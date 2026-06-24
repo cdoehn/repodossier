@@ -5,9 +5,6 @@
 - pyproject.toml
 - CLI entrypoint
 - pipx installation support
-- README.md
-- SPEC.md
-- ARCHITECTURE.md
 
 ## Milestone 1 – Git Discovery
 - Repository detection
