@@ -221,14 +221,14 @@ def get_repository_info(repository_root: Path) -> RepositoryInfo:
     is_current_directory_root = Path.cwd().resolve() == resolved_repository_root
 
     return RepositoryInfo(
-        name=get_repository_name(repository_root),
-        root_path=repository_root,
+        name=get_repository_name(resolved_repository_root),
+        root_path=resolved_repository_root,
         is_current_directory_root=is_current_directory_root,
-        branch=get_current_branch(repository_root),
-        commit_hash=get_current_commit_hash(repository_root),
-        short_commit_hash=get_current_short_commit_hash(repository_root),
-        remote_url=get_origin_remote_url(repository_root),
-        is_dirty=is_working_tree_dirty(repository_root),
-        tracked_files=list_tracked_files(repository_root),
-        commit_metadata=get_current_commit_metadata(repository_root),
+        branch=get_current_branch(resolved_repository_root),
+        commit_hash=get_current_commit_hash(resolved_repository_root),
+        short_commit_hash=get_current_short_commit_hash(resolved_repository_root),
+        remote_url=get_origin_remote_url(resolved_repository_root),
+        is_dirty=is_working_tree_dirty(resolved_repository_root),
+        tracked_files=list_tracked_files(resolved_repository_root),
+        commit_metadata=get_current_commit_metadata(resolved_repository_root),
     )

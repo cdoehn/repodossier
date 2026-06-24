@@ -7,18 +7,7 @@ from importlib import metadata
 from pathlib import Path
 from typing import Iterable, Optional
 
-from .git import (
-    find_repository_root,
-    get_repository_info,
-    get_current_branch,
-    get_current_commit_hash,
-    get_current_commit_metadata,
-    get_current_short_commit_hash,
-    get_origin_remote_url,
-    get_repository_name,
-    is_working_tree_dirty,
-    list_tracked_files,
-)
+from .git import RepositoryInfo, find_repository_root, get_repository_info
 
 
 _FALLBACK_VERSION = "0.1.0.dev0"
@@ -32,10 +21,9 @@ def _determine_version() -> str:
         return _FALLBACK_VERSION
 
 
-def _print_repository_info(repository_root: Path) -> None:
+def _print_repository_info(repository_info: RepositoryInfo) -> None:
     """Display repository information for the CLI."""
     print("Repository info:")
-    repository_info = get_repository_info(repository_root)
     name_display = repository_info.name if repository_info.name is not None else "unknown"
     print(f"  Name: {name_display}")
     print(f"  Root: {repository_info.root_path}")
@@ -67,3 +55,40 @@ def _print_repository_info(repository_root: Path) -> None:
         print(f"  Commit date: {commit_date}")
         print(f"  Commit subject: {subject}")
     print(f"  Tracked files: {len(repository_info.tracked_files)}")
+
+
+def _handle_info_command(_args: argparse.Namespace) -> int:
+    """Run the repository info command."""
+    repository_root: Optional[Path] = find_repository_root()
+    if repository_root is None:
+        print("Error: Could not determine the repository root.")
+        return 1
+
+    repository_info = get_repository_info(repository_root)
+    _print_repository_info(repository_info)
+    return 0
+
+
+def _build_parser() -> argparse.ArgumentParser:
+    """Create the top-level argument parser."""
+    parser = argparse.ArgumentParser(prog="repocontext")
+    parser.add_argument("--version", action="version", version=_determine_version())
+
+    subparsers = parser.add_subparsers(dest="command")
+
+    info_parser = subparsers.add_parser("info", help="Show repository info")
+    info_parser.set_defaults(handler=_handle_info_command)
+
+    parser.set_defaults(handler=_handle_info_command)
+    return parser
+
+
+def main(argv: Optional[Iterable[str]] = None) -> int:
+    """CLI entrypoint."""
+    parser = _build_parser()
+    arguments = parser.parse_args(list(argv) if argv is not None else None)
+    return arguments.handler(arguments)
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
