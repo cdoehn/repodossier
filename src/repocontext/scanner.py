@@ -12,6 +12,33 @@ from typing import Iterable
 from .models import FileInfo
 
 
+def is_text_file(path: Path | str, sample_size: int = 1024) -> bool:
+    """
+    Determine whether a file can be read as UTF-8 text.
+
+    Parameters
+    ----------
+    path:
+        Filesystem path to the file being examined.
+    sample_size:
+        Maximum number of bytes to read when probing the file.
+
+    Returns
+    -------
+    bool
+        True if the file's contents can be decoded as UTF-8 text, False otherwise.
+    """
+    file_path = Path(path)
+
+    try:
+        with file_path.open("rb") as file:
+            sample = file.read(sample_size)
+        sample.decode("utf-8")
+        return True
+    except (UnicodeDecodeError, OSError):
+        return False
+
+
 def scan_single_file(repository_root: Path | str, relative_path: Path | str) -> FileInfo:
     """
     Scan a single file within the repository and return its basic metadata.
