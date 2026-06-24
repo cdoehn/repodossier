@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 from importlib import metadata
+from pathlib import Path
 from typing import Iterable, Optional
 
 from .git import find_repository_root
@@ -18,6 +19,14 @@ def _determine_version() -> str:
         return metadata.version("repocontext")
     except metadata.PackageNotFoundError:
         return _FALLBACK_VERSION
+
+
+def _print_repository_info(repository_root: Path) -> None:
+    """Display repository information for the CLI."""
+    print("Repository info:")
+    print(f"  Root: {repository_root}")
+    is_root = Path.cwd().resolve() == repository_root
+    print(f"  Current directory is root: {'yes' if is_root else 'no'}")
 
 
 def main(argv: Optional[Iterable[str]] = None) -> int:
@@ -39,7 +48,18 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
     )
     parser.add_argument("--version", action="version", version=f"%(prog)s {_determine_version()}")
 
-    parser.parse_args(argv)
+    subparsers = parser.add_subparsers(dest="command")
+    subparsers.add_parser("info", help="Show repository discovery information.")
+
+    args = parser.parse_args(argv)
+
+    if args.command == "info":
+        repository_root = find_repository_root()
+        if repository_root is None:
+            print("No Git repository found.")
+            return 1
+        _print_repository_info(repository_root)
+        return 0
 
     repository_root = find_repository_root()
     if repository_root is not None:
