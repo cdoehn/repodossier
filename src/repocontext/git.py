@@ -48,6 +48,26 @@ def get_repository_name(repository_root: Path) -> Optional[str]:
     return name or None
 
 
+def is_working_tree_dirty(repository_root: Path) -> Optional[bool]:
+    """Return True if the working tree has uncommitted changes, False if clean, or None if unknown."""
+    try:
+        result = subprocess.run(
+            ["git", "status", "--porcelain"],
+            cwd=repository_root,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            check=True,
+        )
+    except (subprocess.CalledProcessError, OSError):
+        return None
+
+    output = result.stdout.strip()
+    if output:
+        return True
+    return False
+
+
 def list_tracked_files(repository_root: Path) -> list[TrackedFile]:
     """Return a list of Git-tracked file paths relative to the repository root."""
     result = subprocess.run(
