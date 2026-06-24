@@ -98,6 +98,24 @@ def get_current_branch(repository_root: Path) -> Optional[str]:
     return None
 
 
+def get_origin_remote_url(repository_root: Path) -> Optional[str]:
+    """Return the origin remote URL for the repository or None if unavailable."""
+    try:
+        result = subprocess.run(
+            ["git", "remote", "get-url", "origin"],
+            cwd=repository_root,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            check=True,
+        )
+    except (subprocess.CalledProcessError, OSError):
+        return None
+
+    url = result.stdout.strip()
+    return url if url else None
+
+
 def get_current_commit_metadata(repository_root: Path) -> Optional[CommitMetadata]:
     """Return metadata for the current HEAD commit or None."""
     try:

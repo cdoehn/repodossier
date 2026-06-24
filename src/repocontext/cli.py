@@ -13,6 +13,7 @@ from .git import (
     get_current_commit_hash,
     get_current_commit_metadata,
     get_current_short_commit_hash,
+    get_origin_remote_url,
     get_repository_name,
     list_tracked_files,
 )
@@ -47,6 +48,9 @@ def _print_repository_info(repository_root: Path) -> None:
     current_short_commit = get_current_short_commit_hash(repository_root)
     short_commit_display = current_short_commit if current_short_commit is not None else "unknown"
     print(f"  Short commit: {short_commit_display}")
+    origin_remote_url = get_origin_remote_url(repository_root)
+    remote_display = origin_remote_url if origin_remote_url is not None else "none"
+    print(f"  Remote: {remote_display}")
     commit_metadata = get_current_commit_metadata(repository_root)
     if commit_metadata is None:
         print("  Commit author: unknown")
