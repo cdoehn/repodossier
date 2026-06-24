@@ -11,6 +11,7 @@ from .git import (
     find_repository_root,
     get_current_branch,
     get_current_commit_hash,
+    get_current_commit_metadata,
     get_current_short_commit_hash,
     list_tracked_files,
 )
@@ -42,6 +43,19 @@ def _print_repository_info(repository_root: Path) -> None:
     current_short_commit = get_current_short_commit_hash(repository_root)
     short_commit_display = current_short_commit if current_short_commit is not None else "unknown"
     print(f"  Short commit: {short_commit_display}")
+    commit_metadata = get_current_commit_metadata(repository_root)
+    if commit_metadata is None:
+        print("  Commit author: unknown")
+        print("  Commit date: unknown")
+        print("  Commit subject: unknown")
+    else:
+        author_name = commit_metadata.author_name or "unknown"
+        author_email = commit_metadata.author_email or "unknown"
+        commit_date = commit_metadata.commit_date or "unknown"
+        subject = commit_metadata.subject or "unknown"
+        print(f"  Commit author: {author_name} <{author_email}>")
+        print(f"  Commit date: {commit_date}")
+        print(f"  Commit subject: {subject}")
     tracked_files = list_tracked_files(repository_root)
     print(f"  Tracked files: {len(tracked_files)}")
 

@@ -12,6 +12,15 @@ class TrackedFile:
     path: Path
 
 
+@dataclass
+class CommitMetadata:
+    """Metadata about a Git commit."""
+    author_name: str
+    author_email: str
+    commit_date: str
+    subject: str
+
+
 def is_current_directory_git_repository() -> bool:
     """Return True if the current working directory contains a .git directory."""
     return (Path.cwd() / ".git").is_dir()
@@ -78,6 +87,34 @@ def get_current_branch(repository_root: Path) -> Optional[str]:
     if commit_hash:
         return f"detached at {commit_hash}"
     return None
+
+
+def get_current_commit_metadata(repository_root: Path) -> Optional[CommitMetadata]:
+    """Return metadata for the current HEAD commit or None."""
+    try:
+        result = subprocess.run(
+            ["git", "show", "-s", "--format=%an%n%ae%n%cI%n%s", "HEAD"],
+            cwd=repository_root,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            check=True,
+        )
+    except (subprocess.CalledProcessError, OSError):
+        return None
+
+    lines = result.stdout.splitlines()
+    if len(lines) < 4:
+        return None
+
+    author_name, author_email, commit_date, subject = (line.strip() for line in lines[:4])
+
+    return CommitMetadata(
+        author_name=author_name,
+        author_email=author_email,
+        commit_date=commit_date,
+        subject=subject,
+    )
 
 
 def get_current_commit_hash(repository_root: Path) -> Optional[str]:
