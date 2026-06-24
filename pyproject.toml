@@ -25,9 +25,23 @@ keywords = ["git", "export", "ai", "context"]
 [project.scripts]
 repocontext = "repocontext.cli:main"
 
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4",
+]
+
 [tool.setuptools]
 package-dir = {"" = "src"}
 
 [tool.setuptools.packages.find]
 where = ["src"]
 include = ["repocontext*"]
+
+[tool.pytest.ini_options]
+testpaths = [
+    "tests",
+]
+addopts = [
+    "-ra",
+    "--color=yes",
+]
