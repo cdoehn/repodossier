@@ -1,3 +1,5 @@
+"""Git repository discovery helpers."""
+
 from pathlib import Path
 
 

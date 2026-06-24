@@ -6,6 +6,8 @@ import argparse
 from importlib import metadata
 from typing import Iterable, Optional
 
+from .git import is_current_directory_git_repository
+
 
 _FALLBACK_VERSION = "0.1.0.dev0"
 
@@ -39,5 +41,9 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
 
     parser.parse_args(argv)
 
-    print("RepoContext CLI is under construction.")
-    return 0
+    if is_current_directory_git_repository():
+        print("Current directory is a Git repository.")
+        return 0
+
+    print("Current directory is not a Git repository.")
+    return 1
