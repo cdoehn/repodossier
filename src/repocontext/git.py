@@ -1,8 +1,15 @@
 """Git repository discovery helpers."""
 
 import subprocess
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
+
+
+@dataclass
+class TrackedFile:
+    """Minimal representation of a Git-tracked file."""
+    path: Path
 
 
 def is_current_directory_git_repository() -> bool:
@@ -23,7 +30,7 @@ def find_repository_root(start_path: Optional[Path] = None) -> Optional[Path]:
         current_path = current_path.parent
 
 
-def list_tracked_files(repository_root: Path) -> list[Path]:
+def list_tracked_files(repository_root: Path) -> list[TrackedFile]:
     """Return a list of Git-tracked file paths relative to the repository root."""
     result = subprocess.run(
         ["git", "ls-files"],
@@ -35,7 +42,7 @@ def list_tracked_files(repository_root: Path) -> list[Path]:
     )
     tracked_paths = [Path(path) for path in result.stdout.splitlines() if path]
     return [
-        relative_path
+        TrackedFile(path=relative_path)
         for relative_path in tracked_paths
         if (repository_root / relative_path).exists()
     ]
