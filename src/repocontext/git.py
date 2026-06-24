@@ -46,3 +46,17 @@ def list_tracked_files(repository_root: Path) -> list[TrackedFile]:
         for relative_path in tracked_paths
         if (repository_root / relative_path).exists()
     ]
+
+
+def get_current_branch(repository_root: Path) -> Optional[str]:
+    """Return the current Git branch name or None if it cannot be determined."""
+    result = subprocess.run(
+        ["git", "branch", "--show-current"],
+        cwd=repository_root,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        check=True,
+    )
+    branch_name = result.stdout.strip()
+    return branch_name or None
