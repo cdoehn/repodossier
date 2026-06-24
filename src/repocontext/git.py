@@ -78,3 +78,21 @@ def get_current_branch(repository_root: Path) -> Optional[str]:
     if commit_hash:
         return f"detached at {commit_hash}"
     return None
+
+
+def get_current_commit_hash(repository_root: Path) -> Optional[str]:
+    """Return the current full Git commit hash for the repository or None."""
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=repository_root,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            check=True,
+        )
+    except subprocess.CalledProcessError:
+        return None
+
+    commit_hash = result.stdout.strip()
+    return commit_hash if commit_hash else None
