@@ -7,7 +7,13 @@ from importlib import metadata
 from pathlib import Path
 from typing import Iterable, Optional
 
-from .git import find_repository_root, get_current_branch, get_current_commit_hash, list_tracked_files
+from .git import (
+    find_repository_root,
+    get_current_branch,
+    get_current_commit_hash,
+    get_current_short_commit_hash,
+    list_tracked_files,
+)
 
 
 _FALLBACK_VERSION = "0.1.0.dev0"
@@ -33,6 +39,9 @@ def _print_repository_info(repository_root: Path) -> None:
     current_commit = get_current_commit_hash(repository_root)
     commit_display = current_commit if current_commit is not None else "unknown"
     print(f"  Commit: {commit_display}")
+    current_short_commit = get_current_short_commit_hash(repository_root)
+    short_commit_display = current_short_commit if current_short_commit is not None else "unknown"
+    print(f"  Short commit: {short_commit_display}")
     tracked_files = list_tracked_files(repository_root)
     print(f"  Tracked files: {len(tracked_files)}")
 
