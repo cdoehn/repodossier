@@ -13,6 +13,7 @@ from .git import (
     get_current_commit_hash,
     get_current_commit_metadata,
     get_current_short_commit_hash,
+    get_repository_name,
     list_tracked_files,
 )
 
@@ -31,6 +32,9 @@ def _determine_version() -> str:
 def _print_repository_info(repository_root: Path) -> None:
     """Display repository information for the CLI."""
     print("Repository info:")
+    repository_name = get_repository_name(repository_root)
+    name_display = repository_name if repository_name is not None else "unknown"
+    print(f"  Name: {name_display}")
     print(f"  Root: {repository_root}")
     is_root = Path.cwd().resolve() == repository_root
     print(f"  Current directory is root: {'yes' if is_root else 'no'}")
@@ -58,44 +62,3 @@ def _print_repository_info(repository_root: Path) -> None:
         print(f"  Commit subject: {subject}")
     tracked_files = list_tracked_files(repository_root)
     print(f"  Tracked files: {len(tracked_files)}")
-
-
-def main(argv: Optional[Iterable[str]] = None) -> int:
-    """Run the RepoContext command-line interface.
-
-    Args:
-        argv: Optional iterable of argument strings. Defaults to ``None`` to use
-            :data:`sys.argv`.
-
-    Returns:
-        An integer process exit code.
-    """
-    parser = argparse.ArgumentParser(
-        prog="repocontext",
-        description=(
-            "RepoContext prepares AI-friendly exports of Git repositories, "
-            "tailored for large language models."
-        ),
-    )
-    parser.add_argument("--version", action="version", version=f"%(prog)s {_determine_version()}")
-
-    subparsers = parser.add_subparsers(dest="command")
-    subparsers.add_parser("info", help="Show repository discovery information.")
-
-    args = parser.parse_args(argv)
-
-    if args.command == "info":
-        repository_root = find_repository_root()
-        if repository_root is None:
-            print("No Git repository found.")
-            return 1
-        _print_repository_info(repository_root)
-        return 0
-
-    repository_root = find_repository_root()
-    if repository_root is not None:
-        print("Repository root:\n ", repository_root, sep="")
-        return 0
-
-    print("No Git repository found.")
-    return 1

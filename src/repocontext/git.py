@@ -39,6 +39,15 @@ def find_repository_root(start_path: Optional[Path] = None) -> Optional[Path]:
         current_path = current_path.parent
 
 
+def get_repository_name(repository_root: Path) -> Optional[str]:
+    """Return the repository name derived from the repository root path."""
+    if repository_root is None:
+        return None
+
+    name = repository_root.name
+    return name or None
+
+
 def list_tracked_files(repository_root: Path) -> list[TrackedFile]:
     """Return a list of Git-tracked file paths relative to the repository root."""
     result = subprocess.run(
