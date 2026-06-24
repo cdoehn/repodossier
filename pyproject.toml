@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "repocontext"
+version = "0.1.0.dev0"
+description = "AI-friendly exports of Git repositories for large language models."
+authors = [{ name = "RepoContext Authors", email = "team@example.com" }]
+requires-python = ">=3.9"
+classifiers = [
+    "Development Status :: 2 - Pre-Alpha",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Topic :: Software Development :: Build Tools",
+]
+keywords = ["git", "export", "ai", "context"]
+
+[tool.setuptools]
+package-dir = {"": "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["repocontext*"]
