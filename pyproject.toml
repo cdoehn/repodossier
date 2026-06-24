@@ -7,10 +7,12 @@ name = "repocontext"
 version = "0.1.0.dev0"
 description = "AI-friendly exports of Git repositories for large language models."
 authors = [{ name = "RepoContext Authors", email = "team@example.com" }]
+license = { file = "LICENSE" }
 requires-python = ">=3.9"
 classifiers = [
     "Development Status :: 2 - Pre-Alpha",
     "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3 :: Only",
     "Programming Language :: Python :: 3.9",

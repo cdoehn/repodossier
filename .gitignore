@@ -1,115 +1,70 @@
-# Byte-compiled / optimized / DLL files
+# Python bytecode and cache
 __pycache__/
 *.py[cod]
 *$py.class
 
-# C extensions
-*.so
+# Virtual environments
+.venv/
+.venv
+venv/
+venv
+env/
+env
+.env
+.env.*
 
-# Distribution / packaging
-.Python
+# Build artifacts
 build/
-develop-eggs/
 dist/
-downloads/
-eggs/
-.eggs/
 lib/
 lib64/
-parts/
-sdist/
-var/
-wheels/
+*.egg
+*.egg-info/
+.eggs/
 pip-wheel-metadata/
 share/python-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
-
-# PyInstaller
-*.manifest
-*.spec
+wheels/
 
 # Installer logs
 pip-log.txt
 pip-delete-this-directory.txt
 
-# Unit test / coverage reports
+# Testing and coverage
+.pytest_cache/
+coverage.xml
 .coverage
 .coverage.*
 .cache
+htmlcov/
 nosetests.xml
-coverage.xml
 *.cover
 *.py,cover
 hypothesis/
-.pytest_cache/
-htmlcov/
 
-# Translations
-*.mo
-*.pot
-
-# Logs
-*.log
-
-# Sphinx documentation
-docs/_build/
-
-# PyBuilder
-target/
-
-# Jupyter Notebook
-.ipynb_checkpoints
-
-# IPython
-profile_default/
-ipython_config.py
-
-# Type checkers
+# Type checker caches
 .mypy_cache/
 .dmypy.json
 dmypy.json
 .pyre/
 .pytype/
 
-# Ruff
+# Lint caches
 .ruff_cache/
 
-# Environments
-.env
-.env.*
-.venv
-.venv/
-env/
-venv/
-ENV/
-env.bak/
-venv.bak/
+# Logs
+*.log
 
-# IDEs and editors
+# Tooling metadata
 .vscode/
 .idea/
 
-# OS metadata
+# OS files
 .DS_Store
 Thumbs.db
 ehthumbs.db
 
-# Temporary files
-*.tmp
-*.swp
-*.swo
-
-# Local python configuration
-pythonrc.py
-
-# RepoContext export outputs
+# RepoContext exports
 full.txt
 ai.txt
 docs.txt
 changed.txt
-
-project_bundle.txt
-bundle_project.sh
-.aider*
