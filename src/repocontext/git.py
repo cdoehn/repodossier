@@ -1,5 +1,6 @@
 """Git repository discovery helpers."""
 
+import subprocess
 from pathlib import Path
 from typing import Optional
 
@@ -20,3 +21,16 @@ def find_repository_root(start_path: Optional[Path] = None) -> Optional[Path]:
         if current_path.parent == current_path:
             return None
         current_path = current_path.parent
+
+
+def list_tracked_files(repository_root: Path) -> list[Path]:
+    """Return a list of Git-tracked file paths relative to the repository root."""
+    result = subprocess.run(
+        ["git", "ls-files"],
+        cwd=repository_root,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        check=True,
+    )
+    return [Path(path) for path in result.stdout.splitlines() if path]

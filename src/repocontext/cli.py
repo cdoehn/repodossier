@@ -7,7 +7,7 @@ from importlib import metadata
 from pathlib import Path
 from typing import Iterable, Optional
 
-from .git import find_repository_root
+from .git import find_repository_root, list_tracked_files
 
 
 _FALLBACK_VERSION = "0.1.0.dev0"
@@ -27,6 +27,8 @@ def _print_repository_info(repository_root: Path) -> None:
     print(f"  Root: {repository_root}")
     is_root = Path.cwd().resolve() == repository_root
     print(f"  Current directory is root: {'yes' if is_root else 'no'}")
+    tracked_files = list_tracked_files(repository_root)
+    print(f"  Tracked files: {len(tracked_files)}")
 
 
 def main(argv: Optional[Iterable[str]] = None) -> int:
