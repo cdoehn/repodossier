@@ -6,6 +6,49 @@ incrementally add file inspection, classification, and repository-wide
 scanning features without altering module layout.
 """
 
+from pathlib import Path
+
+from .models import FileInfo
+
+
+def scan_single_file(repository_root: Path | str, relative_path: Path | str) -> FileInfo:
+    """
+    Scan a single file within the repository and return its basic metadata.
+
+    Parameters
+    ----------
+    repository_root:
+        Filesystem path to the repository root.
+    relative_path:
+        Path to the file to scan, relative to the repository root.
+
+    Returns
+    -------
+    FileInfo
+        Metadata for the requested file, including resolved paths and file size.
+
+    Raises
+    ------
+    ValueError
+        If ``relative_path`` is an absolute path.
+    FileNotFoundError
+        If the file does not exist.
+    """
+    root_path = Path(repository_root).resolve()
+    relative_file_path = Path(relative_path)
+
+    if relative_file_path.is_absolute():
+        raise ValueError("relative_path must be relative to repository root.")
+
+    absolute_file_path = (root_path / relative_file_path).resolve()
+    file_stat = absolute_file_path.stat()
+
+    return FileInfo(
+        relative_path=relative_file_path,
+        absolute_path=absolute_file_path,
+        size_bytes=file_stat.st_size,
+    )
+
 
 class RepositoryScanner:
     """
