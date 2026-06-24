@@ -39,6 +39,24 @@ def is_text_file(path: Path | str, sample_size: int = 1024) -> bool:
         return False
 
 
+def is_binary_file(path: Path | str, sample_size: int = 1024) -> bool:
+    """
+    Determine whether the file appears to be binary based on a small sample.
+
+    Returns True if a null byte is present in the sampled bytes or if the file
+    cannot be read. Returns False otherwise.
+    """
+    file_path = Path(path)
+
+    try:
+        with file_path.open("rb") as file:
+            sample = file.read(sample_size)
+    except OSError:
+        return True
+
+    return b"\x00" in sample
+
+
 def scan_single_file(repository_root: Path | str, relative_path: Path | str) -> FileInfo:
     """
     Scan a single file within the repository and return its basic metadata.
