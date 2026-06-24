@@ -21,6 +21,21 @@ class CommitMetadata:
     subject: str
 
 
+@dataclass
+class RepositoryInfo:
+    """Aggregated information about a Git repository."""
+    name: Optional[str]
+    root_path: Path
+    is_current_directory_root: bool
+    branch: Optional[str]
+    commit_hash: Optional[str]
+    short_commit_hash: Optional[str]
+    remote_url: Optional[str]
+    is_dirty: Optional[bool]
+    tracked_files: list[TrackedFile]
+    commit_metadata: Optional[CommitMetadata]
+
+
 def is_current_directory_git_repository() -> bool:
     """Return True if the current working directory contains a .git directory."""
     return (Path.cwd() / ".git").is_dir()
@@ -198,3 +213,22 @@ def get_current_short_commit_hash(repository_root: Path) -> Optional[str]:
 
     short_hash = result.stdout.strip()
     return short_hash if short_hash else None
+
+
+def get_repository_info(repository_root: Path) -> RepositoryInfo:
+    """Return aggregated information about the repository rooted at repository_root."""
+    resolved_repository_root = repository_root.resolve()
+    is_current_directory_root = Path.cwd().resolve() == resolved_repository_root
+
+    return RepositoryInfo(
+        name=get_repository_name(repository_root),
+        root_path=repository_root,
+        is_current_directory_root=is_current_directory_root,
+        branch=get_current_branch(repository_root),
+        commit_hash=get_current_commit_hash(repository_root),
+        short_commit_hash=get_current_short_commit_hash(repository_root),
+        remote_url=get_origin_remote_url(repository_root),
+        is_dirty=is_working_tree_dirty(repository_root),
+        tracked_files=list_tracked_files(repository_root),
+        commit_metadata=get_current_commit_metadata(repository_root),
+    )
