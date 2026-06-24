@@ -6,7 +6,7 @@ import argparse
 from importlib import metadata
 from typing import Iterable, Optional
 
-from .git import is_current_directory_git_repository
+from .git import find_repository_root
 
 
 _FALLBACK_VERSION = "0.1.0.dev0"
@@ -41,9 +41,10 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
 
     parser.parse_args(argv)
 
-    if is_current_directory_git_repository():
-        print("Current directory is a Git repository.")
+    repository_root = find_repository_root()
+    if repository_root is not None:
+        print("Repository root:\n ", repository_root, sep="")
         return 0
 
-    print("Current directory is not a Git repository.")
+    print("No Git repository found.")
     return 1
