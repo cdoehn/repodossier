@@ -7,6 +7,7 @@ scanning features without altering module layout.
 """
 
 from pathlib import Path
+from typing import Iterable
 
 from .models import FileInfo
 
@@ -48,6 +49,27 @@ def scan_single_file(repository_root: Path | str, relative_path: Path | str) -> 
         absolute_path=absolute_file_path,
         size_bytes=file_stat.st_size,
     )
+
+
+def scan_multiple_files(
+    repository_root: Path | str, relative_paths: Iterable[Path | str]
+) -> list[FileInfo]:
+    """
+    Scan multiple files within the repository and return their metadata.
+
+    Parameters
+    ----------
+    repository_root:
+        Filesystem path to the repository root.
+    relative_paths:
+        Iterable of paths to the files to scan, relative to the repository root.
+
+    Returns
+    -------
+    list[FileInfo]
+        Metadata for each requested file, preserving the order of the provided paths.
+    """
+    return [scan_single_file(repository_root, relative_path) for relative_path in relative_paths]
 
 
 class RepositoryScanner:
