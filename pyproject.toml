@@ -20,6 +20,9 @@ classifiers = [
 ]
 keywords = ["git", "export", "ai", "context"]
 
+[project.scripts]
+repocontext = "repocontext.cli:main"
+
 [tool.setuptools]
 package-dir = {"": "src"}
 
