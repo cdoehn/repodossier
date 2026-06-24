@@ -33,4 +33,9 @@ def list_tracked_files(repository_root: Path) -> list[Path]:
         text=True,
         check=True,
     )
-    return [Path(path) for path in result.stdout.splitlines() if path]
+    tracked_paths = [Path(path) for path in result.stdout.splitlines() if path]
+    return [
+        relative_path
+        for relative_path in tracked_paths
+        if (repository_root / relative_path).exists()
+    ]
