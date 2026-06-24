@@ -42,7 +42,25 @@ def scan_single_file(repository_root: Path | str, relative_path: Path | str) -> 
         raise ValueError("relative_path must be relative to repository root.")
 
     absolute_file_path = (root_path / relative_file_path).resolve()
-    file_stat = absolute_file_path.stat()
+
+    try:
+        file_stat = absolute_file_path.stat()
+    except PermissionError:
+        return FileInfo(
+            relative_path=relative_file_path,
+            absolute_path=absolute_file_path,
+            size_bytes=None,
+            error=f"Permission denied: {absolute_file_path}",
+        )
+    except OSError as exc:
+        if isinstance(exc, FileNotFoundError):
+            raise
+        return FileInfo(
+            relative_path=relative_file_path,
+            absolute_path=absolute_file_path,
+            size_bytes=None,
+            error=f"Unable to access file: {absolute_file_path} ({exc})",
+        )
 
     return FileInfo(
         relative_path=relative_file_path,

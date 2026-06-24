@@ -24,3 +24,4 @@ class FileInfo:
     comment_line_count: Optional[int] = None
     estimated_tokens: Optional[int] = None
     content: Optional[str] = None
+    error: Optional[str] = None
