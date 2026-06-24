@@ -68,3 +68,10 @@ full.txt
 ai.txt
 docs.txt
 changed.txt
+
+# Aider
+.aider*
+
+# Projekt bundle
+bundle_project.sh
+project_bundle.txt
