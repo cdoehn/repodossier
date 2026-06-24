@@ -49,7 +49,7 @@ def list_tracked_files(repository_root: Path) -> list[TrackedFile]:
 
 
 def get_current_branch(repository_root: Path) -> Optional[str]:
-    """Return the current Git branch name or None if it cannot be determined."""
+    """Return the current Git branch name or a detached HEAD state string."""
     result = subprocess.run(
         ["git", "branch", "--show-current"],
         cwd=repository_root,
@@ -59,4 +59,22 @@ def get_current_branch(repository_root: Path) -> Optional[str]:
         check=True,
     )
     branch_name = result.stdout.strip()
-    return branch_name or None
+    if branch_name:
+        return branch_name
+
+    try:
+        detached_result = subprocess.run(
+            ["git", "rev-parse", "--short", "HEAD"],
+            cwd=repository_root,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            check=True,
+        )
+    except subprocess.CalledProcessError:
+        return None
+
+    commit_hash = detached_result.stdout.strip()
+    if commit_hash:
+        return f"detached at {commit_hash}"
+    return None
