@@ -255,6 +255,16 @@ def test_scan_single_file_stores_empty_line_count_for_text_file(tmp_path: Path) 
     assert info.empty_line_count == 2
 
 
+def test_scan_single_file_populates_line_and_empty_counts_together(tmp_path: Path) -> None:
+    file_path = tmp_path / "lines_and_empty.txt"
+    file_path.write_text("line one\n\nline three\n")
+
+    info = scan_single_file(tmp_path, file_path.relative_to(tmp_path))
+
+    assert info.line_count == 3
+    assert info.empty_line_count == 1
+
+
 def test_scan_single_file_keeps_line_count_none_for_binary_file(tmp_path: Path) -> None:
     file_path = tmp_path / "binary.bin"
     file_path.write_bytes(b"\x00\x01\x02")
@@ -273,3 +283,43 @@ def test_scan_single_file_keeps_empty_line_count_none_for_binary_file(tmp_path: 
 
     assert info.is_binary is True
     assert info.empty_line_count is None
+
+
+def test_scan_multiple_files_populates_line_metrics_for_text_files(tmp_path: Path) -> None:
+    file_specs: dict[str, str] = {
+        "alpha.txt": "alpha\nbeta\n",
+        "beta.txt": "one\n\nthree\n",
+    }
+    for name, content in file_specs.items():
+        (tmp_path / name).write_text(content)
+
+    relative_paths = [Path(name) for name in file_specs]
+    results = scan_multiple_files(tmp_path, relative_paths)
+
+    expected_line_counts = [2, 3]
+    expected_empty_counts = [0, 1]
+
+    for info, expected_lines, expected_empty in zip(results, expected_line_counts, expected_empty_counts):
+        assert info.line_count == expected_lines
+        assert info.empty_line_count == expected_empty
+
+
+def test_scan_multiple_files_keeps_line_metrics_none_for_binary_files(tmp_path: Path) -> None:
+    text_file = tmp_path / "plain.txt"
+    text_file.write_text("line one\nline two\n")
+
+    binary_file = tmp_path / "binary.bin"
+    binary_file.write_bytes(b"\x00\x01\x02\x03")
+
+    relative_paths = [Path("binary.bin"), Path("plain.txt")]
+    results = scan_multiple_files(tmp_path, relative_paths)
+
+    binary_info = results[0]
+    assert binary_info.is_binary is True
+    assert binary_info.line_count is None
+    assert binary_info.empty_line_count is None
+
+    text_info = results[1]
+    assert text_info.is_text is True
+    assert text_info.line_count == 2
+    assert text_info.empty_line_count == 0
