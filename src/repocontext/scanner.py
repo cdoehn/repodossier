@@ -309,10 +309,18 @@ def scan_single_file(repository_root: Path | str, relative_path: Path | str) -> 
     is_text = is_text_file(absolute_file_path)
     line_count: Optional[int] = None
     empty_line_count: Optional[int] = None
+    comment_line_count: Optional[int] = None
 
     if is_text and not is_binary:
         line_count = count_total_lines(absolute_file_path)
         empty_line_count = count_empty_lines(absolute_file_path)
+        detected_language_for_comments = detect_language_from_extension(relative_file_path)
+        if detected_language_for_comments is None:
+            detected_language_for_comments = detect_language_from_filename(relative_file_path)
+        if detected_language_for_comments == "python":
+            comment_line_count = count_python_comment_lines(absolute_file_path)
+        elif detected_language_for_comments == "bash":
+            comment_line_count = count_shell_comment_lines(absolute_file_path)
 
     detected_language = detect_language_from_extension(relative_file_path)
     if detected_language is None:
@@ -327,6 +335,7 @@ def scan_single_file(repository_root: Path | str, relative_path: Path | str) -> 
         language=detected_language,
         line_count=line_count,
         empty_line_count=empty_line_count,
+        comment_line_count=comment_line_count,
     )
 
 

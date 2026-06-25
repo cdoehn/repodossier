@@ -380,6 +380,42 @@ def test_scan_single_file_keeps_empty_line_count_none_for_binary_file(tmp_path: 
     assert info.empty_line_count is None
 
 
+def test_scan_single_file_stores_python_comment_line_count(tmp_path: Path) -> None:
+    file_path = tmp_path / "module.py"
+    file_path.write_text("# module comment\nprint('hello')\n# another comment\n")
+
+    info = scan_single_file(tmp_path, file_path.relative_to(tmp_path))
+
+    assert info.comment_line_count == 2
+
+
+def test_scan_single_file_stores_shell_comment_line_count(tmp_path: Path) -> None:
+    file_path = tmp_path / "script.sh"
+    file_path.write_text("#!/usr/bin/env bash\n# script comment\necho hello\n# done\n")
+
+    info = scan_single_file(tmp_path, file_path.relative_to(tmp_path))
+
+    assert info.comment_line_count == 2
+
+
+def test_scan_single_file_keeps_comment_line_count_none_for_plain_text(tmp_path: Path) -> None:
+    file_path = tmp_path / "notes.txt"
+    file_path.write_text("# not counted as language-specific comment\nplain text\n")
+
+    info = scan_single_file(tmp_path, file_path.relative_to(tmp_path))
+
+    assert info.comment_line_count is None
+
+
+def test_scan_single_file_keeps_comment_line_count_none_for_binary_file(tmp_path: Path) -> None:
+    file_path = tmp_path / "binary.bin"
+    file_path.write_bytes(b"\x00\x01\x02")
+
+    info = scan_single_file(tmp_path, file_path.relative_to(tmp_path))
+
+    assert info.comment_line_count is None
+
+
 def test_scan_multiple_files_populates_line_metrics_for_text_files(tmp_path: Path) -> None:
     file_specs: dict[str, str] = {
         "alpha.txt": "alpha\nbeta\n",
