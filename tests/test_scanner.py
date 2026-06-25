@@ -143,3 +143,51 @@ def test_detect_language_from_filename_with_extension_returns_none() -> None:
     assert detect_language_from_filename("README.md") is None
     assert detect_language_from_filename("Makefile.txt") is None
     assert detect_language_from_filename(Path("docker/Dockerfile.template")) is None
+
+
+def test_scan_single_file_language_from_python_extension(tmp_path: Path) -> None:
+    file_path = tmp_path / "example.py"
+    file_path.write_text("print('hello')")
+    info = scan_single_file(tmp_path, file_path.relative_to(tmp_path))
+
+    assert info.language == "python"
+
+
+def test_scan_single_file_language_from_markdown_extension(tmp_path: Path) -> None:
+    file_path = tmp_path / "notes.md"
+    file_path.write_text("# Notes")
+    info = scan_single_file(tmp_path, file_path.relative_to(tmp_path))
+
+    assert info.language == "markdown"
+
+
+def test_scan_single_file_language_from_yaml_extension(tmp_path: Path) -> None:
+    file_path = tmp_path / "config.yml"
+    file_path.write_text("key: value")
+    info = scan_single_file(tmp_path, file_path.relative_to(tmp_path))
+
+    assert info.language == "yaml"
+
+
+def test_scan_single_file_language_from_readme_filename(tmp_path: Path) -> None:
+    file_path = tmp_path / "README"
+    file_path.write_text("Project overview.")
+    info = scan_single_file(tmp_path, file_path.relative_to(tmp_path))
+
+    assert info.language == "markdown"
+
+
+def test_scan_single_file_language_from_license_filename(tmp_path: Path) -> None:
+    file_path = tmp_path / "LICENSE"
+    file_path.write_text("License text.")
+    info = scan_single_file(tmp_path, file_path.relative_to(tmp_path))
+
+    assert info.language == "text"
+
+
+def test_scan_single_file_language_for_unknown_extension_is_none(tmp_path: Path) -> None:
+    file_path = tmp_path / "data.unknown"
+    file_path.write_text("Unrecognized extension content.")
+    info = scan_single_file(tmp_path, file_path.relative_to(tmp_path))
+
+    assert info.language is None

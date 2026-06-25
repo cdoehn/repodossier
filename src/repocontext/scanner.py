@@ -182,12 +182,17 @@ def scan_single_file(repository_root: Path | str, relative_path: Path | str) -> 
     is_binary = is_binary_file(absolute_file_path)
     is_text = is_text_file(absolute_file_path)
 
+    detected_language = detect_language_from_extension(relative_file_path)
+    if detected_language is None:
+        detected_language = detect_language_from_filename(relative_file_path)
+
     return FileInfo(
         relative_path=relative_file_path,
         absolute_path=absolute_file_path,
         size_bytes=file_stat.st_size,
         is_text=is_text,
         is_binary=is_binary,
+        language=detected_language,
     )
 
 
