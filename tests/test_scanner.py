@@ -7,6 +7,7 @@ from repocontext.models import FileInfo
 from repocontext.scanner import (
     count_empty_lines,
     count_python_comment_lines,
+    count_shell_comment_lines,
     count_total_lines,
     detect_language_from_extension,
     detect_language_from_filename,
@@ -115,6 +116,55 @@ def test_count_python_comment_lines_hash_in_string_ignored(tmp_path: Path) -> No
     file_path.write_text("print('# not a comment')\n# actual comment\n")
 
     assert count_python_comment_lines(file_path) == 1
+
+
+def test_count_shell_comment_lines_empty_file(tmp_path: Path) -> None:
+    file_path = tmp_path / "empty.sh"
+    file_path.write_text("")
+
+    assert count_shell_comment_lines(file_path) == 0
+
+
+def test_count_shell_comment_lines_only_comments(tmp_path: Path) -> None:
+    file_path = tmp_path / "comments.sh"
+    file_path.write_text("# comment one\n# comment two\n")
+
+    assert count_shell_comment_lines(file_path) == 2
+
+
+def test_count_shell_comment_lines_mixed_code_and_comments(tmp_path: Path) -> None:
+    file_path = tmp_path / "mixed.sh"
+    file_path.write_text("# header\necho hello\n# footer\n")
+
+    assert count_shell_comment_lines(file_path) == 2
+
+
+def test_count_shell_comment_lines_indented_comments(tmp_path: Path) -> None:
+    file_path = tmp_path / "indented.sh"
+    file_path.write_text("    # indented comment\n\t# tab comment\n")
+
+    assert count_shell_comment_lines(file_path) == 2
+
+
+def test_count_shell_comment_lines_ignores_shebang(tmp_path: Path) -> None:
+    file_path = tmp_path / "script.sh"
+    file_path.write_text("#!/usr/bin/env bash\n# real comment\n")
+
+    assert count_shell_comment_lines(file_path) == 1
+
+
+def test_count_shell_comment_lines_inline_comments_ignored(tmp_path: Path) -> None:
+    file_path = tmp_path / "inline.sh"
+    file_path.write_text("echo hi # inline comment\nvalue=1 # another inline\n")
+
+    assert count_shell_comment_lines(file_path) == 0
+
+
+def test_count_shell_comment_lines_hash_in_string_ignored(tmp_path: Path) -> None:
+    file_path = tmp_path / "strings.sh"
+    file_path.write_text("echo '# not a comment'\n# actual comment\n")
+
+    assert count_shell_comment_lines(file_path) == 1
 
 
 def test_scan_single_file_classifies_text_file(tmp_path: Path) -> None:
