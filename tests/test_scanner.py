@@ -5,6 +5,7 @@ import pytest
 
 from repocontext.models import FileInfo
 from repocontext.scanner import (
+    count_total_lines,
     detect_language_from_extension,
     detect_language_from_filename,
     is_binary_file,
@@ -191,3 +192,36 @@ def test_scan_single_file_language_for_unknown_extension_is_none(tmp_path: Path)
     info = scan_single_file(tmp_path, file_path.relative_to(tmp_path))
 
     assert info.language is None
+
+
+def test_count_total_lines_returns_zero_for_empty_file(tmp_path: Path) -> None:
+    file_path = tmp_path / "empty.txt"
+    file_path.write_text("")
+
+    assert count_total_lines(file_path) == 0
+
+
+def test_count_total_lines_returns_correct_count_for_multi_line_text_file(tmp_path: Path) -> None:
+    file_path = tmp_path / "multi.txt"
+    file_path.write_text("first line\nsecond line\nthird line")
+
+    assert count_total_lines(file_path) == 3
+
+
+def test_scan_single_file_stores_line_count_for_text_file(tmp_path: Path) -> None:
+    file_path = tmp_path / "lines.txt"
+    file_path.write_text("line one\nline two\n")
+
+    info = scan_single_file(tmp_path, file_path.relative_to(tmp_path))
+
+    assert info.line_count == 2
+
+
+def test_scan_single_file_keeps_line_count_none_for_binary_file(tmp_path: Path) -> None:
+    file_path = tmp_path / "binary.bin"
+    file_path.write_bytes(b"\x00\x01\x02")
+
+    info = scan_single_file(tmp_path, file_path.relative_to(tmp_path))
+
+    assert info.is_binary is True
+    assert info.line_count is None

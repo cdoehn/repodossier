@@ -129,6 +129,37 @@ def is_binary_file(path: Path | str, sample_size: int = 1024) -> bool:
     return b"\x00" in sample
 
 
+def count_total_lines(path: Path | str) -> int:
+    """
+    Count the total number of lines in a UTF-8 encoded text file.
+
+    Parameters
+    ----------
+    path:
+        Filesystem path to the file being examined.
+
+    Returns
+    -------
+    int
+        The total number of lines contained in the file. Returns 0 for empty files.
+
+    Raises
+    ------
+    UnicodeDecodeError
+        Propagated if the file cannot be decoded as UTF-8.
+    OSError
+        Propagated if the file cannot be accessed.
+    """
+    file_path = Path(path)
+    line_count = 0
+
+    with file_path.open("r", encoding="utf-8") as file:
+        for line_count, _ in enumerate(file, start=1):
+            pass
+
+    return line_count
+
+
 def scan_single_file(repository_root: Path | str, relative_path: Path | str) -> FileInfo:
     """
     Scan a single file within the repository and return its basic metadata.
@@ -181,6 +212,10 @@ def scan_single_file(repository_root: Path | str, relative_path: Path | str) -> 
 
     is_binary = is_binary_file(absolute_file_path)
     is_text = is_text_file(absolute_file_path)
+    line_count: Optional[int] = None
+
+    if is_text and not is_binary:
+        line_count = count_total_lines(absolute_file_path)
 
     detected_language = detect_language_from_extension(relative_file_path)
     if detected_language is None:
@@ -193,6 +228,7 @@ def scan_single_file(repository_root: Path | str, relative_path: Path | str) -> 
         is_text=is_text,
         is_binary=is_binary,
         language=detected_language,
+        line_count=line_count,
     )
 
 
