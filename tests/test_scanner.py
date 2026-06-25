@@ -6,6 +6,7 @@ import pytest
 from repocontext.models import FileInfo
 from repocontext.scanner import (
     detect_language_from_extension,
+    detect_language_from_filename,
     is_binary_file,
     is_text_file,
     scan_multiple_files,
@@ -114,3 +115,31 @@ def test_detect_language_from_extension_unknown_extension() -> None:
 
 def test_detect_language_from_extension_without_extension() -> None:
     assert detect_language_from_extension("LICENSE") is None
+
+
+def test_detect_language_from_filename_known_extensionless_names() -> None:
+    assert detect_language_from_filename("README") == "markdown"
+    assert detect_language_from_filename("LICENSE") == "text"
+    assert detect_language_from_filename("LICENCE") == "text"
+    assert detect_language_from_filename("COPYING") == "text"
+    assert detect_language_from_filename("CHANGELOG") == "markdown"
+    assert detect_language_from_filename("TODO") == "text"
+    assert detect_language_from_filename("Makefile") == "makefile"
+    assert detect_language_from_filename("Dockerfile") == "dockerfile"
+
+
+def test_detect_language_from_filename_lowercase_variants() -> None:
+    assert detect_language_from_filename("readme") == "markdown"
+    assert detect_language_from_filename("license") == "text"
+    assert detect_language_from_filename(Path("docs/todo")) == "text"
+
+
+def test_detect_language_from_filename_unknown_name_returns_none() -> None:
+    assert detect_language_from_filename("HISTORY") is None
+    assert detect_language_from_filename(Path("notes/overview")) is None
+
+
+def test_detect_language_from_filename_with_extension_returns_none() -> None:
+    assert detect_language_from_filename("README.md") is None
+    assert detect_language_from_filename("Makefile.txt") is None
+    assert detect_language_from_filename(Path("docker/Dockerfile.template")) is None

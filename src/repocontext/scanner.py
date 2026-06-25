@@ -25,6 +25,17 @@ _EXTENSION_LANGUAGE_MAP: dict[str, str] = {
     ".cfg": "ini",
 }
 
+_FILENAME_LANGUAGE_MAP: dict[str, str] = {
+    "readme": "markdown",
+    "license": "text",
+    "licence": "text",
+    "copying": "text",
+    "changelog": "markdown",
+    "todo": "text",
+    "makefile": "makefile",
+    "dockerfile": "dockerfile",
+}
+
 
 def detect_language_from_extension(path: Path | str) -> Optional[str]:
     """
@@ -45,6 +56,32 @@ def detect_language_from_extension(path: Path | str) -> Optional[str]:
     if not suffix:
         return None
     return _EXTENSION_LANGUAGE_MAP.get(suffix)
+
+
+def detect_language_from_filename(path: Path | str) -> Optional[str]:
+    """
+    Infer a file's language based on common extensionless filenames.
+
+    Parameters
+    ----------
+    path:
+        Filesystem path or filename whose basename will be inspected.
+
+    Returns
+    -------
+    Optional[str]
+        The detected language name in lowercase if the filename is recognized
+        and does not include an extension, otherwise ``None``.
+    """
+    file_path = Path(path)
+    if file_path.suffix:
+        return None
+
+    filename = file_path.name.lower()
+    if not filename:
+        return None
+
+    return _FILENAME_LANGUAGE_MAP.get(filename)
 
 
 def is_text_file(path: Path | str, sample_size: int = 1024) -> bool:
