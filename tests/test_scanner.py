@@ -6,6 +6,7 @@ import pytest
 from repocontext.models import FileInfo
 from repocontext.scanner import (
     count_empty_lines,
+    count_python_comment_lines,
     count_total_lines,
     detect_language_from_extension,
     detect_language_from_filename,
@@ -70,6 +71,50 @@ def test_count_empty_lines_treats_whitespace_only_lines_as_empty(tmp_path: Path)
     file_path.write_text("line one\n   \n\t\nline four\n")
 
     assert count_empty_lines(file_path) == 2
+
+
+def test_count_python_comment_lines_empty_file(tmp_path: Path) -> None:
+    file_path = tmp_path / "empty.py"
+    file_path.write_text("")
+
+    assert count_python_comment_lines(file_path) == 0
+
+
+def test_count_python_comment_lines_only_comments(tmp_path: Path) -> None:
+    file_path = tmp_path / "comments.py"
+    file_path.write_text("# comment one\n# comment two\n# comment three\n")
+
+    assert count_python_comment_lines(file_path) == 3
+
+
+def test_count_python_comment_lines_mixed_code_and_comments(tmp_path: Path) -> None:
+    file_path = tmp_path / "mixed.py"
+    file_path.write_text(
+        "# module comment\nprint('hello')\n# trailing comment block\nvalue = 42\n"
+    )
+
+    assert count_python_comment_lines(file_path) == 2
+
+
+def test_count_python_comment_lines_indented_comments(tmp_path: Path) -> None:
+    file_path = tmp_path / "indented.py"
+    file_path.write_text("    # indented comment\n\t# tab indented comment\n")
+
+    assert count_python_comment_lines(file_path) == 2
+
+
+def test_count_python_comment_lines_inline_comments_ignored(tmp_path: Path) -> None:
+    file_path = tmp_path / "inline.py"
+    file_path.write_text("print('value')  # inline comment\nvalue = 10  # still inline\n")
+
+    assert count_python_comment_lines(file_path) == 0
+
+
+def test_count_python_comment_lines_hash_in_string_ignored(tmp_path: Path) -> None:
+    file_path = tmp_path / "strings.py"
+    file_path.write_text("print('# not a comment')\n# actual comment\n")
+
+    assert count_python_comment_lines(file_path) == 1
 
 
 def test_scan_single_file_classifies_text_file(tmp_path: Path) -> None:

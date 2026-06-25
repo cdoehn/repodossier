@@ -193,6 +193,45 @@ def count_empty_lines(path: Path | str) -> int:
     return empty_line_count
 
 
+def count_python_comment_lines(path: Path | str) -> int:
+    """
+    Count the number of Python comment lines in a UTF-8 encoded text file.
+
+    A line is considered a comment line if its first non-whitespace character
+    is ``#``. Blank or whitespace-only lines are ignored, as are inline comments
+    that appear after code on the same line.
+
+    Parameters
+    ----------
+    path:
+        Filesystem path to the file being examined.
+
+    Returns
+    -------
+    int
+        The number of Python comment lines detected. Returns 0 for empty files.
+
+    Raises
+    ------
+    UnicodeDecodeError
+        Propagated if the file cannot be decoded as UTF-8.
+    OSError
+        Propagated if the file cannot be accessed.
+    """
+    file_path = Path(path)
+    comment_count = 0
+
+    with file_path.open("r", encoding="utf-8") as file:
+        for line in file:
+            stripped = line.lstrip()
+            if not stripped:
+                continue
+            if stripped.startswith("#"):
+                comment_count += 1
+
+    return comment_count
+
+
 def scan_single_file(repository_root: Path | str, relative_path: Path | str) -> FileInfo:
     """
     Scan a single file within the repository and return its basic metadata.
