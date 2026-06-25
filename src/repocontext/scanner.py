@@ -107,10 +107,15 @@ def scan_single_file(repository_root: Path | str, relative_path: Path | str) -> 
             error=f"Unable to access file: {absolute_file_path} ({exc})",
         )
 
+    is_binary = is_binary_file(absolute_file_path)
+    is_text = is_text_file(absolute_file_path)
+
     return FileInfo(
         relative_path=relative_file_path,
         absolute_path=absolute_file_path,
         size_bytes=file_stat.st_size,
+        is_text=is_text,
+        is_binary=is_binary,
     )
 
 
