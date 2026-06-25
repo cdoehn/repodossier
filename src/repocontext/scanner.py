@@ -7,9 +7,44 @@ scanning features without altering module layout.
 """
 
 from pathlib import Path
-from typing import Iterable
+from typing import Iterable, Optional
 
 from .models import FileInfo
+
+_EXTENSION_LANGUAGE_MAP: dict[str, str] = {
+    ".py": "python",
+    ".sh": "bash",
+    ".bash": "bash",
+    ".md": "markdown",
+    ".txt": "text",
+    ".json": "json",
+    ".yaml": "yaml",
+    ".yml": "yaml",
+    ".toml": "toml",
+    ".ini": "ini",
+    ".cfg": "ini",
+}
+
+
+def detect_language_from_extension(path: Path | str) -> Optional[str]:
+    """
+    Infer a file's language based on its extension.
+
+    Parameters
+    ----------
+    path:
+        Filesystem path or filename whose extension will be inspected.
+
+    Returns
+    -------
+    Optional[str]
+        The detected language name in lowercase if the extension is known,
+        otherwise ``None``.
+    """
+    suffix = Path(path).suffix.lower()
+    if not suffix:
+        return None
+    return _EXTENSION_LANGUAGE_MAP.get(suffix)
 
 
 def is_text_file(path: Path | str, sample_size: int = 1024) -> bool:

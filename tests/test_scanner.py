@@ -5,6 +5,7 @@ import pytest
 
 from repocontext.models import FileInfo
 from repocontext.scanner import (
+    detect_language_from_extension,
     is_binary_file,
     is_text_file,
     scan_multiple_files,
@@ -95,3 +96,21 @@ def test_scan_multiple_files_preserves_order(tmp_path: Path) -> None:
 
     assert [info.relative_path.name for info in results] == file_names
     assert all(isinstance(info, FileInfo) for info in results)
+
+
+def test_detect_language_from_extension_case_insensitive() -> None:
+    assert detect_language_from_extension("SCRIPT.PY") == "python"
+    assert detect_language_from_extension("notes.TXT") == "text"
+
+
+def test_detect_language_from_extension_yaml_aliases() -> None:
+    assert detect_language_from_extension("config.yaml") == "yaml"
+    assert detect_language_from_extension("config.yml") == "yaml"
+
+
+def test_detect_language_from_extension_unknown_extension() -> None:
+    assert detect_language_from_extension("archive.zip") is None
+
+
+def test_detect_language_from_extension_without_extension() -> None:
+    assert detect_language_from_extension("LICENSE") is None
