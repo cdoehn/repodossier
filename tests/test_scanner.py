@@ -5,6 +5,7 @@ import pytest
 
 from repocontext.models import FileInfo
 from repocontext.scanner import (
+    count_empty_lines,
     count_total_lines,
     detect_language_from_extension,
     detect_language_from_filename,
@@ -41,6 +42,34 @@ def test_is_binary_file_returns_false_for_text_file(tmp_path: Path) -> None:
     text_file.write_text("Just some ordinary text.")
 
     assert is_binary_file(text_file) is False
+
+
+def test_count_empty_lines_returns_zero_for_empty_file(tmp_path: Path) -> None:
+    file_path = tmp_path / "empty.txt"
+    file_path.write_text("")
+
+    assert count_empty_lines(file_path) == 0
+
+
+def test_count_empty_lines_returns_zero_when_no_empty_lines(tmp_path: Path) -> None:
+    file_path = tmp_path / "no_empty.txt"
+    file_path.write_text("line one\nline two\nline three")
+
+    assert count_empty_lines(file_path) == 0
+
+
+def test_count_empty_lines_counts_blank_lines(tmp_path: Path) -> None:
+    file_path = tmp_path / "blank_lines.txt"
+    file_path.write_text("line one\n\nline three\n\n")
+
+    assert count_empty_lines(file_path) == 2
+
+
+def test_count_empty_lines_treats_whitespace_only_lines_as_empty(tmp_path: Path) -> None:
+    file_path = tmp_path / "whitespace_lines.txt"
+    file_path.write_text("line one\n   \n\t\nline four\n")
+
+    assert count_empty_lines(file_path) == 2
 
 
 def test_scan_single_file_classifies_text_file(tmp_path: Path) -> None:
@@ -217,6 +246,15 @@ def test_scan_single_file_stores_line_count_for_text_file(tmp_path: Path) -> Non
     assert info.line_count == 2
 
 
+def test_scan_single_file_stores_empty_line_count_for_text_file(tmp_path: Path) -> None:
+    file_path = tmp_path / "lines_with_empty.txt"
+    file_path.write_text("line one\n\n   \nline four\n")
+
+    info = scan_single_file(tmp_path, file_path.relative_to(tmp_path))
+
+    assert info.empty_line_count == 2
+
+
 def test_scan_single_file_keeps_line_count_none_for_binary_file(tmp_path: Path) -> None:
     file_path = tmp_path / "binary.bin"
     file_path.write_bytes(b"\x00\x01\x02")
@@ -225,3 +263,13 @@ def test_scan_single_file_keeps_line_count_none_for_binary_file(tmp_path: Path) 
 
     assert info.is_binary is True
     assert info.line_count is None
+
+
+def test_scan_single_file_keeps_empty_line_count_none_for_binary_file(tmp_path: Path) -> None:
+    file_path = tmp_path / "binary_empty.bin"
+    file_path.write_bytes(b"\x00\x01\x02")
+
+    info = scan_single_file(tmp_path, file_path.relative_to(tmp_path))
+
+    assert info.is_binary is True
+    assert info.empty_line_count is None

@@ -160,6 +160,39 @@ def count_total_lines(path: Path | str) -> int:
     return line_count
 
 
+def count_empty_lines(path: Path | str) -> int:
+    """
+    Count the number of empty or whitespace-only lines in a UTF-8 encoded text file.
+
+    Parameters
+    ----------
+    path:
+        Filesystem path to the file being examined.
+
+    Returns
+    -------
+    int
+        The number of lines that are empty or contain only whitespace.
+        Returns 0 for empty files.
+
+    Raises
+    ------
+    UnicodeDecodeError
+        Propagated if the file cannot be decoded as UTF-8.
+    OSError
+        Propagated if the file cannot be accessed.
+    """
+    file_path = Path(path)
+    empty_line_count = 0
+
+    with file_path.open("r", encoding="utf-8") as file:
+        for line in file:
+            if not line.strip():
+                empty_line_count += 1
+
+    return empty_line_count
+
+
 def scan_single_file(repository_root: Path | str, relative_path: Path | str) -> FileInfo:
     """
     Scan a single file within the repository and return its basic metadata.
@@ -213,9 +246,11 @@ def scan_single_file(repository_root: Path | str, relative_path: Path | str) -> 
     is_binary = is_binary_file(absolute_file_path)
     is_text = is_text_file(absolute_file_path)
     line_count: Optional[int] = None
+    empty_line_count: Optional[int] = None
 
     if is_text and not is_binary:
         line_count = count_total_lines(absolute_file_path)
+        empty_line_count = count_empty_lines(absolute_file_path)
 
     detected_language = detect_language_from_extension(relative_file_path)
     if detected_language is None:
@@ -229,6 +264,7 @@ def scan_single_file(repository_root: Path | str, relative_path: Path | str) -> 
         is_binary=is_binary,
         language=detected_language,
         line_count=line_count,
+        empty_line_count=empty_line_count,
     )
 
 
