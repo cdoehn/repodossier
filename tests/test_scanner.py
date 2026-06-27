@@ -578,6 +578,85 @@ def test_repository_scanner_scan_returns_tracked_file_infos(tmp_path: Path) -> N
     assert all(info.content is not None for info in results)
 
 
+def test_repository_scanner_scan_complete_repository_with_nested_files(tmp_path: Path) -> None:
+    subprocess.run(["git", "init"], cwd=tmp_path, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    subprocess.run(["git", "config", "user.name", "Test User"], cwd=tmp_path, check=True)
+    subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=tmp_path, check=True)
+
+    src_dir = tmp_path / "src"
+    docs_dir = tmp_path / "docs"
+    src_dir.mkdir()
+    docs_dir.mkdir()
+
+    readme = tmp_path / "README.md"
+    module = src_dir / "module.py"
+    script = src_dir / "script.sh"
+    docs = docs_dir / "notes.txt"
+    binary = tmp_path / "binary.bin"
+    ignored_untracked = tmp_path / "untracked.txt"
+
+    readme.write_text("# Project\n\nOverview\n", encoding="utf-8")
+    module.write_text("# module\nprint('hello')\n", encoding="utf-8")
+    script.write_text("#!/usr/bin/env bash\n# script\necho hello\n", encoding="utf-8")
+    docs.write_text("notes\nmore notes\n", encoding="utf-8")
+    binary.write_bytes(b"\x00\x01\x02")
+    ignored_untracked.write_text("this file is not tracked\n", encoding="utf-8")
+
+    subprocess.run(
+        [
+            "git",
+            "add",
+            "README.md",
+            "src/module.py",
+            "src/script.sh",
+            "docs/notes.txt",
+            "binary.bin",
+        ],
+        cwd=tmp_path,
+        check=True,
+    )
+    subprocess.run(
+        ["git", "commit", "-m", "Add complete repository fixture"],
+        cwd=tmp_path,
+        check=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+
+    results = RepositoryScanner().scan(tmp_path)
+    by_path = {info.relative_path.as_posix(): info for info in results}
+
+    assert list(by_path) == [
+        "README.md",
+        "binary.bin",
+        "docs/notes.txt",
+        "src/module.py",
+        "src/script.sh",
+    ]
+    assert "untracked.txt" not in by_path
+
+    assert by_path["README.md"].language == "markdown"
+    assert by_path["README.md"].line_count == 3
+    assert by_path["README.md"].content == "# Project\n\nOverview\n"
+
+    assert by_path["docs/notes.txt"].language == "text"
+    assert by_path["docs/notes.txt"].line_count == 2
+    assert by_path["docs/notes.txt"].content == "notes\nmore notes\n"
+
+    assert by_path["src/module.py"].language == "python"
+    assert by_path["src/module.py"].comment_line_count == 1
+    assert by_path["src/module.py"].content == "# module\nprint('hello')\n"
+
+    assert by_path["src/script.sh"].language == "bash"
+    assert by_path["src/script.sh"].comment_line_count == 1
+    assert by_path["src/script.sh"].content == "#!/usr/bin/env bash\n# script\necho hello\n"
+
+    assert by_path["binary.bin"].is_binary is True
+    assert by_path["binary.bin"].content is None
+    assert by_path["binary.bin"].line_count is None
+    assert by_path["binary.bin"].estimated_tokens is None
+
+
 def test_load_text_content_returns_complete_file(tmp_path: Path) -> None:
     file_path = tmp_path / "sample.txt"
     expected = "first line\nsecond line\nthird line"
