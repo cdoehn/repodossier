@@ -111,3 +111,10 @@
 - Smoke tests
 - pipx validation
 - Version 1.0.0
+
+
+
+ZUKUNFT IDEEN:
+
+
+Mit argparse alles sehr gut bescheiben!!
