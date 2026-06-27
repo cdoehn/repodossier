@@ -263,6 +263,30 @@ def count_shell_comment_lines(path: Path | str) -> int:
     return comment_count
 
 
+def load_text_content(path: Path | str) -> str:
+    """
+    Load the complete UTF-8 text content of a file.
+
+    Parameters
+    ----------
+    path:
+        Path to a UTF-8 encoded text file.
+
+    Returns
+    -------
+    str
+        Complete file contents.
+
+    Raises
+    ------
+    UnicodeDecodeError
+        If the file is not valid UTF-8.
+    OSError
+        If the file cannot be accessed.
+    """
+    return Path(path).read_text(encoding="utf-8")
+
+
 def scan_single_file(repository_root: Path | str, relative_path: Path | str) -> FileInfo:
     """
     Scan a single file within the repository and return its basic metadata.

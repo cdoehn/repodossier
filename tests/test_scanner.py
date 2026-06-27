@@ -12,6 +12,7 @@ from repocontext.scanner import (
     detect_language_from_extension,
     detect_language_from_filename,
     estimate_tokens,
+    load_text_content,
     is_binary_file,
     is_text_file,
     scan_multiple_files,
@@ -513,3 +514,26 @@ def test_estimate_tokens_larger_text(tmp_path: Path) -> None:
     file_path.write_text("a" * 100)
 
     assert estimate_tokens(file_path) == 25
+
+
+def test_load_text_content_returns_complete_file(tmp_path: Path) -> None:
+    file_path = tmp_path / "sample.txt"
+    expected = "first line\nsecond line\nthird line"
+    file_path.write_text(expected, encoding="utf-8")
+
+    assert load_text_content(file_path) == expected
+
+
+def test_load_text_content_returns_empty_string_for_empty_file(tmp_path: Path) -> None:
+    file_path = tmp_path / "empty.txt"
+    file_path.write_text("", encoding="utf-8")
+
+    assert load_text_content(file_path) == ""
+
+
+def test_load_text_content_supports_unicode(tmp_path: Path) -> None:
+    file_path = tmp_path / "unicode.txt"
+    expected = "äöü ÄÖÜ 😀 こんにちは"
+    file_path.write_text(expected, encoding="utf-8")
+
+    assert load_text_content(file_path) == expected
