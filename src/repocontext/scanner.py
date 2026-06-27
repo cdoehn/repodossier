@@ -343,11 +343,13 @@ def scan_single_file(repository_root: Path | str, relative_path: Path | str) -> 
     empty_line_count: Optional[int] = None
     comment_line_count: Optional[int] = None
     estimated_token_count: Optional[int] = None
+    content: Optional[str] = None
 
     if is_text and not is_binary:
         line_count = count_total_lines(absolute_file_path)
         empty_line_count = count_empty_lines(absolute_file_path)
         estimated_token_count = estimate_tokens(absolute_file_path)
+        content = load_text_content(absolute_file_path)
         detected_language_for_comments = detect_language_from_extension(relative_file_path)
         if detected_language_for_comments is None:
             detected_language_for_comments = detect_language_from_filename(relative_file_path)
@@ -371,6 +373,7 @@ def scan_single_file(repository_root: Path | str, relative_path: Path | str) -> 
         empty_line_count=empty_line_count,
         comment_line_count=comment_line_count,
         estimated_tokens=estimated_token_count,
+        content=content,
     )
 
 
