@@ -129,6 +129,14 @@ def is_binary_file(path: Path | str, sample_size: int = 1024) -> bool:
     return b"\x00" in sample
 
 
+def estimate_tokens(path: Path | str) -> int:
+    """Estimate token count using a simple 1 token per 4 characters heuristic."""
+    content = Path(path).read_text(encoding="utf-8")
+    if not content:
+        return 0
+    return (len(content) + 3) // 4
+
+
 def count_total_lines(path: Path | str) -> int:
     """
     Count the total number of lines in a UTF-8 encoded text file.

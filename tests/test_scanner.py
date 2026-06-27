@@ -11,6 +11,7 @@ from repocontext.scanner import (
     count_total_lines,
     detect_language_from_extension,
     detect_language_from_filename,
+    estimate_tokens,
     is_binary_file,
     is_text_file,
     scan_multiple_files,
@@ -454,3 +455,31 @@ def test_scan_multiple_files_keeps_line_metrics_none_for_binary_files(tmp_path: 
     assert text_info.is_text is True
     assert text_info.line_count == 2
     assert text_info.empty_line_count == 0
+
+
+def test_estimate_tokens_empty_file(tmp_path: Path) -> None:
+    file_path = tmp_path / "empty.txt"
+    file_path.write_text("")
+
+    assert estimate_tokens(file_path) == 0
+
+
+def test_estimate_tokens_small_text(tmp_path: Path) -> None:
+    file_path = tmp_path / "small.txt"
+    file_path.write_text("abcd")
+
+    assert estimate_tokens(file_path) == 1
+
+
+def test_estimate_tokens_rounds_up(tmp_path: Path) -> None:
+    file_path = tmp_path / "rounding.txt"
+    file_path.write_text("abcde")
+
+    assert estimate_tokens(file_path) == 2
+
+
+def test_estimate_tokens_larger_text(tmp_path: Path) -> None:
+    file_path = tmp_path / "large.txt"
+    file_path.write_text("a" * 100)
+
+    assert estimate_tokens(file_path) == 25
