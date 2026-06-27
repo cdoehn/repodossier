@@ -476,6 +476,17 @@ def test_scan_single_file_keeps_estimated_tokens_none_for_binary_file(tmp_path: 
     assert info.estimated_tokens is None
 
 
+def test_scan_multiple_files_populates_estimated_tokens_for_text_files(tmp_path: Path) -> None:
+    first_file = tmp_path / "first.txt"
+    second_file = tmp_path / "second.txt"
+    first_file.write_text("a" * 8)
+    second_file.write_text("b" * 12)
+
+    results = scan_multiple_files(tmp_path, [Path("first.txt"), Path("second.txt")])
+
+    assert [info.estimated_tokens for info in results] == [2, 3]
+
+
 def test_estimate_tokens_empty_file(tmp_path: Path) -> None:
     file_path = tmp_path / "empty.txt"
     file_path.write_text("")
