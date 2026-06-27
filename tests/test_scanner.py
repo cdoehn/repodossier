@@ -1,4 +1,5 @@
 """Focused tests for repocontext.scanner behaviors from task 2.3.c."""
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -13,6 +14,7 @@ from repocontext.scanner import (
     detect_language_from_filename,
     estimate_tokens,
     load_text_content,
+    RepositoryScanner,
     is_binary_file,
     is_text_file,
     scan_multiple_files,
@@ -545,6 +547,35 @@ def test_estimate_tokens_larger_text(tmp_path: Path) -> None:
     file_path.write_text("a" * 100)
 
     assert estimate_tokens(file_path) == 25
+
+
+def test_repository_scanner_scan_returns_tracked_file_infos(tmp_path: Path) -> None:
+    subprocess.run(["git", "init"], cwd=tmp_path, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    subprocess.run(["git", "config", "user.name", "Test User"], cwd=tmp_path, check=True)
+    subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=tmp_path, check=True)
+
+    first_file = tmp_path / "first.txt"
+    second_file = tmp_path / "second.py"
+    untracked_file = tmp_path / "untracked.txt"
+
+    first_file.write_text("first content\n", encoding="utf-8")
+    second_file.write_text("print('hello')\n", encoding="utf-8")
+    untracked_file.write_text("not tracked\n", encoding="utf-8")
+
+    subprocess.run(["git", "add", "first.txt", "second.py"], cwd=tmp_path, check=True)
+    subprocess.run(
+        ["git", "commit", "-m", "Add tracked files"],
+        cwd=tmp_path,
+        check=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+
+    results = RepositoryScanner().scan(tmp_path)
+
+    assert [info.relative_path.as_posix() for info in results] == ["first.txt", "second.py"]
+    assert [info.language for info in results] == ["text", "python"]
+    assert all(info.content is not None for info in results)
 
 
 def test_load_text_content_returns_complete_file(tmp_path: Path) -> None:

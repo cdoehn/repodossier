@@ -9,6 +9,7 @@ scanning features without altering module layout.
 from pathlib import Path
 from typing import Iterable, Optional
 
+from .git import list_tracked_files
 from .models import FileInfo
 
 _EXTENSION_LANGUAGE_MAP: dict[str, str] = {
@@ -399,27 +400,25 @@ def scan_multiple_files(
 
 
 class RepositoryScanner:
-    """
-    Placeholder for repository scanning functionality.
+    """Scan Git-tracked repository files into FileInfo objects."""
 
-    Future implementations will handle walking filesystem trees,
-    collecting file metadata, and producing scan results that other
-    components of RepoContext can consume.
-    """
-
-    def scan(self, root_path: str) -> None:
+    def scan(self, root_path: Path | str) -> list[FileInfo]:
         """
-        Scan the repository located at ``root_path``.
+        Scan Git-tracked files in the repository located at ``root_path``.
 
         Parameters
         ----------
         root_path:
-            The filesystem path to the repository that will be scanned.
+            Filesystem path to the repository root.
 
-        Raises
-        ------
-        NotImplementedError
-            Always raised until the scanning logic is implemented in a
-            subsequent task.
+        Returns
+        -------
+        list[FileInfo]
+            File metadata for every existing Git-tracked file.
         """
-        raise NotImplementedError("Repository scanning has not been implemented yet.")
+        repository_root = Path(root_path).resolve()
+        tracked_files = list_tracked_files(repository_root)
+        return scan_multiple_files(
+            repository_root,
+            [tracked_file.path for tracked_file in tracked_files],
+        )
