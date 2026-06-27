@@ -478,6 +478,17 @@ def test_scan_single_file_keeps_content_none_for_binary_file(tmp_path: Path) -> 
     assert info.content is None
 
 
+def test_scan_multiple_files_populates_content_for_text_files(tmp_path: Path) -> None:
+    first_file = tmp_path / "first.txt"
+    second_file = tmp_path / "second.txt"
+    first_file.write_text("first content\n", encoding="utf-8")
+    second_file.write_text("second content\n", encoding="utf-8")
+
+    results = scan_multiple_files(tmp_path, [Path("first.txt"), Path("second.txt")])
+
+    assert [info.content for info in results] == ["first content\n", "second content\n"]
+
+
 def test_scan_single_file_stores_estimated_tokens_for_text_file(tmp_path: Path) -> None:
     file_path = tmp_path / "tokens.txt"
     file_path.write_text("a" * 100)
