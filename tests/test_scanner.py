@@ -549,6 +549,11 @@ def test_estimate_tokens_larger_text(tmp_path: Path) -> None:
     assert estimate_tokens(file_path) == 25
 
 
+def test_repository_scanner_scan_raises_for_non_git_repository(tmp_path: Path) -> None:
+    with pytest.raises(subprocess.CalledProcessError):
+        RepositoryScanner().scan(tmp_path)
+
+
 def test_repository_scanner_scan_returns_tracked_file_infos(tmp_path: Path) -> None:
     subprocess.run(["git", "init"], cwd=tmp_path, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     subprocess.run(["git", "config", "user.name", "Test User"], cwd=tmp_path, check=True)
