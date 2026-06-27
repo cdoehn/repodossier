@@ -457,6 +457,25 @@ def test_scan_multiple_files_keeps_line_metrics_none_for_binary_files(tmp_path: 
     assert text_info.empty_line_count == 0
 
 
+def test_scan_single_file_stores_estimated_tokens_for_text_file(tmp_path: Path) -> None:
+    file_path = tmp_path / "tokens.txt"
+    file_path.write_text("a" * 100)
+
+    info = scan_single_file(tmp_path, file_path.relative_to(tmp_path))
+
+    assert info.estimated_tokens == 25
+
+
+def test_scan_single_file_keeps_estimated_tokens_none_for_binary_file(tmp_path: Path) -> None:
+    file_path = tmp_path / "binary_tokens.bin"
+    file_path.write_bytes(b"\x00\x01\x02")
+
+    info = scan_single_file(tmp_path, file_path.relative_to(tmp_path))
+
+    assert info.is_binary is True
+    assert info.estimated_tokens is None
+
+
 def test_estimate_tokens_empty_file(tmp_path: Path) -> None:
     file_path = tmp_path / "empty.txt"
     file_path.write_text("")

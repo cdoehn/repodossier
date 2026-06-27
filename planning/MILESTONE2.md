@@ -125,7 +125,7 @@
 
     Implementiert eine einfache Schätzung der Anzahl an KI-Tokens pro Datei. Eine exakte Tokenisierung ist zunächst nicht erforderlich; eine robuste Näherung genügt.
 
-  - [ ] 2.7.b Store estimated tokens in `FileInfo`
+  - [x] 2.7.b Store estimated tokens in `FileInfo`
 
     Speichert die geschätzte Tokenanzahl im `FileInfo`-Objekt. Diese Information wird später verwendet, um Exportgrößen abzuschätzen und große Projekte sinnvoll aufzuteilen.
 
