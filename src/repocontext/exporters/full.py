@@ -1,9 +1,4 @@
-"""Foundational structures for the Full Export MVP.
-
-This module intentionally contains only the section structure and context model
-for Milestone 3.1. Rendering full.txt and wiring the default CLI command are
-implemented in later Milestone 3 steps.
-"""
+"""Foundational structures and orchestration for the Full Export MVP."""
 
 from __future__ import annotations
 
@@ -11,8 +6,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Sequence
 
-from repocontext.git import RepositoryInfo
+from repocontext.git import RepositoryInfo, get_repository_info
 from repocontext.models import FileInfo
+from repocontext.scanner import RepositoryScanner
 
 FULL_EXPORT_SECTION_ORDER: tuple[str, ...] = (
     "ai_quick_start",
@@ -46,7 +42,7 @@ class FullExportContext:
     """Data required to build the Full Export output.
 
     The context deliberately separates repository discovery and file scanning
-    from later rendering and writing steps.
+    from rendering and writing steps.
     """
 
     repository_info: RepositoryInfo
@@ -133,3 +129,128 @@ def create_full_export_context(
         scanned_files=scanned_files,
         warnings=warnings,
     )
+
+
+def build_full_export_context(repository_root: Path | str) -> FullExportContext:
+    """Build the Full Export context for a Git repository."""
+    resolved_repository_root = Path(repository_root).resolve()
+    repository_info = get_repository_info(resolved_repository_root)
+    scanned_files = RepositoryScanner().scan(resolved_repository_root)
+
+    return create_full_export_context(
+        repository_info=repository_info,
+        scanned_files=scanned_files,
+    )
+
+
+def render_full_export(context: FullExportContext) -> str:
+    """Render a minimal Full Export skeleton.
+
+    Later Milestone 3 steps expand each section with its final content.
+    This function already keeps the section order stable and makes the
+    default CLI command able to produce full.txt.
+    """
+    sections = [
+        _render_ai_quick_start_placeholder(context),
+        _render_repository_statistics_placeholder(context),
+        _render_file_summary_placeholder(context),
+        _render_repository_tree_placeholder(context),
+        _render_complete_source_export_placeholder(context),
+        _render_warnings_placeholder(context),
+    ]
+    return "\n\n".join(section.rstrip() for section in sections).rstrip() + "\n"
+
+
+def write_full_export(
+    context: FullExportContext,
+    output_path: Path | str | None = None,
+) -> Path:
+    """Write the rendered Full Export to full.txt and return its path."""
+    resolved_output_path = (
+        Path(output_path).resolve()
+        if output_path is not None
+        else context.repository_root / "full.txt"
+    )
+    rendered_export = render_full_export(context)
+    resolved_output_path.write_text(rendered_export, encoding="utf-8")
+    return resolved_output_path
+
+
+def generate_full_export(repository_root: Path | str) -> Path:
+    """Build, render, and write the Full Export for a repository."""
+    context = build_full_export_context(repository_root)
+    return write_full_export(context)
+
+
+def _render_ai_quick_start_placeholder(context: FullExportContext) -> str:
+    return "\n".join(
+        [
+            FULL_EXPORT_SECTION_HEADINGS["ai_quick_start"],
+            "",
+            f"Repository: {context.repository_info.name or 'unknown'}",
+            "AI Quick Start details will be expanded in Milestone 3.4.",
+        ]
+    )
+
+
+def _render_repository_statistics_placeholder(context: FullExportContext) -> str:
+    return "\n".join(
+        [
+            FULL_EXPORT_SECTION_HEADINGS["repository_statistics"],
+            "",
+            f"Total tracked files: {context.tracked_file_count}",
+            f"Scanned files: {len(context.scanned_files)}",
+            f"Exported text files: {len(context.exported_text_files)}",
+            f"Skipped binary files: {len(context.skipped_binary_files)}",
+            f"Total lines: {context.total_line_count}",
+            f"Estimated tokens: {context.total_estimated_tokens}",
+            "",
+            "Repository statistics will be expanded in Milestone 3.3.",
+        ]
+    )
+
+
+def _render_file_summary_placeholder(context: FullExportContext) -> str:
+    return "\n".join(
+        [
+            FULL_EXPORT_SECTION_HEADINGS["file_summary"],
+            "",
+            f"Files ready for export: {len(context.exported_text_files)}",
+            "File Summary details will be expanded in Milestone 3.5.",
+        ]
+    )
+
+
+def _render_repository_tree_placeholder(context: FullExportContext) -> str:
+    return "\n".join(
+        [
+            FULL_EXPORT_SECTION_HEADINGS["repository_tree"],
+            "",
+            "Repository Tree rendering will be expanded in Milestone 3.6.",
+        ]
+    )
+
+
+def _render_complete_source_export_placeholder(context: FullExportContext) -> str:
+    return "\n".join(
+        [
+            FULL_EXPORT_SECTION_HEADINGS["complete_source_export"],
+            "",
+            f"Source files ready for dumping: {len(context.exported_text_files)}",
+            "Complete Source Export rendering will be expanded in Milestone 3.7.",
+        ]
+    )
+
+
+def _render_warnings_placeholder(context: FullExportContext) -> str:
+    lines = [
+        FULL_EXPORT_SECTION_HEADINGS["warnings"],
+        "",
+    ]
+
+    if context.warnings:
+        lines.extend(f"- {warning}" for warning in context.warnings)
+    else:
+        lines.append("Warning rendering will be expanded in Milestone 3.8.")
+
+    return "\n".join(lines)

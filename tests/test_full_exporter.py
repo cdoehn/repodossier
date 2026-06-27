@@ -6,6 +6,8 @@ from repocontext.exporters.full import (
     FullExportContext,
     create_full_export_context,
     iter_full_export_headings,
+    render_full_export,
+    write_full_export,
 )
 from repocontext.git import RepositoryInfo, TrackedFile
 from repocontext.models import FileInfo
@@ -169,3 +171,44 @@ def test_full_export_context_totals_use_exported_text_files_only(tmp_path: Path)
 
     assert context.total_line_count == 5
     assert context.total_estimated_tokens == 18
+
+
+def test_render_full_export_contains_sections_in_stable_order(tmp_path: Path) -> None:
+    repository_info = make_repository_info(tmp_path)
+    context = create_full_export_context(repository_info, [])
+
+    rendered = render_full_export(context)
+
+    positions = [rendered.index(heading) for heading in iter_full_export_headings()]
+    assert positions == sorted(positions)
+
+
+def test_render_full_export_includes_basic_orchestration_counts(tmp_path: Path) -> None:
+    repository_info = make_repository_info(tmp_path)
+    exported = FileInfo(
+        relative_path=Path("README.md"),
+        absolute_path=tmp_path / "README.md",
+        is_text=True,
+        is_binary=False,
+        line_count=1,
+        estimated_tokens=4,
+        content="readme\n",
+    )
+
+    context = create_full_export_context(repository_info, [exported])
+    rendered = render_full_export(context)
+
+    assert "Total tracked files: 3" in rendered
+    assert "Scanned files: 1" in rendered
+    assert "Exported text files: 1" in rendered
+
+
+def test_write_full_export_writes_full_txt_to_repository_root(tmp_path: Path) -> None:
+    repository_info = make_repository_info(tmp_path)
+    context = create_full_export_context(repository_info, [])
+
+    output_path = write_full_export(context)
+
+    assert output_path == tmp_path / "full.txt"
+    assert output_path.exists()
+    assert "# AI Quick Start" in output_path.read_text(encoding="utf-8")

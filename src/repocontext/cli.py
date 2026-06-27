@@ -7,6 +7,7 @@ from importlib import metadata
 from pathlib import Path
 from typing import Iterable, Optional
 
+from .exporters import generate_full_export
 from .git import RepositoryInfo, find_repository_root, get_repository_info
 
 
@@ -57,11 +58,34 @@ def _print_repository_info(repository_info: RepositoryInfo) -> None:
     print(f"  Tracked files: {len(repository_info.tracked_files)}")
 
 
-def _handle_info_command(_args: argparse.Namespace) -> int:
-    """Run the repository info command."""
-    repository_root: Optional[Path] = find_repository_root()
+def _find_repository_root_or_report_error() -> Optional[Path]:
+    repository_root = find_repository_root()
     if repository_root is None:
         print("Error: Could not determine the repository root.")
+        return None
+    return repository_root
+
+
+def _handle_full_export_command(_args: argparse.Namespace) -> int:
+    """Run the default Full Export command."""
+    repository_root = _find_repository_root_or_report_error()
+    if repository_root is None:
+        return 1
+
+    try:
+        output_path = generate_full_export(repository_root)
+    except OSError as exc:
+        print(f"Error: Could not write full.txt: {exc}")
+        return 1
+
+    print(f"Wrote {output_path}")
+    return 0
+
+
+def _handle_info_command(_args: argparse.Namespace) -> int:
+    """Run the repository info command."""
+    repository_root = _find_repository_root_or_report_error()
+    if repository_root is None:
         return 1
 
     repository_info = get_repository_info(repository_root)
@@ -79,7 +103,7 @@ def _build_parser() -> argparse.ArgumentParser:
     info_parser = subparsers.add_parser("info", help="Show repository info")
     info_parser.set_defaults(handler=_handle_info_command)
 
-    parser.set_defaults(handler=_handle_info_command)
+    parser.set_defaults(handler=_handle_full_export_command)
     return parser
 
 

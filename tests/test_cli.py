@@ -70,18 +70,41 @@ def test_cli_info_command_inside_repository(tmp_path: Path, monkeypatch: pytest.
     assert "Tracked files:" in output
 
 
-def test_cli_default_command_delegates_to_info(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
+def test_cli_default_command_creates_full_export(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
     repo_path = setup_repository(tmp_path / "repo_default")
     monkeypatch.chdir(repo_path)
 
     exit_code = main([])
 
     assert exit_code == 0
+    output_path = repo_path / "full.txt"
+    assert output_path.exists()
+    content = output_path.read_text(encoding="utf-8")
+    assert "# AI Quick Start" in content
+    assert "# Repository Statistics" in content
+    assert "# File Summary" in content
+    assert "# Repository Tree" in content
+    assert "# Complete Source Export" in content
+    assert "# Warnings" in content
+
     captured = capsys.readouterr()
-    output = captured.out
-    assert "Repository info:" in output
-    assert "Name:" in output
-    assert "Root:" in output
+    assert f"Wrote {output_path}" in captured.out
+
+
+def test_cli_default_command_writes_full_txt_to_repository_root_from_subdirectory(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo_path = setup_repository(tmp_path / "repo_from_subdir")
+    nested_dir = repo_path / "nested" / "dir"
+    nested_dir.mkdir(parents=True)
+    monkeypatch.chdir(nested_dir)
+
+    exit_code = main([])
+
+    assert exit_code == 0
+    assert (repo_path / "full.txt").exists()
+    assert not (nested_dir / "full.txt").exists()
 
 
 def test_cli_info_command_outside_repository(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
@@ -90,6 +113,18 @@ def test_cli_info_command_outside_repository(tmp_path: Path, monkeypatch: pytest
     monkeypatch.chdir(non_repo_path)
 
     exit_code = main(["info"])
+
+    assert exit_code == 1
+    captured = capsys.readouterr()
+    assert "Error: Could not determine the repository root." in captured.out
+
+
+def test_cli_default_command_outside_repository(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
+    non_repo_path = tmp_path / "outside_default"
+    non_repo_path.mkdir()
+    monkeypatch.chdir(non_repo_path)
+
+    exit_code = main([])
 
     assert exit_code == 1
     captured = capsys.readouterr()
