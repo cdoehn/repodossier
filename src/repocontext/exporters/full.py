@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections import Counter
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Sequence
@@ -117,6 +118,16 @@ class FullExportContext:
             for file_info in self.exported_text_files
         )
 
+    @property
+    def file_type_counts(self) -> tuple[tuple[str, int], ...]:
+        """Return repository file type counts based on scanned file extensions."""
+        counter: Counter[str] = Counter()
+        for file_info in self.sorted_files:
+            suffix = file_info.relative_path.suffix.lower()
+            file_type = suffix if suffix else "[no extension]"
+            counter[file_type] += 1
+        return tuple(sorted(counter.items()))
+
 
 def create_full_export_context(
     repository_info: RepositoryInfo,
@@ -152,7 +163,7 @@ def render_full_export(context: FullExportContext) -> str:
     """
     sections = [
         _render_ai_quick_start_placeholder(context),
-        _render_repository_statistics_placeholder(context),
+        _render_repository_statistics(context),
         _render_file_summary_placeholder(context),
         _render_repository_tree_placeholder(context),
         _render_complete_source_export_placeholder(context),
@@ -193,21 +204,31 @@ def _render_ai_quick_start_placeholder(context: FullExportContext) -> str:
     )
 
 
-def _render_repository_statistics_placeholder(context: FullExportContext) -> str:
-    return "\n".join(
-        [
-            FULL_EXPORT_SECTION_HEADINGS["repository_statistics"],
-            "",
-            f"Total tracked files: {context.tracked_file_count}",
-            f"Scanned files: {len(context.scanned_files)}",
-            f"Exported text files: {len(context.exported_text_files)}",
-            f"Skipped binary files: {len(context.skipped_binary_files)}",
-            f"Total lines: {context.total_line_count}",
-            f"Estimated tokens: {context.total_estimated_tokens}",
-            "",
-            "Repository statistics will be expanded in Milestone 3.3.",
-        ]
-    )
+def _render_repository_statistics(context: FullExportContext) -> str:
+    """Render repository-wide statistics for the Full Export."""
+    lines = [
+        FULL_EXPORT_SECTION_HEADINGS["repository_statistics"],
+        "",
+        f"Total tracked files: {context.tracked_file_count}",
+        f"Scanned files: {len(context.scanned_files)}",
+        f"Exported text files: {len(context.exported_text_files)}",
+        f"Skipped binary files: {len(context.skipped_binary_files)}",
+        f"Errored files: {len(context.errored_files)}",
+        f"Total lines: {context.total_line_count}",
+        f"Estimated tokens: {context.total_estimated_tokens}",
+        "",
+        "File types:",
+    ]
+
+    if context.file_type_counts:
+        lines.extend(
+            f"- {file_type}: {count}"
+            for file_type, count in context.file_type_counts
+        )
+    else:
+        lines.append("- none: 0")
+
+    return "\n".join(lines)
 
 
 def _render_file_summary_placeholder(context: FullExportContext) -> str:

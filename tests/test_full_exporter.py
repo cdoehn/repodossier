@@ -173,6 +173,70 @@ def test_full_export_context_totals_use_exported_text_files_only(tmp_path: Path)
     assert context.total_estimated_tokens == 18
 
 
+def test_full_export_context_counts_file_types_from_scanned_files(tmp_path: Path) -> None:
+    repository_info = make_repository_info(tmp_path)
+    files = [
+        FileInfo(relative_path=Path("README.md"), absolute_path=tmp_path / "README.md"),
+        FileInfo(relative_path=Path("src/module.py"), absolute_path=tmp_path / "src/module.py"),
+        FileInfo(relative_path=Path("image.bin"), absolute_path=tmp_path / "image.bin"),
+        FileInfo(relative_path=Path("LICENSE"), absolute_path=tmp_path / "LICENSE"),
+    ]
+
+    context = create_full_export_context(repository_info, files)
+
+    assert context.file_type_counts == (
+        (".bin", 1),
+        (".md", 1),
+        (".py", 1),
+        ("[no extension]", 1),
+    )
+
+
+def test_render_full_export_renders_complete_repository_statistics(tmp_path: Path) -> None:
+    repository_info = make_repository_info(tmp_path)
+    exported = FileInfo(
+        relative_path=Path("README.md"),
+        absolute_path=tmp_path / "README.md",
+        is_text=True,
+        is_binary=False,
+        line_count=2,
+        estimated_tokens=6,
+        content="# Example\nText\n",
+    )
+    binary = FileInfo(
+        relative_path=Path("image.bin"),
+        absolute_path=tmp_path / "image.bin",
+        is_text=False,
+        is_binary=True,
+        content=None,
+    )
+    errored = FileInfo(
+        relative_path=Path("broken.txt"),
+        absolute_path=tmp_path / "broken.txt",
+        is_text=True,
+        is_binary=False,
+        content=None,
+        error="Could not read file",
+    )
+
+    context = create_full_export_context(repository_info, [binary, errored, exported])
+    rendered = render_full_export(context)
+
+    assert "# Repository Statistics" in rendered
+    assert "Total tracked files: 3" in rendered
+    assert "Scanned files: 3" in rendered
+    assert "Exported text files: 1" in rendered
+    assert "Skipped binary files: 1" in rendered
+    assert "Errored files: 1" in rendered
+    assert "Total lines: 2" in rendered
+    assert "Estimated tokens: 6" in rendered
+    assert "File types:" in rendered
+    assert "- .bin: 1" in rendered
+    assert "- .md: 1" in rendered
+    assert "- .txt: 1" in rendered
+    assert "Repository statistics will be expanded" not in rendered
+
+
 def test_render_full_export_contains_sections_in_stable_order(tmp_path: Path) -> None:
     repository_info = make_repository_info(tmp_path)
     context = create_full_export_context(repository_info, [])
