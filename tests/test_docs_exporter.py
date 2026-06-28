@@ -17,6 +17,13 @@ from repocontext.exporters.docs import (
     create_docs_export_context,
     is_documentation_file,
 )
+from repocontext.exporters.docs import (
+    DOCS_EXPORT_DOCUMENT_HEADING,
+    DOCS_EXPORT_SECTION_HEADINGS,
+    DOCS_EXPORT_SECTION_ORDER,
+    iter_docs_export_headings,
+    render_docs_export,
+)
 from repocontext.exporters.full import create_full_export_context
 from repocontext.git import RepositoryInfo, TrackedFile
 from repocontext.models import FileInfo
@@ -159,6 +166,186 @@ def test_documentation_category_order_is_stable():
         "License",
         "Other docs",
     )
+
+
+def test_docs_export_section_order_matches_milestone_9_structure():
+    assert DOCS_EXPORT_DOCUMENT_HEADING == "# Documentation Context"
+    assert DOCS_EXPORT_SECTION_ORDER == (
+        "documentation_quick_start",
+        "documentation_summary",
+        "documentation_files",
+        "extracted_documents",
+        "warnings",
+    )
+    assert iter_docs_export_headings() == (
+        "# Documentation Context",
+        "## Documentation Quick Start",
+        "## Documentation Summary",
+        "## Documentation Files",
+        "## Extracted Documents",
+        "## Warnings",
+    )
+
+
+def test_docs_export_headings_cover_every_ordered_section():
+    assert set(DOCS_EXPORT_SECTION_HEADINGS) == set(DOCS_EXPORT_SECTION_ORDER)
+
+
+def test_render_docs_export_contains_required_sections_in_stable_order(tmp_path: Path):
+    context = make_docs_context(
+        tmp_path,
+        [
+            make_file(tmp_path, "README.md", content="# Readme\n"),
+            make_file(tmp_path, "REPOCONTEXT_SPEC_v1.3.txt", content="Spec\n"),
+        ],
+    )
+
+    rendered = render_docs_export(context)
+
+    positions = [rendered.index(heading) for heading in iter_docs_export_headings()]
+    assert positions == sorted(positions)
+    assert rendered.endswith("\n")
+
+
+def test_render_docs_export_quick_start_summarizes_repository_docs(tmp_path: Path):
+    context = make_docs_context(
+        tmp_path,
+        [
+            make_file(tmp_path, "README.md", line_count=2, estimated_tokens=1200),
+            make_file(
+                tmp_path,
+                "planning/REPOCONTEXT_ROADMAP.md",
+                line_count=3,
+                estimated_tokens=2400,
+            ),
+        ],
+    )
+
+    rendered = render_docs_export(context)
+
+    assert "Repository: example" in rendered
+    assert "Documentation files: 2" in rendered
+    assert "Total documentation lines: 5" in rendered
+    assert "Estimated documentation tokens: 3,600" in rendered
+    assert "Purpose: Documentation-only export for AI review." in rendered
+    assert "- Primary documentation: 1" in rendered
+    assert "- Tasks and roadmap: 1" in rendered
+
+
+def test_render_docs_export_summary_groups_files_by_category(tmp_path: Path):
+    context = make_docs_context(
+        tmp_path,
+        [
+            make_file(tmp_path, "docs/usage.md", line_count=7, estimated_tokens=70),
+            make_file(tmp_path, "README.md", line_count=2, estimated_tokens=20),
+            make_file(
+                tmp_path,
+                "REPOCONTEXT_ARCHITECTURE.md",
+                line_count=5,
+                estimated_tokens=50,
+            ),
+        ],
+    )
+
+    rendered = render_docs_export(context)
+
+    assert "Primary documentation:\n- README.md — 2 lines, ~20 tokens" in rendered
+    assert (
+        "Architecture documentation:\n"
+        "- REPOCONTEXT_ARCHITECTURE.md — 5 lines, ~50 tokens"
+    ) in rendered
+    assert "Other docs:\n- docs/usage.md — 7 lines, ~70 tokens" in rendered
+    assert rendered.index("Primary documentation:") < rendered.index("Architecture documentation:")
+    assert rendered.index("Architecture documentation:") < rendered.index("Other docs:")
+
+
+def test_render_docs_export_manifest_lists_docs_as_markdown_table(tmp_path: Path):
+    context = make_docs_context(
+        tmp_path,
+        [
+            make_file(tmp_path, "README.md", line_count=2, estimated_tokens=20),
+            make_file(tmp_path, "docs/usage.md", line_count=3, estimated_tokens=30),
+        ],
+    )
+
+    rendered = render_docs_export(context)
+
+    assert "| Path | Category | Lines | Tokens |" in rendered
+    assert "| --- | --- | ---: | ---: |" in rendered
+    assert "| README.md | Primary documentation | 2 | 20 |" in rendered
+    assert "| docs/usage.md | Other docs | 3 | 30 |" in rendered
+
+
+def test_render_docs_export_extracts_document_contents_and_excludes_code(tmp_path: Path):
+    context = make_docs_context(
+        tmp_path,
+        [
+            make_file(tmp_path, "README.md", content="# Readme\nBody\n"),
+            make_file(tmp_path, "src/app.py", content="print('no')\n"),
+        ],
+    )
+
+    rendered = render_docs_export(context)
+
+    assert "### File: README.md" in rendered
+    assert "```markdown\n# Readme\nBody\n```" in rendered
+    assert "### File: src/app.py" not in rendered
+    assert "print('no')" not in rendered
+
+
+def test_render_docs_export_uses_longer_fence_for_markdown_with_code_fences(tmp_path: Path):
+    context = make_docs_context(
+        tmp_path,
+        [
+            make_file(
+                tmp_path,
+                "README.md",
+                content="# Readme\n\n```python\nprint('nested')\n```\n",
+            ),
+        ],
+    )
+
+    rendered = render_docs_export(context)
+
+    assert "````markdown\n# Readme" in rendered
+    assert "\n````\n\n## Warnings" in rendered
+
+
+def test_render_docs_export_renders_warnings_or_no_warning_state(tmp_path: Path):
+    clean_context = make_docs_context(tmp_path, [make_file(tmp_path, "README.md")])
+    broken_context = make_docs_context(
+        tmp_path,
+        [
+            make_file(
+                tmp_path,
+                "docs/broken.md",
+                content=None,
+                error="Could not read file",
+            )
+        ],
+    )
+
+    clean_rendered = render_docs_export(clean_context)
+    broken_rendered = render_docs_export(broken_context)
+
+    assert "## Warnings\n\nNo warnings." in clean_rendered
+    assert "- No documentation files found." in broken_rendered
+    assert (
+        "- Skipped unreadable documentation file: docs/broken.md: Could not read file"
+        in broken_rendered
+    )
+
+
+def test_render_docs_export_handles_no_documentation_files(tmp_path: Path):
+    context = make_docs_context(tmp_path, [make_file(tmp_path, "src/app.py")])
+
+    rendered = render_docs_export(context)
+
+    assert "Documentation files: 0" in rendered
+    assert "Document types:\n- none" in rendered
+    assert "No documentation files found." in rendered
+    assert "No documentation files exported." in rendered
+    assert "No documentation files available for extraction." in rendered
 
 
 def test_documentation_file_detection_is_case_insensitive():

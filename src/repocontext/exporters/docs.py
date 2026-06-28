@@ -1,8 +1,8 @@
 """Documentation export helpers for RepoContext.
 
-This module contains the documentation-file detection and export-context
-foundation for Milestone 9. Rendering, writing, and CLI integration are added
-in later steps.
+This module contains the documentation-file detection, export-context model,
+and renderer for Milestone 9. Writing and CLI integration are added in later
+steps.
 """
 
 from __future__ import annotations
@@ -17,6 +17,23 @@ from .full import FullExportContext, build_full_export_context
 
 
 DOCS_EXPORT_FILENAME = "docs.txt"
+DOCS_EXPORT_DOCUMENT_HEADING = "# Documentation Context"
+
+DOCS_EXPORT_SECTION_ORDER: tuple[str, ...] = (
+    "documentation_quick_start",
+    "documentation_summary",
+    "documentation_files",
+    "extracted_documents",
+    "warnings",
+)
+
+DOCS_EXPORT_SECTION_HEADINGS: dict[str, str] = {
+    "documentation_quick_start": "## Documentation Quick Start",
+    "documentation_summary": "## Documentation Summary",
+    "documentation_files": "## Documentation Files",
+    "extracted_documents": "## Extracted Documents",
+    "warnings": "## Warnings",
+}
 
 GENERATED_EXPORT_FILENAMES: frozenset[str] = frozenset(
     {
@@ -166,6 +183,18 @@ class DocumentationExportContext:
         return sum(document.estimated_tokens for document in self.documentation_files)
 
 
+def iter_docs_export_headings() -> tuple[str, ...]:
+    """Return docs export headings in stable render order."""
+
+    return (
+        DOCS_EXPORT_DOCUMENT_HEADING,
+        *(
+            DOCS_EXPORT_SECTION_HEADINGS[section_name]
+            for section_name in DOCS_EXPORT_SECTION_ORDER
+        ),
+    )
+
+
 def build_docs_export_context(repository_root: Path | str) -> DocumentationExportContext:
     """Build the documentation export context for a Git repository."""
 
@@ -209,6 +238,21 @@ def create_docs_export_context(
         skipped_files=skipped_files,
         warnings=warnings,
     )
+
+
+def render_docs_export(context: DocumentationExportContext) -> str:
+    """Render the complete documentation export text."""
+
+    sections = [
+        DOCS_EXPORT_DOCUMENT_HEADING,
+        _render_documentation_quick_start_section(context),
+        _render_documentation_summary_section(context),
+        _render_documentation_files_section(context),
+        _render_extracted_documents_section(context),
+        _render_warnings_section(context),
+    ]
+
+    return "\n\n".join(section.rstrip() for section in sections).rstrip() + "\n"
 
 
 def is_documentation_file(path: str | Path, *, is_binary: bool = False) -> bool:
@@ -268,6 +312,175 @@ def categorize_documentation_file(path: str | Path) -> str | None:
         return LICENSE_CATEGORY
 
     return OTHER_DOCS_CATEGORY
+
+
+def _render_documentation_quick_start_section(
+    context: DocumentationExportContext,
+) -> str:
+    """Render a compact AI-oriented docs export introduction."""
+
+    repository_name = context.repository_info.name or context.repository_root.name
+    category_counts = _documentation_category_counts(context.documentation_files)
+
+    lines = [
+        DOCS_EXPORT_SECTION_HEADINGS["documentation_quick_start"],
+        "",
+        f"Repository: {repository_name}",
+        f"Documentation files: {len(context.documentation_files)}",
+        f"Total documentation lines: {_format_number(context.total_line_count)}",
+        f"Estimated documentation tokens: {_format_number(context.estimated_token_count)}",
+        "Purpose: Documentation-only export for AI review.",
+        "",
+        "Document types:",
+    ]
+
+    if category_counts:
+        for category in DOCUMENTATION_CATEGORY_ORDER:
+            count = category_counts.get(category, 0)
+            if count:
+                lines.append(f"- {category}: {count}")
+    else:
+        lines.append("- none")
+
+    return "\n".join(lines)
+
+
+def _render_documentation_summary_section(
+    context: DocumentationExportContext,
+) -> str:
+    """Render documentation files grouped by stable category."""
+
+    lines = [
+        DOCS_EXPORT_SECTION_HEADINGS["documentation_summary"],
+        "",
+    ]
+
+    if not context.documentation_files:
+        lines.append("No documentation files found.")
+        return "\n".join(lines)
+
+    first_category = True
+    for category in DOCUMENTATION_CATEGORY_ORDER:
+        documents = [
+            document
+            for document in context.documentation_files
+            if document.category == category
+        ]
+        if not documents:
+            continue
+
+        if not first_category:
+            lines.append("")
+        first_category = False
+
+        lines.append(f"{category}:")
+        for document in documents:
+            lines.append(
+                "- "
+                f"{document.relative_path.as_posix()} "
+                f"— {document.line_count} lines, "
+                f"~{_format_number(document.estimated_tokens)} tokens"
+            )
+
+    return "\n".join(lines)
+
+
+def _render_documentation_files_section(
+    context: DocumentationExportContext,
+) -> str:
+    """Render a machine-readable manifest table for exported docs."""
+
+    lines = [
+        DOCS_EXPORT_SECTION_HEADINGS["documentation_files"],
+        "",
+    ]
+
+    if not context.documentation_files:
+        lines.append("No documentation files exported.")
+        return "\n".join(lines)
+
+    lines.extend(
+        [
+            "| Path | Category | Lines | Tokens |",
+            "| --- | --- | ---: | ---: |",
+        ]
+    )
+
+    for document in context.documentation_files:
+        lines.append(
+            "| "
+            f"{_escape_markdown_table_cell(document.relative_path.as_posix())} | "
+            f"{_escape_markdown_table_cell(document.category)} | "
+            f"{document.line_count} | "
+            f"{document.estimated_tokens} |"
+        )
+
+    return "\n".join(lines)
+
+
+def _render_extracted_documents_section(
+    context: DocumentationExportContext,
+) -> str:
+    """Render the full content of every exportable documentation file."""
+
+    lines = [
+        DOCS_EXPORT_SECTION_HEADINGS["extracted_documents"],
+        "",
+    ]
+
+    if not context.documentation_files:
+        lines.append("No documentation files available for extraction.")
+        return "\n".join(lines)
+
+    first_document = True
+    for document in context.documentation_files:
+        if not first_document:
+            lines.append("")
+        first_document = False
+
+        fence = _choose_code_fence(document.content)
+        language = _code_fence_language(document.relative_path)
+
+        lines.extend(
+            [
+                f"### File: {document.relative_path.as_posix()}",
+                "",
+                f"{fence}{language}",
+                document.content.rstrip("\n"),
+                fence,
+            ]
+        )
+
+    return "\n".join(lines)
+
+
+def _render_warnings_section(context: DocumentationExportContext) -> str:
+    """Render deterministic docs export warnings."""
+
+    lines = [
+        DOCS_EXPORT_SECTION_HEADINGS["warnings"],
+        "",
+    ]
+
+    if not context.warnings:
+        lines.append("No warnings.")
+        return "\n".join(lines)
+
+    for warning in context.warnings:
+        lines.append(f"- {warning}")
+
+    return "\n".join(lines)
+
+
+def _documentation_category_counts(
+    documentation_files: Sequence[DocumentationFile],
+) -> dict[str, int]:
+    """Return stable counts by documentation category."""
+
+    counts: dict[str, int] = {}
+    for document in documentation_files:
+        counts[document.category] = counts.get(document.category, 0) + 1
+    return counts
 
 
 def _is_exportable_documentation_file(file_info: FileInfo) -> bool:
@@ -381,8 +594,43 @@ def _contains_word(value: str, word: str) -> bool:
     return any(part == word or part.startswith(f"{word}_") for part in normalized.split("_"))
 
 
+def _format_number(value: int) -> str:
+    """Return an English-style thousands-separated number."""
+
+    return f"{value:,}"
+
+
+def _escape_markdown_table_cell(value: str) -> str:
+    """Escape a value for use in a Markdown table cell."""
+
+    return value.replace("\\", "\\\\").replace("|", "\\|").replace("\n", " ")
+
+
+def _choose_code_fence(content: str) -> str:
+    """Return a code fence that is longer than any backtick run in content."""
+
+    fence_length = 3
+    while "`" * fence_length in content:
+        fence_length += 1
+    return "`" * fence_length
+
+
+def _code_fence_language(path: Path) -> str:
+    """Return a Markdown fence language for a documentation file."""
+
+    suffix = path.suffix.lower()
+    if suffix in {".md", ".markdown"}:
+        return "markdown"
+    if suffix == ".rst":
+        return "rst"
+    return "text"
+
+
 __all__ = [
     "DOCS_EXPORT_FILENAME",
+    "DOCS_EXPORT_DOCUMENT_HEADING",
+    "DOCS_EXPORT_SECTION_HEADINGS",
+    "DOCS_EXPORT_SECTION_ORDER",
     "GENERATED_EXPORT_FILENAMES",
     "DOCUMENTATION_CATEGORY_ORDER",
     "DocumentationExportContext",
@@ -398,4 +646,6 @@ __all__ = [
     "categorize_documentation_file",
     "create_docs_export_context",
     "is_documentation_file",
+    "iter_docs_export_headings",
+    "render_docs_export",
 ]
