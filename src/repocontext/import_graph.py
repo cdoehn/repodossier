@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import ast
-from dataclasses import dataclass
+from collections.abc import Mapping
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Literal
 
@@ -192,6 +193,83 @@ def build_python_module_map(
 
     return module_map
 
+
+def _absolute_local_import_candidates(reference: ImportReference) -> list[str]:
+    """Return local module candidates for an absolute import reference."""
+
+    if reference.import_type == "import":
+        if reference.imported_module is None:
+            return []
+        return [reference.imported_module]
+
+    if reference.import_type == "from":
+        candidates: list[str] = []
+        if reference.imported_module:
+            if reference.imported_name and reference.imported_name != "*":
+                candidates.append(f"{reference.imported_module}.{reference.imported_name}")
+            candidates.append(reference.imported_module)
+        return candidates
+
+    return []
+
+
+def _lookup_local_module(
+    module_name: str,
+    module_map: Mapping[str, str | Path],
+) -> tuple[str, Path] | None:
+    """Look up a module name in a local module map."""
+
+    target_path = module_map.get(module_name)
+    if target_path is None:
+        return None
+    return module_name, Path(target_path)
+
+
+def resolve_absolute_import_reference(
+    reference: ImportReference,
+    module_map: Mapping[str, str | Path],
+) -> ImportReference:
+    """Resolve one absolute import reference against known local modules.
+
+    Relative imports are intentionally left unchanged here. They are handled in
+    the dedicated relative-import resolver step.
+    """
+
+    if reference.is_relative or reference.level > 0:
+        return reference
+
+    for candidate in _absolute_local_import_candidates(reference):
+        resolved = _lookup_local_module(candidate, module_map)
+        if resolved is None:
+            continue
+
+        resolved_module, resolved_path = resolved
+        return replace(
+            reference,
+            is_local=True,
+            resolved_module=resolved_module,
+            resolved_path=resolved_path,
+        )
+
+    return replace(
+        reference,
+        is_local=False,
+        resolved_module=None,
+        resolved_path=None,
+    )
+
+
+def resolve_absolute_imports(
+    references: list[ImportReference] | tuple[ImportReference, ...],
+    module_map: Mapping[str, str | Path],
+) -> list[ImportReference]:
+    """Resolve absolute import references against known local modules."""
+
+    return [
+        resolve_absolute_import_reference(reference, module_map)
+        for reference in references
+    ]
+
 def parse_imports_from_source(
     source: str,
     *,
@@ -276,6 +354,8 @@ __all__ = [
     "ImportType",
     "build_python_module_map",
     "module_name_from_python_path",
+    "resolve_absolute_import_reference",
+    "resolve_absolute_imports",
     "parse_imports_from_file",
     "parse_imports_from_source",
 ]
