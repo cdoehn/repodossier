@@ -759,6 +759,88 @@ def _collect_warnings(context: FullExportContext) -> tuple[str, ...]:
     return tuple(warnings)
 
 
+
+def _format_import_graph_section(import_graph, *, max_edges=200, max_imports=100):
+    """Render a compact Import Graph section for full.txt."""
+
+    from repocontext.import_graph import calculate_import_graph_metrics
+
+    metrics = calculate_import_graph_metrics(import_graph)
+    lines = [
+        "## Import Graph",
+        "",
+        "Summary:",
+        f"- Local modules: {metrics.module_count}",
+        f"- Local dependencies: {metrics.local_dependency_count}",
+        f"- External imports: {metrics.external_import_count}",
+        f"- Unresolved imports: {metrics.unresolved_import_count}",
+        f"- Analysis errors: {metrics.error_count}",
+        "",
+    ]
+
+    if metrics.root_modules:
+        lines.append("Root modules:")
+        for module_name in metrics.root_modules[:max_imports]:
+            lines.append(f"- {module_name}")
+        lines.append("")
+
+    if metrics.leaf_modules:
+        lines.append("Leaf modules:")
+        for module_name in metrics.leaf_modules[:max_imports]:
+            lines.append(f"- {module_name}")
+        lines.append("")
+
+    lines.append("Local dependencies:")
+    if import_graph.edges:
+        for edge in import_graph.edges[:max_edges]:
+            lines.append(f"- {edge.source_module} -> {edge.target_module}")
+        if len(import_graph.edges) > max_edges:
+            lines.append(f"- ... {len(import_graph.edges) - max_edges} more")
+    else:
+        lines.append("- none")
+    lines.append("")
+
+    lines.append("External imports:")
+    external_names = sorted(
+        {
+            reference.imported_module
+            for reference in import_graph.external_imports
+            if reference.imported_module
+        }
+    )
+    if external_names:
+        for imported_module in external_names[:max_imports]:
+            lines.append(f"- {imported_module}")
+        if len(external_names) > max_imports:
+            lines.append(f"- ... {len(external_names) - max_imports} more")
+    else:
+        lines.append("- none")
+    lines.append("")
+
+    lines.append("Unresolved imports:")
+    if import_graph.unresolved_imports:
+        for reference in import_graph.unresolved_imports[:max_imports]:
+            imported = reference.imported_module or "."
+            if reference.imported_name:
+                imported = f"{imported}.{reference.imported_name}"
+            lines.append(f"- {reference.source_module}: {imported}")
+        if len(import_graph.unresolved_imports) > max_imports:
+            lines.append(f"- ... {len(import_graph.unresolved_imports) - max_imports} more")
+    else:
+        lines.append("- none")
+    lines.append("")
+
+    if import_graph.errors:
+        lines.append("Analysis errors:")
+        for error in import_graph.errors[:max_imports]:
+            lines.append(f"- {error.source_path}: {error.error_type}: {error.message}")
+        if len(import_graph.errors) > max_imports:
+            lines.append(f"- ... {len(import_graph.errors) - max_imports} more")
+        lines.append("")
+
+    return "\n".join(lines).rstrip()
+
+
 # Import graph integration for the full export pipeline.
 #
 # This adapter connects the existing export file list to the import graph
@@ -814,4 +896,66 @@ def _build_import_graph_for_export(repo_root, files):
             source_paths.append(source_path)
 
     return build_import_graph(source_paths, repo_root=repo_root)
+
+
+_ORIGINAL_RENDER_FULL_EXPORT_WITHOUT_IMPORT_GRAPH = render_full_export
+
+
+def render_full_export(*args, **kwargs):
+    """Render the full export and append the Import Graph section when possible."""
+
+    output = _ORIGINAL_RENDER_FULL_EXPORT_WITHOUT_IMPORT_GRAPH(*args, **kwargs)
+
+    if not isinstance(output, str):
+        return output
+
+    repo_root = kwargs.get("repo_root")
+    files = kwargs.get("files")
+
+    # Most full-export renderers receive a FullExportContext. Prefer context fields.
+    context = None
+    for value in list(args) + list(kwargs.values()):
+        if hasattr(value, "repository_info"):
+            context = value
+            break
+
+    if context is not None:
+        repository_info = getattr(context, "repository_info", None)
+        if repo_root is None and repository_info is not None:
+            repo_root = getattr(repository_info, "root_path", None)
+
+        if files is None:
+            for attribute_name in ("files", "scanned_files", "file_summaries"):
+                if hasattr(context, attribute_name):
+                    candidate_files = getattr(context, attribute_name)
+                    if candidate_files is not None:
+                        files = candidate_files
+                        break
+
+    if repo_root is None:
+        for value in list(args) + list(kwargs.values()):
+            if hasattr(value, "root_path"):
+                repo_root = getattr(value, "root_path")
+                break
+
+    if files is None:
+        for value in list(args) + list(kwargs.values()):
+            if isinstance(value, (list, tuple)):
+                files = value
+                break
+
+    if repo_root is None or files is None:
+        return output
+
+    try:
+        import_graph = _build_import_graph_for_export(repo_root, files)
+        section = _format_import_graph_section(import_graph)
+    except Exception:
+        return output
+
+    if "## Import Graph" in output:
+        return output
+
+    separator = "\n\n" if output and not output.endswith("\n\n") else ""
+    return f"{output}{separator}{section}\n"
 
