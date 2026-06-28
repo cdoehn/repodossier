@@ -1,4 +1,5 @@
 from repocontext.symbols import (
+    build_symbol_index,
     FileSymbolIndex,
     SymbolInfo,
     extract_symbols_from_file,
@@ -401,6 +402,132 @@ def test_extract_symbols_preserves_top_level_source_order_with_methods(tmp_path)
         "Middle",
         None,
     ]
+
+
+def test_build_symbol_index_extracts_symbols_from_multiple_python_files(tmp_path):
+    first = tmp_path / "first.py"
+    first.write_text(
+        "class Service:\n"
+        "    def start(self):\n"
+        "        return 'started'\n",
+        encoding="utf-8",
+    )
+
+    second = tmp_path / "second.py"
+    second.write_text(
+        "async def fetch():\n"
+        "    return 42\n",
+        encoding="utf-8",
+    )
+
+    indexes = build_symbol_index([first, second])
+
+    assert [index.file_path for index in indexes] == [str(first), str(second)]
+    assert [[symbol.name for symbol in index.symbols] for index in indexes] == [
+        ["Service", "start"],
+        ["fetch"],
+    ]
+    assert [[symbol.kind for symbol in index.symbols] for index in indexes] == [
+        ["class", "method"],
+        ["function"],
+    ]
+
+
+def test_build_symbol_index_skips_non_python_files(tmp_path):
+    python_file = tmp_path / "module.py"
+    python_file.write_text(
+        "def main():\n"
+        "    return None\n",
+        encoding="utf-8",
+    )
+
+    text_file = tmp_path / "README.md"
+    text_file.write_text("# Documentation\n", encoding="utf-8")
+
+    indexes = build_symbol_index([python_file, text_file])
+
+    assert [index.file_path for index in indexes] == [str(python_file)]
+    assert [symbol.name for symbol in indexes[0].symbols] == ["main"]
+
+
+def test_build_symbol_index_keeps_going_after_syntax_error(tmp_path):
+    good_file = tmp_path / "good.py"
+    good_file.write_text(
+        "def ok():\n"
+        "    return True\n",
+        encoding="utf-8",
+    )
+
+    broken_file = tmp_path / "broken.py"
+    broken_file.write_text(
+        "def broken(:\n"
+        "    pass\n",
+        encoding="utf-8",
+    )
+
+    another_good_file = tmp_path / "another_good.py"
+    another_good_file.write_text(
+        "class Fine:\n"
+        "    pass\n",
+        encoding="utf-8",
+    )
+
+    indexes = build_symbol_index([good_file, broken_file, another_good_file])
+
+    assert [index.file_path for index in indexes] == [
+        str(good_file),
+        str(broken_file),
+        str(another_good_file),
+    ]
+
+    assert [symbol.name for symbol in indexes[0].symbols] == ["ok"]
+    assert indexes[0].errors == []
+
+    assert indexes[1].symbols == []
+    assert len(indexes[1].errors) == 1
+    assert indexes[1].errors[0].startswith("SyntaxError")
+
+    assert [symbol.name for symbol in indexes[2].symbols] == ["Fine"]
+    assert indexes[2].errors == []
+
+
+def test_build_symbol_index_keeps_going_after_missing_python_file(tmp_path):
+    existing_file = tmp_path / "existing.py"
+    existing_file.write_text(
+        "def existing():\n"
+        "    return True\n",
+        encoding="utf-8",
+    )
+
+    missing_file = tmp_path / "missing.py"
+
+    indexes = build_symbol_index([existing_file, missing_file])
+
+    assert [index.file_path for index in indexes] == [
+        str(existing_file),
+        str(missing_file),
+    ]
+
+    assert [symbol.name for symbol in indexes[0].symbols] == ["existing"]
+    assert indexes[0].errors == []
+
+    assert indexes[1].symbols == []
+    assert len(indexes[1].errors) == 1
+    assert indexes[1].errors[0].startswith("FileNotFoundError")
+
+
+def test_build_symbol_index_accepts_string_paths(tmp_path):
+    path = tmp_path / "string_path.py"
+    path.write_text(
+        "class StringPath:\n"
+        "    pass\n",
+        encoding="utf-8",
+    )
+
+    indexes = build_symbol_index([str(path)])
+
+    assert [index.file_path for index in indexes] == [str(path)]
+    assert [symbol.name for symbol in indexes[0].symbols] == ["StringPath"]
 
 
 def test_extract_symbols_from_syntax_error_file(tmp_path):

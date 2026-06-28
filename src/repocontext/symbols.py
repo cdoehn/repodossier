@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import ast
 from dataclasses import dataclass, field
+from collections.abc import Iterable
 from pathlib import Path
 
 
@@ -150,6 +151,34 @@ def _extract_top_level_symbols(
             symbols.extend(_extract_methods_from_class_node(node, file_path=file_path))
 
     return symbols
+
+
+def _is_python_file(path: Path) -> bool:
+    """Return True when path should be parsed as Python source."""
+
+    return path.suffix == ".py"
+
+
+def build_symbol_index(files: Iterable[str | Path]) -> list[FileSymbolIndex]:
+    """Build a symbol index for a collection of files.
+
+    Only Python files are analyzed. Non-Python paths are skipped.
+    Each Python file produces one FileSymbolIndex, including files that
+    contain syntax errors or cannot be read, so one bad file does not
+    abort the full index build.
+    """
+
+    indexes: list[FileSymbolIndex] = []
+
+    for file in files:
+        path = Path(file)
+
+        if not _is_python_file(path):
+            continue
+
+        indexes.append(extract_symbols_from_file(path))
+
+    return indexes
 
 
 def extract_symbols_from_file(path: str | Path) -> FileSymbolIndex:
