@@ -1,11 +1,13 @@
 from pathlib import Path
 from types import SimpleNamespace
 
+from repocontext.call_graph import CallEdge, CallGraph
 from repocontext.import_graph import ImportEdge, ImportGraph
 from repocontext.ranking import (
     ImportantFileScore,
     rank_important_files,
 )
+from repocontext.symbols import FileSymbolIndex, SymbolInfo
 
 
 def make_file(
@@ -42,6 +44,22 @@ def reasons_for(
     path: str,
 ) -> tuple[str, ...]:
     return score_for(ranked, path).reasons
+
+
+def symbol_index_for_service_project() -> list[FileSymbolIndex]:
+    return [
+        FileSymbolIndex(
+            file_path="src/demo/service.py",
+            symbols=[
+                SymbolInfo(
+                    name="run",
+                    kind="function",
+                    file_path="src/demo/service.py",
+                    line_start=1,
+                )
+            ],
+        )
+    ]
 
 
 def test_rank_important_files_returns_score_model_with_signal_breakdown() -> None:
@@ -319,6 +337,236 @@ def test_import_centrality_deduplicates_repeated_edges_by_source_and_target() ->
 
     core_score = score_for(ranked, "src/demo/core.py")
     assert "Imported by 1 local file" in core_score.reasons
+
+
+def test_call_centrality_ranks_frequently_called_file_above_unused_file() -> None:
+    graph = CallGraph(
+        [
+            CallEdge(
+                caller_file="src/demo/cli.py",
+                caller_name="main",
+                caller_qualified_name="demo.cli.main",
+                callee_name="run",
+                callee_qualified_name="demo.service.run",
+                line_number=3,
+                call_type="function",
+                confidence="imported_local",
+            ),
+            CallEdge(
+                caller_file="src/demo/api.py",
+                caller_name="handle",
+                caller_qualified_name="demo.api.handle",
+                callee_name="run",
+                callee_qualified_name="demo.service.run",
+                line_number=4,
+                call_type="function",
+                confidence="imported_local",
+            ),
+            CallEdge(
+                caller_file="src/demo/worker.py",
+                caller_name="work",
+                caller_qualified_name="demo.worker.work",
+                callee_name="run",
+                callee_qualified_name="demo.service.run",
+                line_number=5,
+                call_type="function",
+                confidence="imported_local",
+            ),
+        ]
+    )
+
+    ranked = rank_important_files(
+        [
+            make_file("src/demo/cli.py"),
+            make_file("src/demo/api.py"),
+            make_file("src/demo/worker.py"),
+            make_file("src/demo/service.py"),
+            make_file("src/demo/unused.py"),
+        ],
+        call_graph=graph,
+        symbols=symbol_index_for_service_project(),
+    )
+
+    assert paths(ranked)[0] == "src/demo/service.py"
+    assert "src/demo/unused.py" not in paths(ranked)
+
+    service_score = score_for(ranked, "src/demo/service.py")
+    assert service_score.signals.call_centrality_score > 0
+    assert "Called by 3 local files" in service_score.reasons
+
+
+def test_call_centrality_gives_small_bonus_to_calling_files() -> None:
+    graph = CallGraph(
+        [
+            CallEdge(
+                caller_file="src/demo/controller.py",
+                caller_name="handle",
+                caller_qualified_name="demo.controller.handle",
+                callee_name="run",
+                callee_qualified_name="demo.service.run",
+                line_number=3,
+                call_type="function",
+                confidence="imported_local",
+            ),
+            CallEdge(
+                caller_file="src/demo/controller.py",
+                caller_name="handle",
+                caller_qualified_name="demo.controller.handle",
+                callee_name="load",
+                callee_qualified_name="demo.config.load",
+                line_number=4,
+                call_type="function",
+                confidence="imported_local",
+            ),
+        ]
+    )
+
+    symbols = [
+        FileSymbolIndex(
+            file_path="src/demo/service.py",
+            symbols=[
+                SymbolInfo(
+                    name="run",
+                    kind="function",
+                    file_path="src/demo/service.py",
+                    line_start=1,
+                )
+            ],
+        ),
+        FileSymbolIndex(
+            file_path="src/demo/config.py",
+            symbols=[
+                SymbolInfo(
+                    name="load",
+                    kind="function",
+                    file_path="src/demo/config.py",
+                    line_start=1,
+                )
+            ],
+        ),
+    ]
+
+    ranked = rank_important_files(
+        [
+            make_file("src/demo/controller.py"),
+            make_file("src/demo/service.py"),
+            make_file("src/demo/config.py"),
+        ],
+        call_graph=graph,
+        symbols=symbols,
+    )
+
+    controller_score = score_for(ranked, "src/demo/controller.py")
+    assert controller_score.signals.call_centrality_score > 0
+    assert "Calls 2 local files" in controller_score.reasons
+
+
+def test_call_centrality_ignores_unresolved_and_unknown_targets() -> None:
+    graph = CallGraph(
+        [
+            CallEdge(
+                caller_file="src/demo/interface.py",
+                caller_name="handle",
+                caller_qualified_name="demo.interface.handle",
+                callee_name="missing",
+                callee_qualified_name=None,
+                line_number=3,
+                call_type="function",
+                confidence="unresolved",
+            ),
+            CallEdge(
+                caller_file="src/demo/interface.py",
+                caller_name="handle",
+                caller_qualified_name="demo.interface.handle",
+                callee_name="ghost",
+                callee_qualified_name="demo.ghost.run",
+                line_number=4,
+                call_type="function",
+                confidence="imported_local",
+            ),
+        ]
+    )
+
+    ranked = rank_important_files(
+        [
+            make_file("src/demo/interface.py"),
+            make_file("src/demo/core.py"),
+        ],
+        call_graph=graph,
+        symbols=[
+            FileSymbolIndex(
+                file_path="src/demo/core.py",
+                symbols=[
+                    SymbolInfo(
+                        name="run",
+                        kind="function",
+                        file_path="src/demo/core.py",
+                        line_start=1,
+                    )
+                ],
+            )
+        ],
+    )
+
+    assert ranked == ()
+
+
+def test_call_centrality_resolves_methods_through_symbol_parent() -> None:
+    graph = CallGraph(
+        [
+            CallEdge(
+                caller_file="src/demo/cli.py",
+                caller_name="main",
+                caller_qualified_name="demo.cli.main",
+                callee_name="execute",
+                callee_qualified_name="demo.service.Service.execute",
+                line_number=3,
+                call_type="method",
+                confidence="imported_local",
+            )
+        ]
+    )
+
+    symbols = [
+        FileSymbolIndex(
+            file_path="src/demo/service.py",
+            symbols=[
+                SymbolInfo(
+                    name="execute",
+                    kind="method",
+                    file_path="src/demo/service.py",
+                    line_start=10,
+                    parent="Service",
+                )
+            ],
+        )
+    ]
+
+    ranked = rank_important_files(
+        [
+            make_file("src/demo/cli.py"),
+            make_file("src/demo/service.py"),
+        ],
+        call_graph=graph,
+        symbols=symbols,
+    )
+
+    service_score = score_for(ranked, "src/demo/service.py")
+    assert service_score.signals.call_centrality_score > 0
+    assert "Called by 1 local file" in service_score.reasons
+
+
+def test_call_centrality_handles_empty_call_graph_without_breaking_other_signals() -> None:
+    ranked = rank_important_files(
+        [
+            make_file("README.md"),
+            make_file("src/demo/cli.py"),
+        ],
+        call_graph=CallGraph(),
+        symbols=[],
+    )
+
+    assert paths(ranked) == ["README.md", "src/demo/cli.py"]
 
 
 def test_documentation_ranking_prioritizes_readme_and_architecture_docs() -> None:

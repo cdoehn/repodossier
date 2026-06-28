@@ -56,6 +56,11 @@ IMPORT_INCOMING_MAX_SCORE = 120
 IMPORT_OUTGOING_WEIGHT = 8
 IMPORT_OUTGOING_MAX_SCORE = 32
 
+CALL_INCOMING_WEIGHT = 35
+CALL_INCOMING_MAX_SCORE = 120
+CALL_OUTGOING_WEIGHT = 6
+CALL_OUTGOING_MAX_SCORE = 24
+
 
 @dataclass(frozen=True, slots=True)
 class ImportantFileSignals:
@@ -118,6 +123,29 @@ class _ImportCentrality:
         return tuple(reasons)
 
 
+@dataclass(frozen=True, slots=True)
+class _CallCentrality:
+    """Internal call centrality score details for one file."""
+
+    score: int = 0
+    incoming_count: int = 0
+    outgoing_count: int = 0
+
+    @property
+    def reasons(self) -> tuple[str, ...]:
+        reasons: list[str] = []
+
+        if self.incoming_count:
+            noun = "file" if self.incoming_count == 1 else "files"
+            reasons.append(f"Called by {self.incoming_count} local {noun}")
+
+        if self.outgoing_count:
+            noun = "file" if self.outgoing_count == 1 else "files"
+            reasons.append(f"Calls {self.outgoing_count} local {noun}")
+
+        return tuple(reasons)
+
+
 def rank_important_files(
     files: Iterable[object],
     *,
@@ -127,14 +155,9 @@ def rank_important_files(
     call_graph: object | None = None,
     project_metadata: object | None = None,
 ) -> tuple[ImportantFileScore, ...]:
-    """Rank important files with deterministic, explainable scores.
+    """Rank important files with deterministic, explainable scores."""
 
-    The additional keyword arguments are accepted now so later Milestone 12
-    patches can add symbol, call-graph, and project metadata scoring without
-    changing the public ranking API.
-    """
-
-    del symbols, call_graph, project_metadata
+    del project_metadata
 
     file_items = list(files)
     candidate_paths = _collect_candidate_paths(file_items)
@@ -144,6 +167,11 @@ def rank_important_files(
     )
     import_centrality_by_path = _calculate_import_centrality_by_path(
         import_graph,
+        candidate_paths,
+    )
+    call_centrality_by_path = _calculate_call_centrality_by_path(
+        call_graph,
+        symbols,
         candidate_paths,
     )
 
@@ -162,6 +190,7 @@ def rank_important_files(
             path,
             pyproject_entrypoint_paths=pyproject_entrypoint_paths,
             import_centrality_by_path=import_centrality_by_path,
+            call_centrality_by_path=call_centrality_by_path,
         )
         if score is None or score.score <= 0:
             continue
@@ -279,12 +308,7 @@ def _calculate_import_centrality_by_path(
     import_graph: object | None,
     candidate_paths: frozenset[str],
 ) -> dict[str, _ImportCentrality]:
-    """Calculate simple import centrality from ImportGraph-like edges.
-
-    Only file paths present in the current ranking candidate set are counted.
-    This keeps the ranking robust when the graph contains stale, external, or
-    otherwise unknown nodes.
-    """
+    """Calculate simple import centrality from ImportGraph-like edges."""
 
     if import_graph is None:
         return {}
@@ -336,6 +360,189 @@ def _calculate_import_centrality_by_path(
     return centrality
 
 
+def _calculate_call_centrality_by_path(
+    call_graph: object | None,
+    symbols: object | None,
+    candidate_paths: frozenset[str],
+) -> dict[str, _CallCentrality]:
+    """Calculate file centrality from resolved local CallGraph-like edges."""
+
+    if call_graph is None:
+        return {}
+
+    edges = getattr(call_graph, "edges", None)
+    if not edges:
+        return {}
+
+    symbol_path_lookup = _build_symbol_path_lookup(symbols, candidate_paths)
+
+    incoming_sources_by_target: dict[str, set[str]] = {}
+    outgoing_targets_by_source: dict[str, set[str]] = {}
+
+    for edge in edges:
+        source_path = _normalized_graph_path(getattr(edge, "caller_file", None))
+        target_path = _resolve_call_target_path(edge, symbol_path_lookup)
+
+        if source_path is None or target_path is None:
+            continue
+
+        if source_path not in candidate_paths or target_path not in candidate_paths:
+            continue
+
+        if source_path == target_path:
+            continue
+
+        incoming_sources_by_target.setdefault(target_path, set()).add(source_path)
+        outgoing_targets_by_source.setdefault(source_path, set()).add(target_path)
+
+    centrality: dict[str, _CallCentrality] = {}
+    all_paths = set(incoming_sources_by_target) | set(outgoing_targets_by_source)
+
+    for path in all_paths:
+        incoming_count = len(incoming_sources_by_target.get(path, set()))
+        outgoing_count = len(outgoing_targets_by_source.get(path, set()))
+        score = _bounded_score(
+            incoming_count,
+            weight=CALL_INCOMING_WEIGHT,
+            maximum=CALL_INCOMING_MAX_SCORE,
+        ) + _bounded_score(
+            outgoing_count,
+            weight=CALL_OUTGOING_WEIGHT,
+            maximum=CALL_OUTGOING_MAX_SCORE,
+        )
+        centrality[path] = _CallCentrality(
+            score=score,
+            incoming_count=incoming_count,
+            outgoing_count=outgoing_count,
+        )
+
+    return centrality
+
+
+def _build_symbol_path_lookup(
+    symbols: object | None,
+    candidate_paths: frozenset[str],
+) -> dict[str, str]:
+    """Build best-effort symbol qualified-name to file path lookup."""
+
+    if symbols is None:
+        return {}
+
+    lookup: dict[str, str] = {}
+    indexes = _iter_symbol_indexes(symbols)
+
+    for index in indexes:
+        index_file_path = _normalized_graph_path(getattr(index, "file_path", None))
+        if index_file_path not in candidate_paths:
+            continue
+
+        module_name = _module_name_from_path(index_file_path)
+        for symbol in getattr(index, "symbols", ()) or ():
+            symbol_name = getattr(symbol, "name", None)
+            if not symbol_name:
+                continue
+
+            symbol_file_path = _normalized_graph_path(
+                getattr(symbol, "file_path", None)
+            ) or index_file_path
+
+            if symbol_file_path not in candidate_paths:
+                continue
+
+            parent = getattr(symbol, "parent", None)
+            keys = {str(symbol_name)}
+
+            if parent:
+                keys.add(f"{parent}.{symbol_name}")
+
+            if module_name:
+                keys.add(f"{module_name}.{symbol_name}")
+                if parent:
+                    keys.add(f"{module_name}.{parent}.{symbol_name}")
+
+            for key in keys:
+                lookup.setdefault(key, symbol_file_path)
+
+    return lookup
+
+
+def _iter_symbol_indexes(symbols: object) -> tuple[object, ...]:
+    """Return FileSymbolIndex-like items from multiple possible containers."""
+
+    if isinstance(symbols, (str, bytes)):
+        return ()
+
+    if isinstance(symbols, Iterable):
+        return tuple(symbols)
+
+    for attribute_name in ("files", "indexes", "symbol_indexes"):
+        value = getattr(symbols, attribute_name, None)
+        if value is None or isinstance(value, (str, bytes)):
+            continue
+        if isinstance(value, Iterable):
+            return tuple(value)
+
+    return ()
+
+
+def _resolve_call_target_path(
+    edge: object,
+    symbol_path_lookup: dict[str, str],
+) -> str | None:
+    """Resolve a call edge callee to a repository-relative file path."""
+
+    explicit_path = _normalized_graph_path(getattr(edge, "callee_file", None))
+    if explicit_path is not None:
+        return explicit_path
+
+    qualified_name = getattr(edge, "callee_qualified_name", None)
+    if isinstance(qualified_name, str):
+        exact_match = symbol_path_lookup.get(qualified_name)
+        if exact_match is not None:
+            return exact_match
+
+        # A qualified unresolved target such as demo.ghost.run must not be
+        # resolved through a bare symbol named run in another file. Only allow
+        # suffix matches against qualified keys such as service.run or
+        # Service.execute, never against plain function names.
+        suffix_matches = [
+            path
+            for key, path in symbol_path_lookup.items()
+            if "." in key and qualified_name.endswith(f".{key}")
+        ]
+        unique_matches = sorted(set(suffix_matches))
+        if len(unique_matches) == 1:
+            return unique_matches[0]
+
+        return None
+
+    callee_name = getattr(edge, "callee_name", None)
+    if isinstance(callee_name, str):
+        return symbol_path_lookup.get(callee_name)
+
+    return None
+
+
+def _module_name_from_path(path: str | None) -> str | None:
+    """Return a best-effort Python module name for a repository path."""
+
+    if not path:
+        return None
+
+    normalized = Path(path).as_posix()
+    if normalized.endswith("/__init__.py"):
+        normalized = normalized[: -len("/__init__.py")]
+    elif normalized.endswith(".py"):
+        normalized = normalized[: -len(".py")]
+    else:
+        return None
+
+    if normalized.startswith("src/"):
+        normalized = normalized[len("src/") :]
+
+    return normalized.replace("/", ".")
+
+
 def _bounded_score(count: int, *, weight: int, maximum: int) -> int:
     """Return a capped linear score for count-based centrality signals."""
 
@@ -345,7 +552,7 @@ def _bounded_score(count: int, *, weight: int, maximum: int) -> int:
 
 
 def _normalized_graph_path(path: object) -> str | None:
-    """Return a normalized path from an import graph edge path."""
+    """Return a normalized path from an import/call graph edge path."""
 
     if path is None:
         return None
@@ -398,6 +605,7 @@ def _score_path(
     *,
     pyproject_entrypoint_paths: frozenset[str],
     import_centrality_by_path: dict[str, _ImportCentrality],
+    call_centrality_by_path: dict[str, _CallCentrality],
 ) -> ImportantFileScore | None:
     """Score one file path and return an explainable ranking result."""
 
@@ -408,12 +616,14 @@ def _score_path(
         pyproject_entrypoint_paths=pyproject_entrypoint_paths,
     )
     import_centrality = import_centrality_by_path.get(path_key, _ImportCentrality())
+    call_centrality = call_centrality_by_path.get(path_key, _CallCentrality())
     documentation_score, documentation_reasons = _score_documentation_path(path)
     structural_score, structural_reasons = _score_structural_path(file_info, path)
 
     signals = ImportantFileSignals(
         entrypoint_score=entrypoint_score,
         import_centrality_score=import_centrality.score,
+        call_centrality_score=call_centrality.score,
         documentation_score=documentation_score,
         structural_score=structural_score,
     )
@@ -421,6 +631,7 @@ def _score_path(
     reasons = (
         *entrypoint_reasons,
         *import_centrality.reasons,
+        *call_centrality.reasons,
         *documentation_reasons,
         *structural_reasons,
     )
