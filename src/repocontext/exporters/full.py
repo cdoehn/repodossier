@@ -165,7 +165,7 @@ def render_full_export(context: FullExportContext) -> str:
         _render_ai_quick_start(context),
         _render_repository_statistics(context),
         _render_file_summary(context),
-        _render_repository_tree_placeholder(context),
+        _render_repository_tree(context),
         _render_complete_source_export_placeholder(context),
         _render_warnings_placeholder(context),
     ]
@@ -505,14 +505,82 @@ def _escape_markdown_table_cell(value: str) -> str:
     return value.replace("|", "\\|")
 
 
-def _render_repository_tree_placeholder(context: FullExportContext) -> str:
-    return "\n".join(
-        [
-            FULL_EXPORT_SECTION_HEADINGS["repository_tree"],
-            "",
-            "Repository Tree rendering will be expanded in Milestone 3.6.",
-        ]
-    )
+def _render_repository_tree(context: FullExportContext) -> str:
+    """Render a deterministic tree view of scanned Git-tracked files."""
+    lines = [
+        FULL_EXPORT_SECTION_HEADINGS["repository_tree"],
+        "",
+        ".",
+    ]
+
+    if not context.sorted_files:
+        return "\n".join(lines)
+
+    tree = _build_repository_tree(context)
+    lines.extend(_format_repository_tree_items(tree))
+
+    return "\n".join(lines)
+
+
+def _build_repository_tree(context: FullExportContext) -> dict[str, object]:
+    """Build a nested dictionary tree from repository-relative file paths."""
+    root: dict[str, object] = {}
+
+    for file_info in context.sorted_files:
+        path_parts = file_info.relative_path.parts
+        if not path_parts:
+            continue
+
+        current_node = root
+        for directory_name in path_parts[:-1]:
+            existing_node = current_node.get(directory_name)
+            if not isinstance(existing_node, dict):
+                existing_node = {}
+                current_node[directory_name] = existing_node
+            current_node = existing_node
+
+        current_node[path_parts[-1]] = _repository_tree_file_label(file_info)
+
+    return root
+
+
+def _format_repository_tree_items(
+    tree: dict[str, object],
+    prefix: str = "",
+) -> list[str]:
+    """Format nested tree items using common tree drawing characters."""
+    lines: list[str] = []
+    items = sorted(tree.items(), key=lambda item: item[0])
+
+    for index, (name, value) in enumerate(items):
+        is_last = index == len(items) - 1
+        branch = "└── " if is_last else "├── "
+
+        if isinstance(value, dict):
+            lines.append(f"{prefix}{branch}{name}")
+            child_prefix = prefix + ("    " if is_last else "│   ")
+            lines.extend(_format_repository_tree_items(value, child_prefix))
+        else:
+            lines.append(f"{prefix}{branch}{value}")
+
+    return lines
+
+
+def _repository_tree_file_label(file_info: FileInfo) -> str:
+    """Return the display label for one file inside the repository tree."""
+    label = file_info.relative_path.name
+    markers: list[str] = []
+
+    if file_info.is_binary is True:
+        markers.append("binary skipped")
+
+    if file_info.error is not None:
+        markers.append("error")
+
+    if markers:
+        return f"{label} [{', '.join(markers)}]"
+
+    return label
 
 
 def _render_complete_source_export_placeholder(context: FullExportContext) -> str:

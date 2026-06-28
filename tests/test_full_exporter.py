@@ -368,6 +368,99 @@ def test_render_full_export_file_summary_escapes_markdown_table_pipes(
     assert "| docs/weird\\|name.txt | Text | 1 | 2 |" in rendered
 
 
+def test_render_full_export_renders_repository_tree(tmp_path: Path) -> None:
+    repository_info = make_repository_info(tmp_path)
+    files = [
+        FileInfo(
+            relative_path=Path("src/repocontext/scanner.py"),
+            absolute_path=tmp_path / "src/repocontext/scanner.py",
+            is_text=True,
+            is_binary=False,
+            language="python",
+            content="scanner\n",
+        ),
+        FileInfo(
+            relative_path=Path("README.md"),
+            absolute_path=tmp_path / "README.md",
+            is_text=True,
+            is_binary=False,
+            language="markdown",
+            content="# Readme\n",
+        ),
+        FileInfo(
+            relative_path=Path("src/repocontext/cli.py"),
+            absolute_path=tmp_path / "src/repocontext/cli.py",
+            is_text=True,
+            is_binary=False,
+            language="python",
+            content="cli\n",
+        ),
+        FileInfo(
+            relative_path=Path("tests/test_cli.py"),
+            absolute_path=tmp_path / "tests/test_cli.py",
+            is_text=True,
+            is_binary=False,
+            language="python",
+            content="test\n",
+        ),
+        FileInfo(
+            relative_path=Path("image.bin"),
+            absolute_path=tmp_path / "image.bin",
+            is_text=False,
+            is_binary=True,
+            content=None,
+        ),
+    ]
+
+    context = create_full_export_context(repository_info, files)
+    rendered = render_full_export(context)
+
+    assert "# Repository Tree" in rendered
+    assert "Repository Tree rendering will be expanded" not in rendered
+    assert "." in rendered
+    assert "├── README.md" in rendered
+    assert "├── image.bin [binary skipped]" in rendered
+    assert "├── src" in rendered
+    assert "│   └── repocontext" in rendered
+    assert "│       ├── cli.py" in rendered
+    assert "│       └── scanner.py" in rendered
+    assert "└── tests" in rendered
+    assert "    └── test_cli.py" in rendered
+
+
+def test_render_full_export_repository_tree_marks_errored_files(tmp_path: Path) -> None:
+    repository_info = make_repository_info(tmp_path)
+    errored = FileInfo(
+        relative_path=Path("broken.txt"),
+        absolute_path=tmp_path / "broken.txt",
+        is_text=True,
+        is_binary=False,
+        content=None,
+        error="Could not read file",
+    )
+
+    context = create_full_export_context(repository_info, [errored])
+    rendered = render_full_export(context)
+
+    assert "└── broken.txt [error]" in rendered
+
+
+def test_render_full_export_repository_tree_handles_empty_repository(
+    tmp_path: Path,
+) -> None:
+    repository_info = make_repository_info(tmp_path)
+    repository_info.tracked_files.clear()
+    context = create_full_export_context(repository_info, [])
+
+    rendered = render_full_export(context)
+
+    repository_tree_section = rendered.split("# Repository Tree", 1)[1].split(
+        "# Complete Source Export",
+        1,
+    )[0]
+    assert repository_tree_section.strip() == "."
+
+
 def test_full_export_context_counts_file_types_from_scanned_files(tmp_path: Path) -> None:
     repository_info = make_repository_info(tmp_path)
     files = [
