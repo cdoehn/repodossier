@@ -184,10 +184,11 @@ class PythonCallVisitor(ast.NodeVisitor):
         self._visit_function_node(node)
 
     def visit_Call(self, node: ast.Call) -> None:
-        """Record direct function calls such as foo()."""
+        """Record direct function and unresolved method calls."""
+
+        caller_name, caller_qualified_name = self._current_caller()
 
         if isinstance(node.func, ast.Name):
-            caller_name, caller_qualified_name = self._current_caller()
             self.graph.add_edge(
                 CallEdge(
                     caller_file=self.source_path,
@@ -197,6 +198,19 @@ class PythonCallVisitor(ast.NodeVisitor):
                     callee_qualified_name=None,
                     line_number=getattr(node, "lineno", None),
                     call_type="function",
+                    confidence="unresolved",
+                )
+            )
+        elif isinstance(node.func, ast.Attribute):
+            self.graph.add_edge(
+                CallEdge(
+                    caller_file=self.source_path,
+                    caller_name=caller_name,
+                    caller_qualified_name=caller_qualified_name,
+                    callee_name=node.func.attr,
+                    callee_qualified_name=None,
+                    line_number=getattr(node, "lineno", None),
+                    call_type="method",
                     confidence="unresolved",
                 )
             )

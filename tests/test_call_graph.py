@@ -245,19 +245,6 @@ def test_parse_calls_from_source_tracks_method_caller_context():
     ]
 
 
-def test_parse_calls_from_source_leaves_attribute_calls_for_later_milestone():
-    source = (
-        "def main():\n"
-        "    service.run()\n"
-    )
-
-    graph = parse_calls_from_source(
-        source,
-        source_path="src/app.py",
-        module_name="app",
-    )
-
-    assert graph.sorted_edges() == []
 
 def test_parse_calls_from_source_detects_nested_function_calls():
     source = (
@@ -384,6 +371,104 @@ def test_parse_calls_from_source_detects_multiple_module_level_calls():
             callee_qualified_name=None,
             line_number=3,
             call_type="function",
+            confidence="unresolved",
+        ),
+    ]
+
+def test_parse_calls_from_source_detects_attribute_method_call_without_local_resolution():
+    source = (
+        "def main():\n"
+        "    service.run()\n"
+    )
+
+    graph = parse_calls_from_source(
+        source,
+        source_path="src/app.py",
+        module_name="app",
+    )
+
+    assert graph.sorted_edges() == [
+        CallEdge(
+            caller_file="src/app.py",
+            caller_name="main",
+            caller_qualified_name="app.main",
+            callee_name="run",
+            callee_qualified_name=None,
+            line_number=2,
+            call_type="method",
+            confidence="unresolved",
+        )
+    ]
+
+def test_parse_calls_from_source_detects_several_attribute_method_calls():
+    source = (
+        "def main(result, scanner):\n"
+        "    scanner.scan()\n"
+        "    result.to_dict()\n"
+    )
+
+    graph = parse_calls_from_source(
+        source,
+        source_path="src/app.py",
+        module_name="app",
+    )
+
+    assert graph.sorted_edges() == [
+        CallEdge(
+            caller_file="src/app.py",
+            caller_name="main",
+            caller_qualified_name="app.main",
+            callee_name="scan",
+            callee_qualified_name=None,
+            line_number=2,
+            call_type="method",
+            confidence="unresolved",
+        ),
+        CallEdge(
+            caller_file="src/app.py",
+            caller_name="main",
+            caller_qualified_name="app.main",
+            callee_name="to_dict",
+            callee_qualified_name=None,
+            line_number=3,
+            call_type="method",
+            confidence="unresolved",
+        ),
+    ]
+
+
+def test_parse_calls_from_source_keeps_function_and_method_calls_distinct():
+    source = (
+        "def main(service):\n"
+        "    prepare()\n"
+        "    service.run()\n"
+    )
+
+    graph = parse_calls_from_source(
+        source,
+        source_path="src/app.py",
+        module_name="app",
+    )
+
+    assert graph.sorted_edges() == [
+        CallEdge(
+            caller_file="src/app.py",
+            caller_name="main",
+            caller_qualified_name="app.main",
+            callee_name="prepare",
+            callee_qualified_name=None,
+            line_number=2,
+            call_type="function",
+            confidence="unresolved",
+        ),
+        CallEdge(
+            caller_file="src/app.py",
+            caller_name="main",
+            caller_qualified_name="app.main",
+            callee_name="run",
+            callee_qualified_name=None,
+            line_number=3,
+            call_type="method",
             confidence="unresolved",
         ),
     ]
