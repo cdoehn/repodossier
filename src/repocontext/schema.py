@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
+import re
 import sqlite3
 from typing import Iterable, Sequence
 
@@ -34,6 +35,42 @@ SQL_SCHEMA_DIRECTORIES: tuple[str, ...] = (
 )
 
 SQLITE_MAGIC_HEADER = b"SQLite format 3\x00"
+
+
+_CREATE_TABLE_PREFIX_RE = re.compile(
+    r"^\s*CREATE\s+(?:TEMPORARY\s+|TEMP\s+)?TABLE\s+"
+    r"(?:IF\s+NOT\s+EXISTS\s+)?"
+    r"(?P<name>\"(?:\"\"|[^\"])+\"|`[^`]+`|\[[^\]]+\]|[A-Za-z_][\w$]*(?:\.[A-Za-z_][\w$]*)?)"
+    r"\s*\(",
+    re.IGNORECASE | re.DOTALL,
+)
+
+_COLUMN_STOP_KEYWORDS: frozenset[str] = frozenset(
+    {
+        "PRIMARY",
+        "NOT",
+        "NULL",
+        "DEFAULT",
+        "UNIQUE",
+        "CHECK",
+        "REFERENCES",
+        "COLLATE",
+        "GENERATED",
+        "AS",
+        "CONSTRAINT",
+    }
+)
+
+_TABLE_CONSTRAINT_KEYWORDS: frozenset[str] = frozenset(
+    {
+        "CONSTRAINT",
+        "PRIMARY",
+        "FOREIGN",
+        "UNIQUE",
+        "CHECK",
+        "EXCLUDE",
+    }
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -661,6 +698,560 @@ def _clean_schema_value(value: object, *, default: str = "") -> str:
     return text or default
 
 
+def extract_sql_schema_file(
+    sql_path: str | Path,
+    *,
+    repo_root: str | Path | None = None,
+    encoding: str = "utf-8",
+) -> DatabaseSchemaReport:
+    """Extract best-effort CREATE TABLE schema metadata from one SQL file.
+
+    This is intentionally not a full SQL parser. It recognizes common CREATE
+    TABLE statements and extracts a useful, conservative table/column summary.
+    Project code and migrations are never executed.
+    """
+
+    path = Path(sql_path)
+    root = Path(repo_root) if repo_root is not None else path.parent
+    source_file = _relative_path(root, path)
+
+    try:
+        sql_text = path.read_text(encoding=encoding)
+    except (OSError, UnicodeDecodeError) as exc:
+        return DatabaseSchemaReport(
+            sql_schema_files=(source_file,),
+            warnings=(f"{source_file}: could not read SQL schema file: {type(exc).__name__}: {exc}",),
+        )
+
+    create_statements = extract_create_table_statements_from_sql(sql_text)
+    tables: list[SchemaTable] = []
+    warnings: list[str] = []
+
+    for statement in create_statements:
+        table = parse_create_table_statement(statement, source_file=source_file)
+        if table is None:
+            warnings.append(f"{source_file}: could not parse CREATE TABLE statement")
+            continue
+        tables.append(table)
+
+    if not create_statements:
+        warnings.append(f"{source_file}: no CREATE TABLE statements found")
+
+    return DatabaseSchemaReport(
+        sql_schema_files=(source_file,),
+        tables=tuple(tables),
+        create_statements=create_statements,
+        warnings=tuple(warnings),
+    )
+
+
+def extract_create_table_statements_from_sql(sql_text: str) -> tuple[str, ...]:
+    """Return CREATE TABLE statements from SQL text in deterministic order."""
+
+    statements = _split_sql_statements(sql_text)
+    return tuple(
+        statement
+        for statement in statements
+        if _CREATE_TABLE_PREFIX_RE.match(statement)
+    )
+
+
+def parse_create_table_statement(
+    statement: str,
+    *,
+    source_file: str = "",
+) -> SchemaTable | None:
+    """Parse a single CREATE TABLE statement into a SchemaTable if possible."""
+
+    cleaned_statement = statement.strip().rstrip(";").strip()
+    match = _CREATE_TABLE_PREFIX_RE.match(cleaned_statement)
+    if match is None:
+        return None
+
+    table_name = _normalize_sql_identifier(match.group("name"))
+    if not table_name:
+        return None
+
+    body = _extract_parenthesized_body(cleaned_statement, match.end() - 1)
+    if body is None:
+        return SchemaTable(
+            name=table_name,
+            table_type="table",
+            create_sql=cleaned_statement,
+            source_file=source_file,
+        )
+
+    columns: list[SchemaColumn] = []
+    foreign_keys: list[SchemaForeignKey] = []
+    column_position = 0
+
+    for item in _split_top_level_comma_items(body):
+        if not item:
+            continue
+
+        leading_keyword = _leading_sql_keyword(item)
+        if leading_keyword in _TABLE_CONSTRAINT_KEYWORDS:
+            foreign_key = _parse_foreign_key_constraint(item, table_name)
+            if foreign_key is not None:
+                foreign_keys.append(foreign_key)
+            continue
+
+        column = _parse_create_table_column(item, position=column_position)
+        if column is not None:
+            columns.append(column)
+            column_position += 1
+
+    return SchemaTable(
+        name=table_name,
+        table_type="table",
+        columns=tuple(columns),
+        foreign_keys=tuple(foreign_keys),
+        create_sql=cleaned_statement,
+        source_file=source_file,
+    )
+
+
+def _split_sql_statements(sql_text: str) -> tuple[str, ...]:
+    """Split SQL text into statements while respecting quotes and comments."""
+
+    statements: list[str] = []
+    current: list[str] = []
+
+    in_single_quote = False
+    in_double_quote = False
+    in_backtick = False
+    in_bracket = False
+    in_line_comment = False
+    in_block_comment = False
+    paren_depth = 0
+    index = 0
+
+    while index < len(sql_text):
+        char = sql_text[index]
+        next_char = sql_text[index + 1] if index + 1 < len(sql_text) else ""
+
+        if in_line_comment:
+            if char == "\n":
+                in_line_comment = False
+                current.append(char)
+            index += 1
+            continue
+
+        if in_block_comment:
+            if char == "*" and next_char == "/":
+                in_block_comment = False
+                index += 2
+            else:
+                index += 1
+            continue
+
+        if not (in_single_quote or in_double_quote or in_backtick or in_bracket):
+            if char == "-" and next_char == "-":
+                in_line_comment = True
+                index += 2
+                continue
+            if char == "/" and next_char == "*":
+                in_block_comment = True
+                index += 2
+                continue
+
+        current.append(char)
+
+        if in_single_quote:
+            if char == "'" and next_char == "'":
+                current.append(next_char)
+                index += 2
+                continue
+            if char == "'":
+                in_single_quote = False
+            index += 1
+            continue
+
+        if in_double_quote:
+            if char == '"' and next_char == '"':
+                current.append(next_char)
+                index += 2
+                continue
+            if char == '"':
+                in_double_quote = False
+            index += 1
+            continue
+
+        if in_backtick:
+            if char == "`":
+                in_backtick = False
+            index += 1
+            continue
+
+        if in_bracket:
+            if char == "]":
+                in_bracket = False
+            index += 1
+            continue
+
+        if char == "'":
+            in_single_quote = True
+        elif char == '"':
+            in_double_quote = True
+        elif char == "`":
+            in_backtick = True
+        elif char == "[":
+            in_bracket = True
+        elif char == "(":
+            paren_depth += 1
+        elif char == ")" and paren_depth > 0:
+            paren_depth -= 1
+        elif char == ";" and paren_depth == 0:
+            statement = "".join(current).strip()
+            if statement:
+                statements.append(statement)
+            current = []
+
+        index += 1
+
+    tail = "".join(current).strip()
+    if tail:
+        statements.append(tail)
+
+    return tuple(statements)
+
+
+def _extract_parenthesized_body(statement: str, open_paren_index: int) -> str | None:
+    """Return text inside the parenthesized CREATE TABLE body."""
+
+    if open_paren_index < 0 or open_paren_index >= len(statement):
+        return None
+    if statement[open_paren_index] != "(":
+        return None
+
+    in_single_quote = False
+    in_double_quote = False
+    in_backtick = False
+    in_bracket = False
+    depth = 0
+    body_start = open_paren_index + 1
+    index = open_paren_index
+
+    while index < len(statement):
+        char = statement[index]
+        next_char = statement[index + 1] if index + 1 < len(statement) else ""
+
+        if in_single_quote:
+            if char == "'" and next_char == "'":
+                index += 2
+                continue
+            if char == "'":
+                in_single_quote = False
+            index += 1
+            continue
+
+        if in_double_quote:
+            if char == '"' and next_char == '"':
+                index += 2
+                continue
+            if char == '"':
+                in_double_quote = False
+            index += 1
+            continue
+
+        if in_backtick:
+            if char == "`":
+                in_backtick = False
+            index += 1
+            continue
+
+        if in_bracket:
+            if char == "]":
+                in_bracket = False
+            index += 1
+            continue
+
+        if char == "'":
+            in_single_quote = True
+        elif char == '"':
+            in_double_quote = True
+        elif char == "`":
+            in_backtick = True
+        elif char == "[":
+            in_bracket = True
+        elif char == "(":
+            depth += 1
+        elif char == ")":
+            depth -= 1
+            if depth == 0:
+                return statement[body_start:index]
+
+        index += 1
+
+    return None
+
+
+def _split_top_level_comma_items(text: str) -> tuple[str, ...]:
+    """Split comma-separated SQL fragments while respecting nested syntax."""
+
+    items: list[str] = []
+    current: list[str] = []
+
+    in_single_quote = False
+    in_double_quote = False
+    in_backtick = False
+    in_bracket = False
+    depth = 0
+    index = 0
+
+    while index < len(text):
+        char = text[index]
+        next_char = text[index + 1] if index + 1 < len(text) else ""
+
+        current.append(char)
+
+        if in_single_quote:
+            if char == "'" and next_char == "'":
+                current.append(next_char)
+                index += 2
+                continue
+            if char == "'":
+                in_single_quote = False
+            index += 1
+            continue
+
+        if in_double_quote:
+            if char == '"' and next_char == '"':
+                current.append(next_char)
+                index += 2
+                continue
+            if char == '"':
+                in_double_quote = False
+            index += 1
+            continue
+
+        if in_backtick:
+            if char == "`":
+                in_backtick = False
+            index += 1
+            continue
+
+        if in_bracket:
+            if char == "]":
+                in_bracket = False
+            index += 1
+            continue
+
+        if char == "'":
+            in_single_quote = True
+        elif char == '"':
+            in_double_quote = True
+        elif char == "`":
+            in_backtick = True
+        elif char == "[":
+            in_bracket = True
+        elif char == "(":
+            depth += 1
+        elif char == ")" and depth > 0:
+            depth -= 1
+        elif char == "," and depth == 0:
+            item = "".join(current[:-1]).strip()
+            if item:
+                items.append(item)
+            current = []
+
+        index += 1
+
+    tail = "".join(current).strip()
+    if tail:
+        items.append(tail)
+
+    return tuple(items)
+
+
+def _parse_create_table_column(
+    definition: str,
+    *,
+    position: int | None = None,
+) -> SchemaColumn | None:
+    """Parse one best-effort CREATE TABLE column definition."""
+
+    column_name, remainder = _read_sql_identifier(definition)
+    if not column_name:
+        return None
+
+    upper_remainder = remainder.upper()
+    data_type = _extract_column_data_type(remainder)
+    nullable = None
+
+    if re.search(r"\bNOT\s+NULL\b", upper_remainder):
+        nullable = False
+    elif re.search(r"\bNULL\b", upper_remainder):
+        nullable = True
+
+    primary_key_position = 1 if re.search(r"\bPRIMARY\s+KEY\b", upper_remainder) else 0
+
+    return SchemaColumn(
+        name=column_name,
+        data_type=data_type,
+        nullable=nullable,
+        default_value=_extract_default_value(remainder),
+        primary_key_position=primary_key_position,
+        position=position,
+        raw_definition=definition,
+    )
+
+
+def _parse_foreign_key_constraint(
+    definition: str,
+    table_name: str,
+) -> SchemaForeignKey | None:
+    """Parse a simple table-level FOREIGN KEY constraint if present."""
+
+    match = re.search(
+        r"FOREIGN\s+KEY\s*\((?P<from>[^)]+)\)\s+"
+        r"REFERENCES\s+(?P<table>\"(?:\"\"|[^\"])+\"|`[^`]+`|\[[^\]]+\]|[A-Za-z_][\w$]*(?:\.[A-Za-z_][\w$]*)?)"
+        r"\s*\((?P<to>[^)]+)\)",
+        definition,
+        re.IGNORECASE | re.DOTALL,
+    )
+    if match is None:
+        return None
+
+    from_column = _normalize_sql_identifier(match.group("from").split(",", 1)[0].strip())
+    to_table = _normalize_sql_identifier(match.group("table"))
+    to_column = _normalize_sql_identifier(match.group("to").split(",", 1)[0].strip())
+
+    on_update = _extract_referential_action(definition, "UPDATE")
+    on_delete = _extract_referential_action(definition, "DELETE")
+
+    if not from_column or not to_table or not to_column:
+        return None
+
+    return SchemaForeignKey(
+        table=table_name,
+        from_column=from_column,
+        to_table=to_table,
+        to_column=to_column,
+        on_update=on_update,
+        on_delete=on_delete,
+    )
+
+
+def _extract_referential_action(definition: str, action_kind: str) -> str:
+    """Extract ON UPDATE/DELETE action text from a foreign key definition."""
+
+    match = re.search(
+        rf"\bON\s+{re.escape(action_kind)}\s+"
+        r"(CASCADE|RESTRICT|SET\s+NULL|SET\s+DEFAULT|NO\s+ACTION)",
+        definition,
+        re.IGNORECASE,
+    )
+    if match is None:
+        return ""
+    return " ".join(match.group(1).upper().split())
+
+
+def _read_sql_identifier(text: str) -> tuple[str, str]:
+    """Read the leading SQL identifier from text and return name plus rest."""
+
+    stripped = text.lstrip()
+    if not stripped:
+        return "", ""
+
+    first = stripped[0]
+    if first == '"':
+        return _read_quoted_identifier(stripped, '"', '"')
+    if first == "`":
+        return _read_quoted_identifier(stripped, "`", "`")
+    if first == "[":
+        return _read_quoted_identifier(stripped, "[", "]")
+
+    match = re.match(r"([A-Za-z_][\w$]*)(.*)$", stripped, re.DOTALL)
+    if match is None:
+        return "", stripped
+
+    return match.group(1), match.group(2).strip()
+
+
+def _read_quoted_identifier(text: str, opener: str, closer: str) -> tuple[str, str]:
+    """Read a quoted SQL identifier and return normalized name plus rest."""
+
+    index = 1
+    value: list[str] = []
+
+    while index < len(text):
+        char = text[index]
+        next_char = text[index + 1] if index + 1 < len(text) else ""
+
+        if char == closer:
+            if opener == '"' and next_char == '"':
+                value.append('"')
+                index += 2
+                continue
+            return "".join(value), text[index + 1 :].strip()
+
+        value.append(char)
+        index += 1
+
+    return "", text
+
+
+def _normalize_sql_identifier(identifier: str) -> str:
+    """Normalize quoted SQL identifiers without changing dotted names."""
+
+    stripped = identifier.strip()
+    if not stripped:
+        return ""
+
+    if stripped.startswith('"') and stripped.endswith('"'):
+        return stripped[1:-1].replace('""', '"')
+    if stripped.startswith("`") and stripped.endswith("`"):
+        return stripped[1:-1]
+    if stripped.startswith("[") and stripped.endswith("]"):
+        return stripped[1:-1]
+
+    return stripped
+
+
+def _leading_sql_keyword(definition: str) -> str:
+    """Return the first SQL keyword in uppercase."""
+
+    match = re.match(r"\s*([A-Za-z_][\w$]*)", definition)
+    if match is None:
+        return ""
+    return match.group(1).upper()
+
+
+def _extract_column_data_type(remainder: str) -> str:
+    """Extract a best-effort column data type from a column definition tail."""
+
+    tokens = remainder.strip().split()
+    data_type_tokens: list[str] = []
+
+    for token in tokens:
+        normalized_token = token.upper().rstrip(",")
+        if normalized_token in _COLUMN_STOP_KEYWORDS:
+            break
+        data_type_tokens.append(token)
+
+    return " ".join(data_type_tokens).strip()
+
+
+def _extract_default_value(remainder: str) -> str | None:
+    """Extract a compact DEFAULT value from a column definition tail."""
+
+    match = re.search(r"\bDEFAULT\b\s+(.+)$", remainder, re.IGNORECASE | re.DOTALL)
+    if match is None:
+        return None
+
+    value = match.group(1).strip()
+    stop_match = re.search(
+        r"\s+\b(PRIMARY|NOT|NULL|UNIQUE|CHECK|REFERENCES|COLLATE|GENERATED|CONSTRAINT)\b",
+        value,
+        re.IGNORECASE,
+    )
+    if stop_match is not None:
+        value = value[: stop_match.start()].strip()
+
+    return value or None
+
+
 __all__ = [
     "DatabaseSchemaReport",
     "SQLITE_MAGIC_HEADER",
@@ -672,6 +1263,9 @@ __all__ = [
     "SchemaIndex",
     "SchemaTable",
     "discover_database_schema_files",
+    "parse_create_table_statement",
+    "extract_sql_schema_file",
+    "extract_create_table_statements_from_sql",
     "extract_sqlite_schema_file",
     "has_sqlite_magic_header",
     "is_generated_export_file",

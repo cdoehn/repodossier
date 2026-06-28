@@ -13,6 +13,9 @@ from repocontext.schema import (
     SchemaIndex,
     SchemaTable,
     discover_database_schema_files,
+    parse_create_table_statement,
+    extract_sql_schema_file,
+    extract_create_table_statements_from_sql,
     extract_sqlite_schema_file,
     has_sqlite_magic_header,
     is_generated_export_file,
@@ -187,6 +190,206 @@ def test_sqlite_magic_header_rejects_non_sqlite_file(tmp_path: Path) -> None:
 
 
 
+
+
+def test_extract_create_table_statements_from_sql_handles_multiple_tables_and_comments() -> None:
+    sql = """
+    -- ignored comment with CREATE TABLE fake (id INTEGER);
+    CREATE TABLE users (
+        id INTEGER PRIMARY KEY,
+        name TEXT NOT NULL
+    );
+
+    SELECT 1;
+
+    /* ignored block comment */
+    CREATE TABLE IF NOT EXISTS roles (
+        id INTEGER PRIMARY KEY,
+        name TEXT
+    );
+    """
+
+    statements = extract_create_table_statements_from_sql(sql)
+
+    assert len(statements) == 2
+    assert statements[0].lstrip().upper().startswith("CREATE TABLE USERS")
+    assert statements[1].lstrip().upper().startswith("CREATE TABLE IF NOT EXISTS ROLES")
+
+
+def test_extract_create_table_statements_from_sql_handles_temp_table() -> None:
+    statements = extract_create_table_statements_from_sql(
+        "CREATE TEMP TABLE temp_data (id INTEGER PRIMARY KEY);"
+    )
+
+    assert len(statements) == 1
+    assert "TEMP TABLE temp_data" in statements[0]
+
+
+def test_parse_create_table_statement_reads_columns_and_constraints() -> None:
+    table = parse_create_table_statement(
+        """
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY,
+            role_id INTEGER NOT NULL,
+            name TEXT NOT NULL,
+            email TEXT DEFAULT 'unknown',
+            FOREIGN KEY(role_id) REFERENCES roles(id) ON DELETE CASCADE
+        );
+        """,
+        source_file="schema.sql",
+    )
+
+    assert table is not None
+    assert table.name == "users"
+    assert table.source_file == "schema.sql"
+    assert table.table_type == "table"
+    assert [column.name for column in table.columns] == ["id", "role_id", "name", "email"]
+    assert [column.position for column in table.columns] == [0, 1, 2, 3]
+
+    id_column = next(column for column in table.columns if column.name == "id")
+    assert id_column.data_type == "INTEGER"
+    assert id_column.is_primary_key is True
+
+    name_column = next(column for column in table.columns if column.name == "name")
+    assert name_column.data_type == "TEXT"
+    assert name_column.nullable is False
+
+    email_column = next(column for column in table.columns if column.name == "email")
+    assert email_column.default_value == "'unknown'"
+
+    assert len(table.foreign_keys) == 1
+    foreign_key = table.foreign_keys[0]
+    assert foreign_key.from_column == "role_id"
+    assert foreign_key.to_table == "roles"
+    assert foreign_key.to_column == "id"
+    assert foreign_key.on_delete == "CASCADE"
+
+
+def test_parse_create_table_statement_handles_quoted_identifiers() -> None:
+    sql = """CREATE TABLE "user accounts" (
+      "user id" INTEGER PRIMARY KEY,
+      [display name] TEXT,
+      `email-address` TEXT
+    );"""
+
+    table = parse_create_table_statement(sql)
+
+    assert table is not None
+    assert table.name == "user accounts"
+    assert [column.name for column in table.columns] == [
+        "user id",
+        "display name",
+        "email-address",
+    ]
+
+
+def test_parse_create_table_statement_ignores_table_constraints_as_columns() -> None:
+    table = parse_create_table_statement(
+        """
+        CREATE TABLE memberships (
+            user_id INTEGER NOT NULL,
+            group_id INTEGER NOT NULL,
+            PRIMARY KEY (user_id, group_id),
+            UNIQUE (group_id, user_id),
+            CHECK (user_id > 0)
+        );
+        """
+    )
+
+    assert table is not None
+    assert [column.name for column in table.columns] == ["user_id", "group_id"]
+
+
+def test_parse_create_table_statement_handles_semicolon_inside_string() -> None:
+    statements = extract_create_table_statements_from_sql(
+        """
+        CREATE TABLE logs (
+            id INTEGER PRIMARY KEY,
+            message TEXT DEFAULT 'hello; world'
+        );
+        CREATE TABLE users (id INTEGER PRIMARY KEY);
+        """
+    )
+
+    assert len(statements) == 2
+    first_table = parse_create_table_statement(statements[0])
+    assert first_table is not None
+    message_column = next(column for column in first_table.columns if column.name == "message")
+    assert message_column.default_value == "'hello; world'"
+
+
+def test_parse_create_table_statement_returns_none_for_non_create_table() -> None:
+    assert parse_create_table_statement("CREATE INDEX users_idx ON users(id);") is None
+
+
+def test_extract_sql_schema_file_reads_create_table_statements(tmp_path: Path) -> None:
+    sql_path = tmp_path / "schema" / "schema.sql"
+    sql_path.parent.mkdir(parents=True)
+    sql_path.write_text(
+        """
+        CREATE TABLE users (
+            id INTEGER PRIMARY KEY,
+            name TEXT NOT NULL
+        );
+
+        CREATE TABLE roles (
+            id INTEGER PRIMARY KEY,
+            name TEXT
+        );
+        """,
+        encoding="utf-8",
+    )
+
+    report = extract_sql_schema_file(sql_path, repo_root=tmp_path)
+
+    assert report.sql_schema_files == ("schema/schema.sql",)
+    assert report.warnings == ()
+    assert [table.name for table in report.tables] == ["roles", "users"]
+    assert len(report.create_statements) == 2
+
+
+def test_extract_sql_schema_file_warns_when_no_create_table_exists(tmp_path: Path) -> None:
+    sql_path = tmp_path / "schema.sql"
+    sql_path.write_text("CREATE INDEX users_idx ON users(id);", encoding="utf-8")
+
+    report = extract_sql_schema_file(sql_path, repo_root=tmp_path)
+
+    assert report.sql_schema_files == ("schema.sql",)
+    assert report.tables == ()
+    assert report.create_statements == ()
+    assert "schema.sql: no CREATE TABLE statements found" in report.warnings
+
+
+def test_extract_sql_schema_file_handles_unreadable_or_missing_file(tmp_path: Path) -> None:
+    sql_path = tmp_path / "missing.sql"
+
+    report = extract_sql_schema_file(sql_path, repo_root=tmp_path)
+
+    assert report.sql_schema_files == ("missing.sql",)
+    assert report.tables == ()
+    assert any("could not read SQL schema file" in warning for warning in report.warnings)
+
+
+def test_extract_sql_schema_file_does_not_export_inserted_values_from_sql_file(tmp_path: Path) -> None:
+    sql_path = tmp_path / "schema.sql"
+    sql_path.write_text(
+        """
+        CREATE TABLE users (
+            id INTEGER PRIMARY KEY,
+            name TEXT NOT NULL
+        );
+
+        INSERT INTO users (name) VALUES ('VerySecretUserName');
+        """,
+        encoding="utf-8",
+    )
+
+    report = extract_sql_schema_file(sql_path, repo_root=tmp_path)
+    report_text = repr(report)
+
+    assert "users" in report_text
+    assert "name" in report_text
+    assert "VerySecretUserName" not in report_text
 
 def test_extract_sqlite_schema_file_preserves_sqlite_column_order(tmp_path: Path) -> None:
     database_path = tmp_path / "ordered.sqlite"
