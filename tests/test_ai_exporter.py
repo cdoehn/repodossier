@@ -344,6 +344,88 @@ def test_symbol_index_handles_syntax_errors_without_crashing(tmp_path: Path) -> 
     assert "src/example/broken.py" in symbol_index_section
     assert "Traceback" not in symbol_index_section
 
+
+def test_import_graph_renders_internal_and_external_imports(tmp_path: Path) -> None:
+    context = make_ai_export_context_from_files(
+        tmp_path,
+        {
+            "src/example/__init__.py": "",
+            "src/example/helper.py": "def help_me():\n    return 1\n",
+            "src/example/app.py": (
+                "import os\n"
+                "from example.helper import help_me\n"
+                "\n"
+                "def main():\n"
+                "    return help_me()\n"
+            ),
+        },
+    )
+
+    rendered = render_ai_export(context)
+    import_graph_section = rendered.split("## Import Graph", 1)[1].split("## Call Graph", 1)[0]
+
+    assert "Summary:" in import_graph_section
+    assert "- Local modules: 3" in import_graph_section
+    assert "Local imports by source file:" in import_graph_section
+    assert "### src/example/app.py" in import_graph_section
+    assert "Module: example.app" in import_graph_section
+    assert "- example.helper (help_me, line 2)" in import_graph_section
+    assert "External imports:" in import_graph_section
+    assert "- example.app: os" in import_graph_section
+
+
+def test_import_graph_renders_relative_imports(tmp_path: Path) -> None:
+    context = make_ai_export_context_from_files(
+        tmp_path,
+        {
+            "src/example/__init__.py": "",
+            "src/example/helper.py": "VALUE = 1\n",
+            "src/example/app.py": "from .helper import VALUE\n",
+        },
+    )
+
+    rendered = render_ai_export(context)
+    import_graph_section = rendered.split("## Import Graph", 1)[1].split("## Call Graph", 1)[0]
+
+    assert "### src/example/app.py" in import_graph_section
+    assert "- example.helper (VALUE, line 1)" in import_graph_section
+
+
+def test_import_graph_handles_python_file_without_imports(tmp_path: Path) -> None:
+    context = make_ai_export_context_from_files(
+        tmp_path,
+        {
+            "src/example/app.py": "VALUE = 1\n",
+        },
+    )
+
+    rendered = render_ai_export(context)
+    import_graph_section = rendered.split("## Import Graph", 1)[1].split("## Call Graph", 1)[0]
+
+    assert "- Local modules: 1" in import_graph_section
+    assert "Local imports by source file:\n- none" in import_graph_section
+    assert "External imports:\n- none" in import_graph_section
+    assert "Unresolved imports:\n- none" in import_graph_section
+
+
+def test_import_graph_handles_syntax_errors_without_raw_object_repr(tmp_path: Path) -> None:
+    context = make_ai_export_context_from_files(
+        tmp_path,
+        {
+            "src/example/broken.py": "from .helper import VALUE\n\ndef broken(:\n    pass\n",
+            "src/example/helper.py": "VALUE = 1\n",
+        },
+    )
+
+    rendered = render_ai_export(context)
+    import_graph_section = rendered.split("## Import Graph", 1)[1].split("## Call Graph", 1)[0]
+
+    assert "Analysis errors:" in import_graph_section
+    assert "src/example/broken.py" in import_graph_section
+    assert "SyntaxError" in import_graph_section
+    assert "ImportReference(" not in import_graph_section
+    assert "ImportEdge(" not in import_graph_section
+
 def test_render_ai_export_contains_required_sections(tmp_path: Path) -> None:
     context = make_ai_export_context(tmp_path)
 

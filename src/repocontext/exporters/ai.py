@@ -95,7 +95,7 @@ def render_ai_export(context: AIExportContext) -> str:
         _render_architecture_summary_section(context),
         _render_important_files_section(context),
         _render_symbol_index_section(context),
-        _render_import_graph_section(),
+        _render_import_graph_section(context),
         _render_call_graph_section(),
         _render_notes_section(),
     ]
@@ -929,17 +929,256 @@ def _repository_relative_display_path(path: Path, repository_root: Path) -> str:
     except ValueError:
         return path.as_posix()
 
-def _render_import_graph_section() -> str:
-    """Render the placeholder Import Graph section."""
+def _render_import_graph_section(context: AIExportContext) -> str:
+    """Render a compact Import Graph section using the Milestone 6 graph builder."""
 
-    return "\n".join(
+    source_paths = _import_graph_source_paths(context)
+
+    lines = [
+        AI_EXPORT_SECTION_HEADINGS["import_graph"],
+        "",
+    ]
+
+    if not source_paths:
+        lines.append("No Python source files available for import graph analysis.")
+        return "\n".join(lines)
+
+    try:
+        from repocontext.import_graph import (
+            build_import_graph,
+            calculate_import_graph_metrics,
+        )
+
+        import_graph = build_import_graph(
+            source_paths,
+            repo_root=context.repository_root,
+        )
+        metrics = calculate_import_graph_metrics(import_graph)
+    except Exception as exc:
+        lines.append(f"Could not build import graph: {type(exc).__name__}: {exc}")
+        return "\n".join(lines)
+
+    lines.extend(
         [
-            AI_EXPORT_SECTION_HEADINGS["import_graph"],
+            "Summary:",
+            f"- Local modules: {metrics.module_count}",
+            f"- Local dependencies: {metrics.local_dependency_count}",
+            f"- External imports: {metrics.external_import_count}",
+            f"- Unresolved imports: {metrics.unresolved_import_count}",
+            f"- Analysis errors: {metrics.error_count}",
             "",
-            "Import graph rendering is not implemented yet.",
+            "Local imports by source file:",
         ]
     )
 
+    local_blocks = _format_ai_import_graph_local_blocks(import_graph, context)
+    if local_blocks:
+        lines.extend(local_blocks)
+    else:
+        lines.append("- none")
+
+    external_lines = _format_ai_import_graph_external_lines(import_graph)
+    lines.extend(["", "External imports:"])
+    if external_lines:
+        lines.extend(external_lines)
+    else:
+        lines.append("- none")
+
+    unresolved_lines = _format_ai_import_graph_unresolved_lines(import_graph)
+    lines.extend(["", "Unresolved imports:"])
+    if unresolved_lines:
+        lines.extend(unresolved_lines)
+    else:
+        lines.append("- none")
+
+    error_lines = _format_ai_import_graph_error_lines(import_graph, context)
+    if error_lines:
+        lines.extend(["", "Analysis errors:"])
+        lines.extend(error_lines)
+
+    return "\n".join(lines)
+
+
+def _import_graph_source_paths(context: AIExportContext) -> tuple[Path, ...]:
+    """Return Python source paths for import graph analysis."""
+
+    return _symbol_index_source_paths(context)
+
+
+def _format_ai_import_graph_local_blocks(
+    import_graph: object,
+    context: AIExportContext,
+) -> list[str]:
+    """Format local import graph edges grouped by source file."""
+
+    edges_by_source: dict[tuple[str, str], list[object]] = {}
+
+    for edge in _sorted_ai_import_graph_edges(import_graph):
+        source_path = _repository_relative_display_path(
+            Path(getattr(edge, "source_path")),
+            context.repository_root,
+        )
+        source_module = getattr(edge, "source_module", "")
+        edges_by_source.setdefault((source_path, source_module), []).append(edge)
+
+    lines: list[str] = []
+
+    for index, ((source_path, source_module), edges) in enumerate(
+        sorted(edges_by_source.items(), key=lambda item: item[0])
+    ):
+        if index > 0:
+            lines.append("")
+
+        lines.append(f"### {source_path}")
+        if source_module:
+            lines.append(f"Module: {source_module}")
+        lines.append("imports:")
+
+        visible_edges = edges[:50]
+        for edge in visible_edges:
+            target_module = getattr(edge, "target_module", "")
+            imported_name = getattr(edge, "imported_name", None)
+            line_number = getattr(edge, "line_number", 0) or "unknown"
+
+            if imported_name:
+                lines.append(f"- {target_module} ({imported_name}, line {line_number})")
+            else:
+                lines.append(f"- {target_module} (line {line_number})")
+
+        remaining_count = len(edges) - len(visible_edges)
+        if remaining_count > 0:
+            lines.append(f"- ... {remaining_count} more local imports")
+
+    return lines
+
+
+def _sorted_ai_import_graph_edges(import_graph: object) -> tuple[object, ...]:
+    """Return local import graph edges in deterministic order."""
+
+    return tuple(
+        sorted(
+            getattr(import_graph, "edges", ()) or (),
+            key=lambda edge: (
+                getattr(edge, "source_module", ""),
+                getattr(edge, "target_module", ""),
+                getattr(edge, "line_number", 0) or 0,
+                getattr(edge, "import_type", ""),
+                getattr(edge, "imported_name", "") or "",
+                Path(getattr(edge, "source_path")).as_posix(),
+                Path(getattr(edge, "target_path")).as_posix(),
+            ),
+        )
+    )
+
+
+def _format_ai_import_graph_external_lines(import_graph: object) -> list[str]:
+    """Format external imports compactly and deterministically."""
+
+    grouped: dict[str, set[str]] = {}
+
+    for reference in getattr(import_graph, "external_imports", ()) or ():
+        source_module = getattr(reference, "source_module", "")
+        imported_module = getattr(reference, "imported_module", None)
+        imported_name = getattr(reference, "imported_name", None)
+
+        if not source_module or not imported_module:
+            continue
+
+        display = imported_module
+        if imported_name and imported_name != "*":
+            display = f"{display}.{imported_name}"
+
+        grouped.setdefault(source_module, set()).add(display)
+
+    lines: list[str] = []
+    for source_module, imported_modules in sorted(grouped.items()):
+        imports = ", ".join(sorted(imported_modules)[:20])
+        extra_count = len(imported_modules) - min(len(imported_modules), 20)
+
+        if extra_count > 0:
+            imports = f"{imports}, ... {extra_count} more"
+
+        lines.append(f"- {source_module}: {imports}")
+
+    return lines[:100]
+
+
+def _format_ai_import_graph_unresolved_lines(import_graph: object) -> list[str]:
+    """Format unresolved imports compactly and deterministically."""
+
+    references = tuple(
+        sorted(
+            getattr(import_graph, "unresolved_imports", ()) or (),
+            key=lambda reference: (
+                getattr(reference, "source_module", ""),
+                getattr(reference, "imported_module", "") or "",
+                getattr(reference, "imported_name", "") or "",
+                getattr(reference, "line_number", 0) or 0,
+                getattr(reference, "level", 0) or 0,
+            ),
+        )
+    )
+
+    lines: list[str] = []
+
+    for reference in references[:100]:
+        source_module = getattr(reference, "source_module", "")
+        imported_module = getattr(reference, "imported_module", None) or "."
+        imported_name = getattr(reference, "imported_name", None)
+        line_number = getattr(reference, "line_number", 0) or "unknown"
+
+        imported = imported_module
+        if imported_name and imported_name != "*":
+            imported = f"{imported}.{imported_name}"
+
+        lines.append(f"- {source_module}: {imported} (line {line_number})")
+
+    remaining_count = len(references) - len(lines)
+    if remaining_count > 0:
+        lines.append(f"- ... {remaining_count} more unresolved imports")
+
+    return lines
+
+
+def _format_ai_import_graph_error_lines(
+    import_graph: object,
+    context: AIExportContext,
+) -> list[str]:
+    """Format import graph analysis errors."""
+
+    errors = tuple(
+        sorted(
+            getattr(import_graph, "errors", ()) or (),
+            key=lambda error: (
+                Path(getattr(error, "source_path")).as_posix(),
+                getattr(error, "error_type", ""),
+                getattr(error, "line_number", 0) or 0,
+                getattr(error, "message", ""),
+            ),
+        )
+    )
+
+    lines: list[str] = []
+
+    for error in errors[:50]:
+        source_path = _repository_relative_display_path(
+            Path(getattr(error, "source_path")),
+            context.repository_root,
+        )
+        error_type = getattr(error, "error_type", "ImportAnalysisError")
+        message = getattr(error, "message", "")
+        line_number = getattr(error, "line_number", None)
+
+        if line_number is None:
+            lines.append(f"- {source_path}: {error_type}: {message}")
+        else:
+            lines.append(f"- {source_path}:{line_number}: {error_type}: {message}")
+
+    remaining_count = len(errors) - len(lines)
+    if remaining_count > 0:
+        lines.append(f"- ... {remaining_count} more import analysis errors")
+
+    return lines
 
 def _render_call_graph_section() -> str:
     """Render the placeholder Call Graph section."""
