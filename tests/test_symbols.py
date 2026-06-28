@@ -101,26 +101,6 @@ def test_extract_symbols_from_async_top_level_function(tmp_path):
     assert index.symbols[0].parent is None
 
 
-def test_extract_symbols_does_not_count_methods_as_top_level_functions(tmp_path):
-    path = tmp_path / "class_with_method.py"
-    path.write_text(
-        "class Example:\n"
-        "    def method(self):\n"
-        "        return 'method'\n"
-        "\n"
-        "def top_level():\n"
-        "    return 'function'\n",
-        encoding="utf-8",
-    )
-
-    index = extract_symbols_from_file(path)
-
-    assert index.errors == []
-    assert [symbol.name for symbol in index.symbols] == ["Example", "top_level"]
-    assert [symbol.kind for symbol in index.symbols] == ["class", "function"]
-    assert all(symbol.parent is None for symbol in index.symbols)
-
-
 def test_extract_symbols_ignores_nested_functions_for_mvp(tmp_path):
     path = tmp_path / "nested.py"
     path.write_text(
@@ -194,28 +174,6 @@ def test_extract_symbols_from_class_with_base_class(tmp_path):
     assert [symbol.kind for symbol in index.symbols] == ["class", "class"]
 
 
-def test_extract_symbols_from_class_with_metaclass_and_methods(tmp_path):
-    path = tmp_path / "class_with_details.py"
-    path.write_text(
-        "class Plugin(BasePlugin, metaclass=PluginMeta):\n"
-        "    def configure(self):\n"
-        "        return None\n"
-        "\n"
-        "    async def run(self):\n"
-        "        return None\n",
-        encoding="utf-8",
-    )
-
-    index = extract_symbols_from_file(path)
-
-    assert index.errors == []
-    assert len(index.symbols) == 1
-    assert index.symbols[0].name == "Plugin"
-    assert index.symbols[0].kind == "class"
-    assert index.symbols[0].line_start == 1
-    assert index.symbols[0].line_end == 6
-
-
 def test_extract_symbols_ignores_nested_classes_for_mvp(tmp_path):
     path = tmp_path / "nested_class.py"
     path.write_text(
@@ -232,14 +190,190 @@ def test_extract_symbols_ignores_nested_classes_for_mvp(tmp_path):
     assert [symbol.kind for symbol in index.symbols] == ["class"]
 
 
-def test_extract_symbols_preserves_top_level_source_order(tmp_path):
+def test_extract_symbols_from_class_with_one_method(tmp_path):
+    path = tmp_path / "class_with_method.py"
+    path.write_text(
+        "class Example:\n"
+        "    def method(self):\n"
+        "        return 'method'\n",
+        encoding="utf-8",
+    )
+
+    index = extract_symbols_from_file(path)
+
+    assert index.errors == []
+    assert [symbol.name for symbol in index.symbols] == ["Example", "method"]
+    assert [symbol.kind for symbol in index.symbols] == ["class", "method"]
+    assert index.symbols[0].parent is None
+    assert index.symbols[1].parent == "Example"
+    assert index.symbols[1].line_start == 2
+    assert index.symbols[1].line_end == 3
+
+
+def test_extract_symbols_from_class_with_multiple_methods(tmp_path):
+    path = tmp_path / "class_with_multiple_methods.py"
+    path.write_text(
+        "class Service:\n"
+        "    def start(self):\n"
+        "        return 'start'\n"
+        "\n"
+        "    def stop(self):\n"
+        "        return 'stop'\n",
+        encoding="utf-8",
+    )
+
+    index = extract_symbols_from_file(path)
+
+    assert index.errors == []
+    assert [symbol.name for symbol in index.symbols] == ["Service", "start", "stop"]
+    assert [symbol.kind for symbol in index.symbols] == ["class", "method", "method"]
+    assert [symbol.parent for symbol in index.symbols] == [None, "Service", "Service"]
+
+
+def test_extract_symbols_from_class_with_init_method(tmp_path):
+    path = tmp_path / "class_with_init.py"
+    path.write_text(
+        "class App:\n"
+        "    def __init__(self, name):\n"
+        "        self.name = name\n",
+        encoding="utf-8",
+    )
+
+    index = extract_symbols_from_file(path)
+
+    assert index.errors == []
+    assert [symbol.name for symbol in index.symbols] == ["App", "__init__"]
+    assert [symbol.kind for symbol in index.symbols] == ["class", "method"]
+    assert index.symbols[1].parent == "App"
+
+
+def test_extract_symbols_from_class_with_async_method(tmp_path):
+    path = tmp_path / "class_with_async_method.py"
+    path.write_text(
+        "class Worker:\n"
+        "    async def run(self):\n"
+        "        return 42\n",
+        encoding="utf-8",
+    )
+
+    index = extract_symbols_from_file(path)
+
+    assert index.errors == []
+    assert [symbol.name for symbol in index.symbols] == ["Worker", "run"]
+    assert [symbol.kind for symbol in index.symbols] == ["class", "method"]
+    assert index.symbols[1].parent == "Worker"
+    assert index.symbols[1].line_start == 2
+    assert index.symbols[1].line_end == 3
+
+
+def test_extract_symbols_from_class_with_special_methods(tmp_path):
+    path = tmp_path / "class_with_special_methods.py"
+    path.write_text(
+        "class Person:\n"
+        "    def __str__(self):\n"
+        "        return 'person'\n"
+        "\n"
+        "    def __repr__(self):\n"
+        "        return 'Person()'\n",
+        encoding="utf-8",
+    )
+
+    index = extract_symbols_from_file(path)
+
+    assert index.errors == []
+    assert [symbol.name for symbol in index.symbols] == [
+        "Person",
+        "__str__",
+        "__repr__",
+    ]
+    assert [symbol.kind for symbol in index.symbols] == [
+        "class",
+        "method",
+        "method",
+    ]
+    assert [symbol.parent for symbol in index.symbols] == [
+        None,
+        "Person",
+        "Person",
+    ]
+
+
+def test_extract_symbols_does_not_mark_methods_as_top_level_functions(tmp_path):
+    path = tmp_path / "class_and_function.py"
+    path.write_text(
+        "class Example:\n"
+        "    def method(self):\n"
+        "        return 'method'\n"
+        "\n"
+        "def top_level():\n"
+        "    return 'function'\n",
+        encoding="utf-8",
+    )
+
+    index = extract_symbols_from_file(path)
+
+    assert index.errors == []
+    assert [symbol.name for symbol in index.symbols] == [
+        "Example",
+        "method",
+        "top_level",
+    ]
+    assert [symbol.kind for symbol in index.symbols] == [
+        "class",
+        "method",
+        "function",
+    ]
+    assert [symbol.parent for symbol in index.symbols] == [
+        None,
+        "Example",
+        None,
+    ]
+
+
+def test_extract_symbols_ignores_nested_functions_inside_methods_for_mvp(tmp_path):
+    path = tmp_path / "method_with_nested_function.py"
+    path.write_text(
+        "class Example:\n"
+        "    def method(self):\n"
+        "        def helper():\n"
+        "            return 'helper'\n"
+        "        return helper()\n",
+        encoding="utf-8",
+    )
+
+    index = extract_symbols_from_file(path)
+
+    assert index.errors == []
+    assert [symbol.name for symbol in index.symbols] == ["Example", "method"]
+    assert [symbol.kind for symbol in index.symbols] == ["class", "method"]
+
+
+def test_extract_symbols_ignores_methods_inside_nested_classes_for_mvp(tmp_path):
+    path = tmp_path / "nested_class_with_method.py"
+    path.write_text(
+        "class Outer:\n"
+        "    class Inner:\n"
+        "        def inner_method(self):\n"
+        "            return None\n",
+        encoding="utf-8",
+    )
+
+    index = extract_symbols_from_file(path)
+
+    assert index.errors == []
+    assert [symbol.name for symbol in index.symbols] == ["Outer"]
+    assert [symbol.kind for symbol in index.symbols] == ["class"]
+
+
+def test_extract_symbols_preserves_top_level_source_order_with_methods(tmp_path):
     path = tmp_path / "ordered.py"
     path.write_text(
         "def first():\n"
         "    return 1\n"
         "\n"
         "class Middle:\n"
-        "    pass\n"
+        "    def load(self):\n"
+        "        return 2\n"
         "\n"
         "async def last():\n"
         "    return 3\n",
@@ -249,11 +383,23 @@ def test_extract_symbols_preserves_top_level_source_order(tmp_path):
     index = extract_symbols_from_file(path)
 
     assert index.errors == []
-    assert [symbol.name for symbol in index.symbols] == ["first", "Middle", "last"]
+    assert [symbol.name for symbol in index.symbols] == [
+        "first",
+        "Middle",
+        "load",
+        "last",
+    ]
     assert [symbol.kind for symbol in index.symbols] == [
         "function",
         "class",
+        "method",
         "function",
+    ]
+    assert [symbol.parent for symbol in index.symbols] == [
+        None,
+        None,
+        "Middle",
+        None,
     ]
 
 

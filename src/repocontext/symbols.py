@@ -83,15 +83,61 @@ def _symbol_from_class_node(
     )
 
 
+def _symbol_from_method_node(
+    node: ast.FunctionDef | ast.AsyncFunctionDef,
+    *,
+    file_path: str,
+    parent: str,
+) -> SymbolInfo:
+    """Create symbol information for a direct class method node."""
+
+    return SymbolInfo(
+        name=node.name,
+        kind="method",
+        file_path=file_path,
+        line_start=node.lineno,
+        line_end=getattr(node, "end_lineno", None),
+        parent=parent,
+    )
+
+
+def _extract_methods_from_class_node(
+    node: ast.ClassDef,
+    *,
+    file_path: str,
+) -> list[SymbolInfo]:
+    """Extract direct methods from a class node.
+
+    Nested classes and nested functions remain intentionally ignored for
+    the Milestone 5 MVP. Only direct FunctionDef and AsyncFunctionDef
+    children of the class body are treated as methods.
+    """
+
+    methods: list[SymbolInfo] = []
+
+    for child in node.body:
+        if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            methods.append(
+                _symbol_from_method_node(
+                    child,
+                    file_path=file_path,
+                    parent=node.name,
+                )
+            )
+
+    return methods
+
+
 def _extract_top_level_symbols(
     tree: ast.Module,
     *,
     file_path: str,
 ) -> list[SymbolInfo]:
-    """Extract top-level function and class symbols from a Python module.
+    """Extract top-level symbols from a Python module.
 
-    Nested functions, nested classes, and methods are intentionally ignored
-    in these MVP steps. Methods are handled separately by Method Discovery.
+    Top-level functions and classes are extracted in source order. Direct
+    methods are emitted immediately after their parent class symbol.
+    Nested functions and nested classes remain intentionally ignored.
     """
 
     symbols: list[SymbolInfo] = []
@@ -101,6 +147,7 @@ def _extract_top_level_symbols(
             symbols.append(_symbol_from_function_node(node, file_path=file_path))
         elif isinstance(node, ast.ClassDef):
             symbols.append(_symbol_from_class_node(node, file_path=file_path))
+            symbols.extend(_extract_methods_from_class_node(node, file_path=file_path))
 
     return symbols
 
