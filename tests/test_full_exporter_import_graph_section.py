@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from pathlib import Path
 
+from repocontext.call_graph import CallEdge, CallGraph
 from repocontext.import_graph import (
     ImportAnalysisError,
     ImportEdge,
@@ -12,7 +13,9 @@ from repocontext.git import RepositoryInfo, TrackedFile
 from repocontext.models import FileInfo
 
 from repocontext.exporters.full import (
+    _build_call_graph_for_export,
     _build_import_graph_for_export,
+    _format_call_graph_section,
     _format_import_graph_section,
     create_full_export_context,
     render_full_export,
@@ -395,3 +398,147 @@ def test_format_import_graph_section_renders_none_for_empty_graph(tmp_path: Path
     assert "Local dependencies:\n- none" in section
     assert "External imports:\n- none" in section
     assert "Unresolved imports:\n- none" in section
+
+def test_format_call_graph_section_summarizes_and_limits_edges() -> None:
+    graph = CallGraph(
+        [
+            CallEdge(
+                caller_file="src/app/main.py",
+                caller_name="main",
+                caller_qualified_name="app.main.main",
+                callee_name="helper",
+                callee_qualified_name="app.utils.helper",
+                line_number=4,
+                call_type="function",
+                confidence="imported_local",
+            ),
+            CallEdge(
+                caller_file="src/app/main.py",
+                caller_name="main",
+                caller_qualified_name="app.main.main",
+                callee_name="Path",
+                callee_qualified_name="pathlib.Path",
+                line_number=5,
+                call_type="function",
+                confidence="external",
+            ),
+        ]
+    )
+
+    section = _format_call_graph_section(graph, max_edges=1)
+
+    assert section.startswith("## Call Graph")
+    assert "- Call edges: 2" in section
+    assert "- Local/internal calls: 1" in section
+    assert "- External calls: 1" in section
+    assert "- Ambiguous calls: 0" in section
+    assert "- Unresolved calls: 0" in section
+    assert (
+        "Calls:\n"
+        "- app.main.main -> app.utils.helper "
+        "(line 4, function, imported_local)"
+    ) in section
+    assert "- pathlib.Path" not in section
+    assert "- ... 1 more" in section
+
+
+def _make_call_graph_full_export_context(repo_root: Path):
+    files = [
+        _write_import_graph_fixture_file(repo_root, "src/app/__init__.py", ""),
+        _write_import_graph_fixture_file(
+            repo_root,
+            "src/app/scanner.py",
+            "def scan_single_file():\n"
+            "    return None\n",
+        ),
+        _write_import_graph_fixture_file(
+            repo_root,
+            "src/app/main.py",
+            "from app.scanner import scan_single_file\n"
+            "\n"
+            "def main():\n"
+            "    return scan_single_file()\n",
+        ),
+        _write_import_graph_fixture_file(repo_root, "README.md", "# Example\n"),
+    ]
+
+    repository_info = RepositoryInfo(
+        name="example",
+        root_path=repo_root,
+        is_current_directory_root=True,
+        branch="main",
+        commit_hash="a" * 40,
+        short_commit_hash="aaaaaaa",
+        remote_url=None,
+        is_dirty=False,
+        tracked_files=[TrackedFile(path=file_info.relative_path) for file_info in files],
+        commit_metadata=None,
+    )
+
+    return create_full_export_context(repository_info, files)
+
+
+def _rendered_call_graph_section(rendered_export: str) -> str:
+    assert "## Call Graph" in rendered_export
+    return rendered_export.split("## Call Graph", 1)[1]
+
+
+def test_build_call_graph_for_export_uses_context_files_import_graph_and_symbols(
+    tmp_path: Path,
+) -> None:
+    context = _make_call_graph_full_export_context(tmp_path)
+    import_graph = _build_import_graph_for_export(
+        context.repository_root,
+        context.scanned_files,
+    )
+
+    call_graph = _build_call_graph_for_export(
+        context.repository_root,
+        context.scanned_files,
+        import_graph=import_graph,
+    )
+
+    assert call_graph.sorted_edges() == [
+        CallEdge(
+            caller_file="src/app/main.py",
+            caller_name="main",
+            caller_qualified_name="app.main.main",
+            callee_name="scan_single_file",
+            callee_qualified_name="app.scanner.scan_single_file",
+            line_number=4,
+            call_type="function",
+            confidence="imported_local",
+        )
+    ]
+
+
+def test_render_full_export_appends_call_graph_section_after_import_graph(
+    tmp_path: Path,
+) -> None:
+    context = _make_call_graph_full_export_context(tmp_path)
+
+    rendered = render_full_export(context)
+    after_warnings = rendered.split("# Warnings", 1)[1]
+    section = _rendered_call_graph_section(rendered)
+
+    assert after_warnings.index("## Import Graph") < after_warnings.index("## Call Graph")
+    assert "- Call edges: 1" in section
+    assert "- Local/internal calls: 1" in section
+    assert (
+        "- app.main.main -> app.scanner.scan_single_file "
+        "(line 4, function, imported_local)"
+    ) in section
+
+
+def test_write_full_export_persists_call_graph_section_to_full_txt(
+    tmp_path: Path,
+) -> None:
+    context = _make_call_graph_full_export_context(tmp_path)
+
+    output_path = write_full_export(context)
+
+    content = output_path.read_text(encoding="utf-8")
+    section = _rendered_call_graph_section(content)
+    assert "- Call edges: 1" in section
+    assert "- app.main.main -> app.scanner.scan_single_file" in section
+

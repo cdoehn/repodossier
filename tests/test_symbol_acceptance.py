@@ -233,13 +233,13 @@ def test_milestone_5_acceptance_no_symbol_cli_entrypoint_is_added():
     ] == []
 
 
-def test_milestone_5_acceptance_symbol_module_is_not_wired_into_exports_yet():
-    forbidden_tokens = (
-        "build_symbol_index(",
+def test_milestone_5_acceptance_symbol_module_is_only_wired_where_expected():
+    """Milestone 7 may use the symbol index for Call Graph export integration."""
+
+    still_forbidden_tokens = (
         "format_symbol_index(",
         "extract_symbols_from_file(",
     )
-
     offenders = []
 
     for path in _package_source_files():
@@ -247,10 +247,21 @@ def test_milestone_5_acceptance_symbol_module_is_not_wired_into_exports_yet():
             continue
 
         text = path.read_text(encoding="utf-8")
-        for token in forbidden_tokens:
+        for token in still_forbidden_tokens:
             if token in text:
                 offenders.append(
                     f"{path.relative_to(PROJECT_ROOT).as_posix()} contains {token}"
                 )
 
     assert offenders == []
+
+    build_symbol_index_users = []
+    for path in _package_source_files():
+        if path.name == "symbols.py":
+            continue
+
+        text = path.read_text(encoding="utf-8")
+        if "build_symbol_index(" in text:
+            build_symbol_index_users.append(path.relative_to(PROJECT_ROOT).as_posix())
+
+    assert build_symbol_index_users == ["src/repocontext/exporters/full.py"]

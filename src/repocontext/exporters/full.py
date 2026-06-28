@@ -1001,6 +1001,124 @@ def _build_import_graph_for_export(repo_root, files):
     return build_import_graph(source_paths, repo_root=repo_root)
 
 
+def _call_graph_export_source_paths(repo_root, files):
+    """Return Python source paths from the file list used by the export pipeline."""
+
+    source_paths = []
+    for file_info in files:
+        source_path = _import_graph_export_source_path(file_info, repo_root)
+        if source_path is not None:
+            source_paths.append(source_path)
+
+    return tuple(
+        sorted(
+            source_paths,
+            key=lambda path: Path(path).as_posix(),
+        )
+    )
+
+
+def _call_graph_display_source_path(source_path, repo_root):
+    """Return a stable repository-relative source path for call graph edges."""
+
+    path = Path(source_path)
+    root = Path(repo_root)
+
+    try:
+        return path.resolve(strict=False).relative_to(root.resolve(strict=False))
+    except ValueError:
+        return path
+
+
+def _build_call_graph_for_export(repo_root, files, *, import_graph=None):
+    """Build a call graph from the file list used by the export pipeline."""
+
+    from repocontext.call_graph import CallGraph, parse_calls_from_source
+    from repocontext.import_graph import build_import_graph, module_name_from_python_path
+    from repocontext.symbols import build_symbol_index
+
+    source_paths = _call_graph_export_source_paths(repo_root, files)
+    symbol_index = build_symbol_index(source_paths, base_path=repo_root)
+
+    if import_graph is None:
+        import_graph = build_import_graph(source_paths, repo_root=repo_root)
+
+    call_graph = CallGraph()
+
+    for source_path in source_paths:
+        module_name = module_name_from_python_path(source_path, repo_root=repo_root)
+        if module_name is None:
+            continue
+
+        try:
+            source = Path(source_path).read_text(encoding="utf-8")
+            file_graph = parse_calls_from_source(
+                source,
+                source_path=_call_graph_display_source_path(source_path, repo_root),
+                module_name=module_name,
+                symbol_index=symbol_index,
+                import_graph=import_graph,
+            )
+        except (OSError, SyntaxError, UnicodeDecodeError, ValueError):
+            continue
+
+        for edge in file_graph.sorted_edges():
+            call_graph.add_edge(edge)
+
+    return call_graph
+
+
+def _format_call_graph_edge_line(edge):
+    """Format one call graph edge for full.txt."""
+
+    line_number = edge.line_number if edge.line_number is not None else "unknown"
+    return (
+        f"- {edge.caller_key} -> {edge.callee_key} "
+        f"(line {line_number}, {edge.call_type}, {edge.confidence})"
+    )
+
+
+def _format_call_graph_section(call_graph, *, max_edges=200):
+    """Render a compact Call Graph section for full.txt."""
+
+    edges = tuple(call_graph.sorted_edges())
+
+    local_count = sum(
+        1
+        for edge in edges
+        if edge.confidence in {"local", "local_method", "imported_local"}
+    )
+    external_count = sum(1 for edge in edges if edge.confidence == "external")
+    ambiguous_count = sum(1 for edge in edges if edge.confidence == "ambiguous")
+    unresolved_count = sum(
+        1
+        for edge in edges
+        if edge.confidence.startswith("unresolved")
+    )
+
+    lines = [
+        "## Call Graph",
+        "",
+        "Summary:",
+        f"- Call edges: {len(edges)}",
+        f"- Local/internal calls: {local_count}",
+        f"- External calls: {external_count}",
+        f"- Ambiguous calls: {ambiguous_count}",
+        f"- Unresolved calls: {unresolved_count}",
+        "",
+        "Calls:",
+    ]
+
+    _append_limited_items(
+        lines,
+        edges,
+        max_items=max_edges,
+        formatter=_format_call_graph_edge_line,
+    )
+
+    return "\n".join(lines).rstrip()
+
+
 _ORIGINAL_RENDER_FULL_EXPORT_WITHOUT_IMPORT_GRAPH = render_full_export
 
 
@@ -1050,12 +1168,28 @@ def render_full_export(*args, **kwargs):
     if repo_root is None or files is None:
         return output
 
+    sections = []
+    import_graph = None
+
     try:
         import_graph = _build_import_graph_for_export(repo_root, files)
-        section = _format_import_graph_section(import_graph)
+        sections.append(_format_import_graph_section(import_graph))
     except Exception:
+        import_graph = None
+
+    try:
+        call_graph = _build_call_graph_for_export(
+            repo_root,
+            files,
+            import_graph=import_graph,
+        )
+        sections.append(_format_call_graph_section(call_graph))
+    except Exception:
+        pass
+
+    if not sections:
         return output
 
     separator = "\n\n" if output and not output.endswith("\n\n") else ""
-    return f"{output}{separator}{section}\n"
+    return f"{output}{separator}{chr(10).join(chr(10) + section if index else section for index, section in enumerate(sections))}\n"
 

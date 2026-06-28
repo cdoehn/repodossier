@@ -33,10 +33,11 @@ def test_symbol_extraction_does_not_create_standalone_export_filename():
     assert offenders == []
 
 
-def test_symbol_extraction_is_not_wired_into_other_modules_yet():
-    forbidden_tokens = (
+def test_symbol_extraction_is_only_wired_into_call_graph_export_pipeline():
+    """Milestone 7 intentionally wires build_symbol_index into full export call graph generation."""
+
+    still_forbidden_tokens = (
         "extract_symbols_from_file(",
-        "build_symbol_index(",
         "format_symbol_index(",
     )
     offenders = []
@@ -46,13 +47,24 @@ def test_symbol_extraction_is_not_wired_into_other_modules_yet():
             continue
 
         text = path.read_text(encoding="utf-8")
-        for token in forbidden_tokens:
+        for token in still_forbidden_tokens:
             if token in text:
                 offenders.append(
                     f"{path.relative_to(PROJECT_ROOT).as_posix()} contains {token}"
                 )
 
     assert offenders == []
+
+    build_symbol_index_users = []
+    for path in _package_source_files():
+        if path.name == "symbols.py":
+            continue
+
+        text = path.read_text(encoding="utf-8")
+        if "build_symbol_index(" in text:
+            build_symbol_index_users.append(path.relative_to(PROJECT_ROOT).as_posix())
+
+    assert build_symbol_index_users == ["src/repocontext/exporters/full.py"]
 
 
 def test_project_scripts_do_not_add_symbol_specific_cli_entrypoints():
