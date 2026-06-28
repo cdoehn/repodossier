@@ -408,3 +408,83 @@ def test_analyze_dependencies_uses_passed_file_list_for_requirements_discovery(
         dependency.normalized_name
         for dependency in report.dependencies_by_type("development")
     ] == ["pytest"]
+
+
+def test_render_dependency_full_section_includes_summary_and_dependency_groups() -> None:
+    from repocontext.dependencies import render_dependency_full_section
+
+    report = DependencyReport(
+        dependencies=(
+            Dependency(
+                name="click",
+                version_constraint=">=8",
+                dependency_type="runtime",
+                source_file="pyproject.toml",
+                source_section="project.dependencies",
+                raw_value="click>=8",
+            ),
+            Dependency(
+                name="pytest",
+                version_constraint=">=8",
+                dependency_type="development",
+                source_file="requirements-dev.txt",
+                source_section="requirements-dev.txt",
+                raw_value="pytest>=8",
+            ),
+            Dependency(
+                name="mkdocs",
+                dependency_type="optional",
+                source_file="pyproject.toml",
+                source_section="project.optional-dependencies.docs",
+                raw_value="mkdocs",
+                group="docs",
+            ),
+        ),
+        dependency_files=("pyproject.toml", "requirements-dev.txt"),
+    )
+
+    rendered = render_dependency_full_section(report)
+
+    assert "# Dependencies" in rendered
+    assert "Runtime dependencies: 1" in rendered
+    assert "Development dependencies: 1" in rendered
+    assert "Optional dependencies: 1" in rendered
+    assert "- pyproject.toml" in rendered
+    assert "- requirements-dev.txt" in rendered
+    assert "- click>=8 (pyproject.toml, project.dependencies)" in rendered
+    assert "- pytest>=8 (requirements-dev.txt)" in rendered
+    assert "- docs: mkdocs (pyproject.toml, project.optional-dependencies.docs)" in rendered
+
+
+def test_insert_dependency_full_section_before_complete_source_dump() -> None:
+    from repocontext.dependencies import insert_dependency_full_section
+
+    report = DependencyReport(
+        dependencies=(
+            Dependency(
+                name="click",
+                dependency_type="runtime",
+                source_file="pyproject.toml",
+                source_section="project.dependencies",
+                raw_value="click>=8",
+            ),
+        ),
+        dependency_files=("pyproject.toml",),
+    )
+
+    full_text = "# RepoContext Full Export\n\n# Complete Source Dump\n\ncontent\n"
+    rendered = insert_dependency_full_section(full_text, report)
+
+    assert rendered.index("# Dependencies") < rendered.index("# Complete Source Dump")
+    assert "Runtime dependencies: 1" in rendered
+    assert "click>=8" in rendered
+
+
+def test_insert_dependency_full_section_is_idempotent() -> None:
+    from repocontext.dependencies import insert_dependency_full_section
+
+    report = DependencyReport()
+    full_text = "# RepoContext Full Export\n\n# Dependencies\n\nalready here\n"
+
+    assert insert_dependency_full_section(full_text, report) == full_text
+

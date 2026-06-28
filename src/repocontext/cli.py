@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from .dependencies import append_dependencies_full_section
+
 import argparse
 from importlib import metadata
 from pathlib import Path
@@ -205,6 +207,148 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
     arguments = parser.parse_args(list(argv) if argv is not None else None)
     return arguments.handler(arguments)
 
+
+
+
+_REPOCONTEXT_DEPENDENCY_FULL_EXPORT_HOOK = True
+
+
+def _repocontext_add_dependencies_to_full_export(full_text, local_values):
+    """Add dependency information to full.txt text right before it is written."""
+
+    if not isinstance(full_text, str):
+        return full_text
+
+    repo_root = _repocontext_dependency_repo_root_from_locals(local_values)
+    files = _repocontext_dependency_files_from_locals(local_values)
+
+    return append_dependencies_full_section(full_text, repo_root, files=files)
+
+
+def _repocontext_dependency_repo_root_from_locals(local_values):
+    from pathlib import Path as _Path
+    import os as _os
+
+    for key in (
+        "repo_root",
+        "repository_root",
+        "project_root",
+        "root",
+        "base_path",
+        "workdir",
+        "cwd",
+    ):
+        value = local_values.get(key)
+        candidate = _repocontext_dependency_path_from_value(value)
+        if candidate is not None and candidate.exists() and candidate.is_dir():
+            return candidate
+
+    for key in (
+        "output_path",
+        "output_file",
+        "full_path",
+        "full_txt_path",
+        "full_output_path",
+        "full_file",
+    ):
+        value = local_values.get(key)
+        candidate = _repocontext_dependency_path_from_value(value)
+        if candidate is not None:
+            if candidate.name == "full.txt":
+                return candidate.parent
+            if candidate.exists() and candidate.is_dir():
+                return candidate
+
+    files = _repocontext_dependency_files_from_locals(local_values)
+    if files:
+        absolute_paths = []
+        for file_item in files:
+            path_value = _repocontext_dependency_path_from_value(file_item)
+            if path_value is not None and path_value.is_absolute():
+                absolute_paths.append(path_value)
+
+        if absolute_paths:
+            common = _Path(_os.path.commonpath([path.as_posix() for path in absolute_paths]))
+            if common.is_file():
+                common = common.parent
+            if common.exists():
+                return common
+
+    return _Path.cwd()
+
+
+def _repocontext_dependency_files_from_locals(local_values):
+    for key in (
+        "files",
+        "scanned_files",
+        "file_infos",
+        "file_reports",
+        "source_files",
+        "project_files",
+    ):
+        value = local_values.get(key)
+        files = _repocontext_dependency_files_from_value(value)
+        if files is not None:
+            return files
+
+    for value in local_values.values():
+        files = _repocontext_dependency_files_from_value(value)
+        if files is not None:
+            return files
+
+    return None
+
+
+def _repocontext_dependency_files_from_value(value):
+    if value is None or isinstance(value, (str, bytes, dict)):
+        return None
+
+    try:
+        items = list(value)
+    except TypeError:
+        return None
+
+    if not items:
+        return None
+
+    path_like_count = 0
+    for item in items:
+        if _repocontext_dependency_path_from_value(item) is not None:
+            path_like_count += 1
+
+    if path_like_count == 0:
+        return None
+
+    return items
+
+
+def _repocontext_dependency_path_from_value(value):
+    from pathlib import Path as _Path
+
+    if isinstance(value, (str, _Path)):
+        try:
+            return _Path(value)
+        except TypeError:
+            return None
+
+    for attribute_name in (
+        "absolute_path",
+        "relative_path",
+        "path",
+        "repo_root",
+        "repository_root",
+        "project_root",
+        "root",
+        "name",
+    ):
+        attribute_value = getattr(value, attribute_name, None)
+        if isinstance(attribute_value, (str, _Path)):
+            try:
+                return _Path(attribute_value)
+            except TypeError:
+                return None
+
+    return None
 
 if __name__ == "__main__":
     raise SystemExit(main())

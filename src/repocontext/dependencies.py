@@ -750,3 +750,110 @@ def _unique_sorted_strings(values: Iterable[str]) -> tuple[str, ...]:
         if str(value).strip()
     }
     return tuple(sorted(unique_values))
+
+
+def render_dependency_full_section(report: DependencyReport) -> str:
+    """Render a human-readable dependency section for full.txt exports."""
+
+    counts = report.counts_by_type()
+    lines: list[str] = [
+        "# Dependencies",
+        "",
+        "## Summary",
+        "",
+        f"Runtime dependencies: {counts['runtime']}",
+        f"Development dependencies: {counts['development']}",
+        f"Optional dependencies: {counts['optional']}",
+        f"Unknown dependencies: {counts['unknown']}",
+        "",
+        "## Dependency Files",
+        "",
+    ]
+
+    if report.dependency_files:
+        lines.extend(f"- {dependency_file}" for dependency_file in report.dependency_files)
+    else:
+        lines.append("No dependency files found.")
+
+    sections = (
+        ("runtime", "Runtime Dependencies"),
+        ("development", "Development Dependencies"),
+        ("optional", "Optional Dependencies"),
+        ("unknown", "Unknown Dependencies"),
+    )
+
+    for dependency_type, heading in sections:
+        lines.extend(["", f"## {heading}", ""])
+        dependencies = report.dependencies_by_type(dependency_type)
+        if dependencies:
+            lines.extend(
+                f"- {_format_dependency_for_full_export(dependency)}"
+                for dependency in dependencies
+            )
+        else:
+            lines.append("None detected.")
+
+    warnings = tuple(report.warnings) + tuple(report.unsupported_lines)
+    if warnings:
+        lines.extend(["", "## Unsupported / Warnings", ""])
+        lines.extend(f"- {warning}" for warning in warnings)
+
+    return "\n".join(lines).rstrip() + "\n"
+
+
+def insert_dependency_full_section(full_text: str, report: DependencyReport) -> str:
+    """Insert the dependency section into an existing full.txt export."""
+
+    if "# Dependencies" in full_text or "## Dependencies" in full_text:
+        return full_text
+
+    section = render_dependency_full_section(report).strip()
+    normalized_text = full_text.rstrip()
+
+    source_dump_markers = (
+        "# Complete Source Dump",
+        "## Complete Source Dump",
+        "# Source Dump",
+        "## Source Dump",
+    )
+
+    for marker in source_dump_markers:
+        marker_index = normalized_text.find(marker)
+        if marker_index == -1:
+            continue
+
+        before = normalized_text[:marker_index].rstrip()
+        after = normalized_text[marker_index:].lstrip()
+        return f"{before}\n\n{section}\n\n{after}\n"
+
+    return f"{normalized_text}\n\n{section}\n"
+
+
+def append_dependencies_full_section(
+    full_text: str,
+    repo_root: str | Path,
+    files: Iterable[str | Path] | None = None,
+) -> str:
+    """Analyze dependencies and append/insert the full export section."""
+
+    report = analyze_dependencies(repo_root, files=files)
+    return insert_dependency_full_section(full_text, report)
+
+
+def _format_dependency_for_full_export(dependency: Dependency) -> str:
+    display_value = dependency.raw_value or dependency.name
+
+    if dependency.group:
+        display_value = f"{dependency.group}: {display_value}"
+
+    details: list[str] = []
+    if dependency.source_file:
+        details.append(dependency.source_file)
+    if dependency.source_section and dependency.source_section != dependency.source_file:
+        details.append(dependency.source_section)
+
+    if details:
+        display_value = f"{display_value} ({', '.join(details)})"
+
+    return display_value
+
