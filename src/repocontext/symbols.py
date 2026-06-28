@@ -67,15 +67,31 @@ def _symbol_from_function_node(
     )
 
 
-def _extract_top_level_functions(
+def _symbol_from_class_node(
+    node: ast.ClassDef,
+    *,
+    file_path: str,
+) -> SymbolInfo:
+    """Create symbol information for a top-level class node."""
+
+    return SymbolInfo(
+        name=node.name,
+        kind="class",
+        file_path=file_path,
+        line_start=node.lineno,
+        line_end=getattr(node, "end_lineno", None),
+    )
+
+
+def _extract_top_level_symbols(
     tree: ast.Module,
     *,
     file_path: str,
 ) -> list[SymbolInfo]:
-    """Extract top-level function symbols from a parsed Python module.
+    """Extract top-level function and class symbols from a Python module.
 
-    Nested functions and methods are intentionally ignored in this MVP
-    step. Methods are handled separately by Method Discovery.
+    Nested functions, nested classes, and methods are intentionally ignored
+    in these MVP steps. Methods are handled separately by Method Discovery.
     """
 
     symbols: list[SymbolInfo] = []
@@ -83,6 +99,8 @@ def _extract_top_level_functions(
     for node in tree.body:
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             symbols.append(_symbol_from_function_node(node, file_path=file_path))
+        elif isinstance(node, ast.ClassDef):
+            symbols.append(_symbol_from_class_node(node, file_path=file_path))
 
     return symbols
 
@@ -118,5 +136,5 @@ def extract_symbols_from_file(path: str | Path) -> FileSymbolIndex:
             errors=[_format_syntax_error(error)],
         )
 
-    symbols = _extract_top_level_functions(tree, file_path=file_path_str)
+    symbols = _extract_top_level_symbols(tree, file_path=file_path_str)
     return FileSymbolIndex(file_path=file_path_str, symbols=symbols)

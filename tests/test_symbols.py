@@ -116,9 +116,9 @@ def test_extract_symbols_does_not_count_methods_as_top_level_functions(tmp_path)
     index = extract_symbols_from_file(path)
 
     assert index.errors == []
-    assert [symbol.name for symbol in index.symbols] == ["top_level"]
-    assert index.symbols[0].kind == "function"
-    assert index.symbols[0].parent is None
+    assert [symbol.name for symbol in index.symbols] == ["Example", "top_level"]
+    assert [symbol.kind for symbol in index.symbols] == ["class", "function"]
+    assert all(symbol.parent is None for symbol in index.symbols)
 
 
 def test_extract_symbols_ignores_nested_functions_for_mvp(tmp_path):
@@ -135,6 +135,126 @@ def test_extract_symbols_ignores_nested_functions_for_mvp(tmp_path):
 
     assert index.errors == []
     assert [symbol.name for symbol in index.symbols] == ["outer"]
+
+
+def test_extract_symbols_from_simple_class(tmp_path):
+    path = tmp_path / "simple_class.py"
+    path.write_text(
+        "class AppConfig:\n"
+        "    pass\n",
+        encoding="utf-8",
+    )
+
+    index = extract_symbols_from_file(path)
+
+    assert index.errors == []
+    assert len(index.symbols) == 1
+    assert index.symbols[0].name == "AppConfig"
+    assert index.symbols[0].kind == "class"
+    assert index.symbols[0].file_path == str(path)
+    assert index.symbols[0].line_start == 1
+    assert index.symbols[0].line_end == 2
+    assert index.symbols[0].parent is None
+
+
+def test_extract_symbols_from_multiple_classes(tmp_path):
+    path = tmp_path / "multiple_classes.py"
+    path.write_text(
+        "class First:\n"
+        "    pass\n"
+        "\n"
+        "class Second:\n"
+        "    pass\n",
+        encoding="utf-8",
+    )
+
+    index = extract_symbols_from_file(path)
+
+    assert index.errors == []
+    assert [symbol.name for symbol in index.symbols] == ["First", "Second"]
+    assert [symbol.kind for symbol in index.symbols] == ["class", "class"]
+    assert [symbol.line_start for symbol in index.symbols] == [1, 4]
+
+
+def test_extract_symbols_from_class_with_base_class(tmp_path):
+    path = tmp_path / "base_class.py"
+    path.write_text(
+        "class Base:\n"
+        "    pass\n"
+        "\n"
+        "class Child(Base):\n"
+        "    pass\n",
+        encoding="utf-8",
+    )
+
+    index = extract_symbols_from_file(path)
+
+    assert index.errors == []
+    assert [symbol.name for symbol in index.symbols] == ["Base", "Child"]
+    assert [symbol.kind for symbol in index.symbols] == ["class", "class"]
+
+
+def test_extract_symbols_from_class_with_metaclass_and_methods(tmp_path):
+    path = tmp_path / "class_with_details.py"
+    path.write_text(
+        "class Plugin(BasePlugin, metaclass=PluginMeta):\n"
+        "    def configure(self):\n"
+        "        return None\n"
+        "\n"
+        "    async def run(self):\n"
+        "        return None\n",
+        encoding="utf-8",
+    )
+
+    index = extract_symbols_from_file(path)
+
+    assert index.errors == []
+    assert len(index.symbols) == 1
+    assert index.symbols[0].name == "Plugin"
+    assert index.symbols[0].kind == "class"
+    assert index.symbols[0].line_start == 1
+    assert index.symbols[0].line_end == 6
+
+
+def test_extract_symbols_ignores_nested_classes_for_mvp(tmp_path):
+    path = tmp_path / "nested_class.py"
+    path.write_text(
+        "class Outer:\n"
+        "    class Inner:\n"
+        "        pass\n",
+        encoding="utf-8",
+    )
+
+    index = extract_symbols_from_file(path)
+
+    assert index.errors == []
+    assert [symbol.name for symbol in index.symbols] == ["Outer"]
+    assert [symbol.kind for symbol in index.symbols] == ["class"]
+
+
+def test_extract_symbols_preserves_top_level_source_order(tmp_path):
+    path = tmp_path / "ordered.py"
+    path.write_text(
+        "def first():\n"
+        "    return 1\n"
+        "\n"
+        "class Middle:\n"
+        "    pass\n"
+        "\n"
+        "async def last():\n"
+        "    return 3\n",
+        encoding="utf-8",
+    )
+
+    index = extract_symbols_from_file(path)
+
+    assert index.errors == []
+    assert [symbol.name for symbol in index.symbols] == ["first", "Middle", "last"]
+    assert [symbol.kind for symbol in index.symbols] == [
+        "function",
+        "class",
+        "function",
+    ]
 
 
 def test_extract_symbols_from_syntax_error_file(tmp_path):
