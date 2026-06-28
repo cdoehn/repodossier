@@ -710,3 +710,114 @@ def test_parse_calls_from_source_does_not_resolve_unknown_class_name_method_call
         )
     ]
 
+def test_parse_calls_from_source_marks_chained_method_call_conservatively():
+    source = (
+        "def main(path):\n"
+        "    return path.read_text().splitlines()\n"
+    )
+
+    graph = parse_calls_from_source(
+        source,
+        source_path="src/app.py",
+        module_name="app",
+    )
+
+    assert graph.sorted_edges() == [
+        CallEdge(
+            caller_file="src/app.py",
+            caller_name="main",
+            caller_qualified_name="app.main",
+            callee_name="read_text",
+            callee_qualified_name=None,
+            line_number=2,
+            call_type="method",
+            confidence="unresolved",
+        ),
+        CallEdge(
+            caller_file="src/app.py",
+            caller_name="main",
+            caller_qualified_name="app.main",
+            callee_name="splitlines",
+            callee_qualified_name=None,
+            line_number=2,
+            call_type="method",
+            confidence="unresolved_method",
+        ),
+    ]
+
+
+def test_parse_calls_from_source_marks_chained_call_after_unknown_method_conservatively():
+    source = (
+        "def main(scanner):\n"
+        "    return scanner.scan().to_export()\n"
+    )
+
+    graph = parse_calls_from_source(
+        source,
+        source_path="src/app.py",
+        module_name="app",
+    )
+
+    assert graph.sorted_edges() == [
+        CallEdge(
+            caller_file="src/app.py",
+            caller_name="main",
+            caller_qualified_name="app.main",
+            callee_name="scan",
+            callee_qualified_name=None,
+            line_number=2,
+            call_type="method",
+            confidence="unresolved",
+        ),
+        CallEdge(
+            caller_file="src/app.py",
+            caller_name="main",
+            caller_qualified_name="app.main",
+            callee_name="to_export",
+            callee_qualified_name=None,
+            line_number=2,
+            call_type="method",
+            confidence="unresolved_method",
+        ),
+    ]
+
+
+def test_parse_calls_from_source_keeps_self_call_local_inside_chain_but_chain_unresolved():
+    source = (
+        "class Loader:\n"
+        "    def run(self):\n"
+        "        return self.load().normalize()\n"
+        "\n"
+        "    def load(self):\n"
+        "        return self\n"
+    )
+
+    graph = parse_calls_from_source(
+        source,
+        source_path="src/loader.py",
+        module_name="app.loader",
+    )
+
+    assert graph.sorted_edges() == [
+        CallEdge(
+            caller_file="src/loader.py",
+            caller_name="Loader.run",
+            caller_qualified_name="app.loader.Loader.run",
+            callee_name="load",
+            callee_qualified_name="app.loader.Loader.load",
+            line_number=3,
+            call_type="method",
+            confidence="local_method",
+        ),
+        CallEdge(
+            caller_file="src/loader.py",
+            caller_name="Loader.run",
+            caller_qualified_name="app.loader.Loader.run",
+            callee_name="normalize",
+            callee_qualified_name=None,
+            line_number=3,
+            call_type="method",
+            confidence="unresolved_method",
+        ),
+    ]
+

@@ -235,7 +235,18 @@ class PythonCallVisitor(ast.NodeVisitor):
         if cls_target is not None:
             return self._qualify(f"{cls_target}.{node.func.attr}"), "local_method"
 
+        if self._is_chained_method_call(node):
+            return None, "unresolved_method"
+
         return None, "unresolved"
+
+    def _is_chained_method_call(self, node: ast.Call) -> bool:
+        """Return True for chained calls such as obj.load().parse()."""
+
+        if not isinstance(node.func, ast.Attribute):
+            return False
+
+        return isinstance(node.func.value, ast.Call)
 
     def _is_self_method_call(self, node: ast.Call) -> bool:
         """Return True when the call is self.method() inside a class."""
