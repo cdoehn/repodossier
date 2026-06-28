@@ -966,6 +966,14 @@ def _import_graph_export_source_path(file_info, repo_root):
                 raw_path = value
                 break
 
+    if not isinstance(file_info, (str, Path)):
+        if getattr(file_info, "is_binary", False) is True:
+            return None
+        if getattr(file_info, "is_text", True) is False:
+            return None
+        if getattr(file_info, "error", None):
+            return None
+
     if raw_path is None:
         return None
 
