@@ -254,6 +254,32 @@ External calls:
 
 The Call Graph is intentionally conservative. Dynamic calls, monkeypatching, reflection, decorators, runtime imports, and complex type inference are not guaranteed to be resolved.
 
+### Call Graph guarantees and limits
+
+RepoContext's Call Graph is designed to be useful without pretending to be perfect.
+
+It guarantees that:
+
+- Python source is parsed statically with `ast`
+- project code is not imported or executed
+- directly visible calls are collected
+- identical call edges at the same call location are deduplicated
+- repeated calls on different lines remain visible
+- repo-internal resolved calls are shown prominently
+- external, ambiguous, and unresolved calls are separated from internal calls
+- large call groups are truncated with deterministic `... more` lines
+
+Default `full.txt` Call Graph display limits:
+
+| Group | Default limit |
+| --- | ---: |
+| Internal calls | 200 |
+| External calls | 25 |
+| Ambiguous calls | 25 |
+| Unresolved calls | 25 |
+
+The Call Graph does not guarantee complete resolution for dynamic Python behavior such as monkeypatching, runtime imports, reflection, framework injection, decorators that replace functions, or object method calls where the receiver type is unknown.
+
 ## Symbol extraction
 
 RepoContext includes a Python Symbol Index used internally by later analysis stages.
