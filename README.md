@@ -41,12 +41,12 @@ Implemented:
 - Python call graph
 - compact `ai.txt` export
 - documentation-only `docs.txt` export
+- dependency detection from `pyproject.toml` and requirements files
 - CLI aliases for full and AI exports
 
 Planned but not complete yet:
 
 - `changed.txt`
-- dependency summary from `pyproject.toml` and requirements files
 - database schema extraction
 - secret detection
 - advanced important-file ranking
@@ -171,10 +171,11 @@ The current `full.txt` export contains:
 2. Repository Statistics
 3. File Summary
 4. Repository Tree
-5. Complete Source Export
-6. Warnings
-7. Import Graph
-8. Call Graph
+5. Dependencies
+6. Complete Source Export
+7. Warnings
+8. Import Graph
+9. Call Graph
 
 The export is Markdown-oriented and designed to be readable both by humans and AI systems.
 
@@ -185,10 +186,11 @@ The current `ai.txt` export contains:
 1. Project summary
 2. Architecture Summary
 3. Important Files
-4. Symbol Index
-5. Import Graph
-6. Call Graph
-7. Notes
+4. Dependencies
+5. Symbol Index
+6. Import Graph
+7. Call Graph
+8. Notes
 
 The AI export is intentionally compact and does not include a complete source dump.
 

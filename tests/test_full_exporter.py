@@ -38,6 +38,7 @@ def test_full_export_section_order_matches_milestone_3_structure() -> None:
         "repository_statistics",
         "file_summary",
         "repository_tree",
+        "dependencies",
         "complete_source_export",
         "warnings",
     )
@@ -49,6 +50,7 @@ def test_full_export_section_headings_are_markdown_headings() -> None:
         "# Repository Statistics",
         "# File Summary",
         "# Repository Tree",
+        "# Dependencies",
         "# Complete Source Export",
         "# Warnings",
     )
@@ -465,7 +467,7 @@ def test_render_full_export_repository_tree_handles_empty_repository(
     rendered = render_full_export(context)
 
     repository_tree_section = rendered.split("# Repository Tree", 1)[1].split(
-        "# Complete Source Export",
+        "# Dependencies",
         1,
     )[0]
     assert repository_tree_section.strip() == "."

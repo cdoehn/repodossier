@@ -71,3 +71,27 @@ def test_architecture_documents_docs_exporter_scope():
     assert "docs.txt" in architecture
     assert "Contains documentation files only" in architecture
 
+
+def test_readme_no_longer_lists_dependency_detection_as_planned() -> None:
+    readme = Path("README.md").read_text(encoding="utf-8")
+
+    planned_section = readme.split("Planned but not complete yet:", 1)[1].split(
+        "## Installation", 1
+    )[0]
+
+    assert "dependency summary from `pyproject.toml` and requirements files" not in planned_section
+
+
+def test_readme_lists_dependencies_in_full_and_ai_exports() -> None:
+    readme = Path("README.md").read_text(encoding="utf-8")
+
+    full_output_section = readme.split("## Output: full.txt", 1)[1].split(
+        "## Output: ai.txt", 1
+    )[0]
+    ai_output_section = readme.split("## Output: ai.txt", 1)[1].split(
+        "## Output: docs.txt", 1
+    )[0]
+
+    assert "Dependencies" in full_output_section
+    assert "Dependencies" in ai_output_section
+

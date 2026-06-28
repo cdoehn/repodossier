@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Sequence
 
+from repocontext.dependencies import analyze_dependencies, render_dependency_full_section
 from repocontext.git import RepositoryInfo, get_repository_info
 from repocontext.gitignore import ensure_repocontext_gitignore_entries
 from repocontext.models import FileInfo
@@ -17,6 +18,7 @@ FULL_EXPORT_SECTION_ORDER: tuple[str, ...] = (
     "repository_statistics",
     "file_summary",
     "repository_tree",
+    "dependencies",
     "complete_source_export",
     "warnings",
 )
@@ -26,6 +28,7 @@ FULL_EXPORT_SECTION_HEADINGS: dict[str, str] = {
     "repository_statistics": "# Repository Statistics",
     "file_summary": "# File Summary",
     "repository_tree": "# Repository Tree",
+    "dependencies": "# Dependencies",
     "complete_source_export": "# Complete Source Export",
     "warnings": "# Warnings",
 }
@@ -172,6 +175,7 @@ def render_full_export(context: FullExportContext) -> str:
         _render_repository_statistics(context),
         _render_file_summary(context),
         _render_repository_tree(context),
+        _render_dependencies(context),
         _render_complete_source_export(context),
         _render_warnings(context),
     ]
@@ -659,6 +663,16 @@ def _repository_tree_file_label(file_info: FileInfo) -> str:
 
     return label
 
+
+
+def _render_dependencies(context: FullExportContext) -> str:
+    """Render dependency information for the Full Export."""
+
+    dependency_report = analyze_dependencies(
+        context.repository_root,
+        files=(file_info.relative_path for file_info in context.scanned_files),
+    )
+    return render_dependency_full_section(dependency_report).rstrip()
 
 def _render_complete_source_export(context: FullExportContext) -> str:
     """Render the complete source dump for all exported text files."""
