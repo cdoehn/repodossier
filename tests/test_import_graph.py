@@ -8,15 +8,15 @@ from repocontext.import_graph import (
     ImportReference,
     build_python_module_map,
     module_name_from_python_path,
-    resolve_absolute_import_reference,
-    resolve_absolute_imports,
-    resolve_relative_import_reference,
-    resolve_relative_imports,
-    resolve_import_reference,
-    resolve_imports,
-    resolved_import_target,
     parse_imports_from_file,
     parse_imports_from_source,
+    resolve_absolute_import_reference,
+    resolve_absolute_imports,
+    resolve_import_reference,
+    resolve_imports,
+    resolve_relative_import_reference,
+    resolve_relative_imports,
+    resolved_import_target,
 )
 
 
@@ -764,6 +764,195 @@ def test_resolve_imports_maps_mixed_imports_to_file_targets() -> None:
         ("repocontext.exporter", Path("src/repocontext/exporter.py")),
         ("repocontext.scanner", Path("src/repocontext/scanner.py")),
         None,
+    ]
+
+
+
+
+def test_import_resolution_integration_handles_mini_src_project(tmp_path: Path) -> None:
+    project_files = {
+        "src/repocontext/__init__.py": "",
+        "src/repocontext/cli.py": """
+import argparse
+import repocontext.exporter
+from repocontext import scanner
+""",
+        "src/repocontext/exporter.py": """
+from .scanner import scan_files
+from . import symbols
+from .missing import nope
+""",
+        "src/repocontext/git.py": "",
+        "src/repocontext/scanner.py": "def scan_files(): pass\n",
+        "src/repocontext/symbols.py": "",
+        "src/repocontext/subpkg/__init__.py": "",
+        "src/repocontext/subpkg/example.py": """
+from .. import git as repo_git
+from ..scanner import scan_files as scan
+""",
+    }
+
+    source_paths: list[Path] = []
+    for relative_path, content in project_files.items():
+        path = tmp_path / relative_path
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content, encoding="utf-8")
+        source_paths.append(path)
+
+    module_map = build_python_module_map(source_paths, repo_root=tmp_path)
+
+    assert module_map == {
+        "repocontext": tmp_path / "src/repocontext/__init__.py",
+        "repocontext.cli": tmp_path / "src/repocontext/cli.py",
+        "repocontext.exporter": tmp_path / "src/repocontext/exporter.py",
+        "repocontext.git": tmp_path / "src/repocontext/git.py",
+        "repocontext.scanner": tmp_path / "src/repocontext/scanner.py",
+        "repocontext.subpkg": tmp_path / "src/repocontext/subpkg/__init__.py",
+        "repocontext.subpkg.example": tmp_path / "src/repocontext/subpkg/example.py",
+        "repocontext.symbols": tmp_path / "src/repocontext/symbols.py",
+    }
+
+    references = []
+    errors = []
+    for source_path in [
+        tmp_path / "src/repocontext/cli.py",
+        tmp_path / "src/repocontext/exporter.py",
+        tmp_path / "src/repocontext/subpkg/example.py",
+    ]:
+        source_module = module_name_from_python_path(source_path, repo_root=tmp_path)
+        assert source_module is not None
+
+        parsed_references, parsed_errors = parse_imports_from_file(
+            source_path,
+            source_module=source_module,
+        )
+        references.extend(resolve_imports(parsed_references, module_map))
+        errors.extend(parsed_errors)
+
+    assert errors == []
+
+    resolved_summary = [
+        (
+            reference.source_module,
+            reference.imported_module,
+            reference.imported_name,
+            reference.is_local,
+            reference.resolved_module,
+            (
+                reference.resolved_path.relative_to(tmp_path).as_posix()
+                if reference.resolved_path is not None
+                else None
+            ),
+        )
+        for reference in references
+    ]
+
+    assert resolved_summary == [
+        (
+            "repocontext.cli",
+            "argparse",
+            None,
+            False,
+            None,
+            None,
+        ),
+        (
+            "repocontext.cli",
+            "repocontext.exporter",
+            None,
+            True,
+            "repocontext.exporter",
+            "src/repocontext/exporter.py",
+        ),
+        (
+            "repocontext.cli",
+            "repocontext",
+            "scanner",
+            True,
+            "repocontext.scanner",
+            "src/repocontext/scanner.py",
+        ),
+        (
+            "repocontext.exporter",
+            "scanner",
+            "scan_files",
+            True,
+            "repocontext.scanner",
+            "src/repocontext/scanner.py",
+        ),
+        (
+            "repocontext.exporter",
+            None,
+            "symbols",
+            True,
+            "repocontext.symbols",
+            "src/repocontext/symbols.py",
+        ),
+        (
+            "repocontext.exporter",
+            "missing",
+            "nope",
+            False,
+            None,
+            None,
+        ),
+        (
+            "repocontext.subpkg.example",
+            None,
+            "git",
+            True,
+            "repocontext.git",
+            "src/repocontext/git.py",
+        ),
+        (
+            "repocontext.subpkg.example",
+            "scanner",
+            "scan_files",
+            True,
+            "repocontext.scanner",
+            "src/repocontext/scanner.py",
+        ),
+    ]
+
+
+def test_import_resolution_integration_resolves_package_init_targets(tmp_path: Path) -> None:
+    project_files = {
+        "src/app/__init__.py": "",
+        "src/app/main.py": """
+import app.plugins
+from app import plugins
+from . import plugins as local_plugins
+""",
+        "src/app/plugins/__init__.py": "",
+    }
+
+    source_paths: list[Path] = []
+    for relative_path, content in project_files.items():
+        path = tmp_path / relative_path
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content, encoding="utf-8")
+        source_paths.append(path)
+
+    module_map = build_python_module_map(source_paths, repo_root=tmp_path)
+    source_path = tmp_path / "src/app/main.py"
+    source_module = module_name_from_python_path(source_path, repo_root=tmp_path)
+
+    assert source_module == "app.main"
+
+    parsed_references, errors = parse_imports_from_file(
+        source_path,
+        source_module=source_module,
+    )
+    resolved_references = resolve_imports(parsed_references, module_map)
+
+    assert errors == []
+    assert [
+        resolved_import_target(reference)
+        for reference in resolved_references
+    ] == [
+        ("app.plugins", tmp_path / "src/app/plugins/__init__.py"),
+        ("app.plugins", tmp_path / "src/app/plugins/__init__.py"),
+        ("app.plugins", tmp_path / "src/app/plugins/__init__.py"),
     ]
 
 
