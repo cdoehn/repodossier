@@ -8,9 +8,15 @@ from repocontext.import_graph import (
     ImportReference,
 )
 
+from repocontext.git import RepositoryInfo, TrackedFile
+from repocontext.models import FileInfo
+
 from repocontext.exporters.full import (
     _build_import_graph_for_export,
     _format_import_graph_section,
+    create_full_export_context,
+    render_full_export,
+    write_full_export,
 )
 
 
@@ -196,6 +202,129 @@ def test_format_import_graph_section_limits_large_lists() -> None:
     assert "- json" in section
     assert "- pathlib" not in section
     assert section.count("- ... 1 more") >= 2
+
+
+
+
+def _write_import_graph_fixture_file(
+    repo_root: Path,
+    relative_path: str,
+    content: str,
+) -> FileInfo:
+    path = repo_root / relative_path
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(content, encoding="utf-8")
+
+    suffix = path.suffix.lower()
+    if suffix == ".py":
+        language = "python"
+    elif suffix == ".md":
+        language = "markdown"
+    else:
+        language = "text"
+
+    return FileInfo(
+        relative_path=Path(relative_path),
+        absolute_path=path,
+        is_text=True,
+        is_binary=False,
+        language=language,
+        line_count=len(content.splitlines()),
+        estimated_tokens=(len(content) + 3) // 4 if content else 0,
+        content=content,
+    )
+
+
+def _make_import_graph_full_export_context(
+    repo_root: Path,
+    *,
+    reverse_files: bool = False,
+):
+    files = [
+        _write_import_graph_fixture_file(repo_root, "src/app/__init__.py", ""),
+        _write_import_graph_fixture_file(
+            repo_root,
+            "src/app/main.py",
+            "import os\n"
+            "import app.utils\n"
+            "from .missing import nope\n",
+        ),
+        _write_import_graph_fixture_file(
+            repo_root,
+            "src/app/utils.py",
+            "def helper():\n"
+            "    return 'ok'\n",
+        ),
+        _write_import_graph_fixture_file(repo_root, "README.md", "# Example\n"),
+    ]
+
+    if reverse_files:
+        files = list(reversed(files))
+
+    repository_info = RepositoryInfo(
+        name="example",
+        root_path=repo_root,
+        is_current_directory_root=True,
+        branch="main",
+        commit_hash="a" * 40,
+        short_commit_hash="aaaaaaa",
+        remote_url=None,
+        is_dirty=False,
+        tracked_files=[TrackedFile(path=file_info.relative_path) for file_info in files],
+        commit_metadata=None,
+    )
+
+    return create_full_export_context(repository_info, files)
+
+
+def _rendered_import_graph_section(rendered_export: str) -> str:
+    assert "## Import Graph" in rendered_export
+    return rendered_export.split("## Import Graph", 1)[1]
+
+
+def test_render_full_export_includes_import_graph_section_from_context_files(
+    tmp_path: Path,
+) -> None:
+    context = _make_import_graph_full_export_context(tmp_path)
+
+    rendered = render_full_export(context)
+    section = _rendered_import_graph_section(rendered)
+
+    assert "Summary:" in section
+    assert "- Local modules: 3" in section
+    assert "- Local dependencies: 1" in section
+    assert "- External imports: 1" in section
+    assert "- Unresolved imports: 1" in section
+    assert "Local dependencies:\n- app.main -> app.utils" in section
+    assert "External imports:\n- os" in section
+    assert "Unresolved imports:\n- app.main: missing.nope" in section
+
+
+def test_write_full_export_persists_import_graph_section_to_full_txt(
+    tmp_path: Path,
+) -> None:
+    context = _make_import_graph_full_export_context(tmp_path)
+
+    output_path = write_full_export(context)
+
+    assert output_path == tmp_path / "full.txt"
+    content = output_path.read_text(encoding="utf-8")
+    section = _rendered_import_graph_section(content)
+    assert "- app.main -> app.utils" in section
+    assert "- os" in section
+    assert "- app.main: missing.nope" in section
+
+
+def test_render_full_export_import_graph_output_is_deterministic_for_file_order(
+    tmp_path: Path,
+) -> None:
+    normal_context = _make_import_graph_full_export_context(tmp_path)
+    reversed_context = _make_import_graph_full_export_context(
+        tmp_path,
+        reverse_files=True,
+    )
+
+    assert render_full_export(normal_context) == render_full_export(reversed_context)
 
 
 def test_format_import_graph_section_renders_summary_dependencies_and_imports(tmp_path: Path) -> None:
