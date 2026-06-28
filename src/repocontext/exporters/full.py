@@ -493,7 +493,7 @@ def _render_repository_statistics(context: FullExportContext) -> str:
 
 
 def _render_file_summary(context: FullExportContext) -> str:
-    """Render a compact summary of all exported text files."""
+    """Render a readable grouped summary of all exported text files."""
     lines = [
         FULL_EXPORT_SECTION_HEADINGS["file_summary"],
         "",
@@ -503,12 +503,35 @@ def _render_file_summary(context: FullExportContext) -> str:
         lines.append("No exportable text files.")
         return "\n".join(lines)
 
+    grouped_files = _group_file_summary_entries(context)
+
     lines.extend(
         [
-            "| Path | Language | Lines | Tokens |",
-            "| --- | --- | ---: | ---: |",
+            f"Exported text files: {len(context.exported_text_files)}",
+            f"Total lines: {_format_number(context.total_line_count)}",
+            f"Estimated tokens: {_format_number(context.total_estimated_tokens)}",
+            "",
         ]
     )
+
+    for group_index, (language, entries) in enumerate(grouped_files):
+        if group_index > 0:
+            lines.append("")
+
+        file_word = "file" if len(entries) == 1 else "files"
+        lines.append(f"## {language} ({len(entries)} {file_word})")
+
+        for file_info in entries:
+            lines.append(_format_file_summary_entry(file_info))
+
+    return "\n".join(lines)
+
+
+def _group_file_summary_entries(
+    context: FullExportContext,
+) -> tuple[tuple[str, tuple[FileInfo, ...]], ...]:
+    """Group exported text files by display language in stable order."""
+    grouped: dict[str, list[FileInfo]] = {}
 
     for file_info in context.exported_text_files:
         language = (
@@ -516,21 +539,37 @@ def _render_file_summary(context: FullExportContext) -> str:
             if file_info.language
             else "Unknown"
         )
-        lines.append(
-            "| "
-            f"{_escape_markdown_table_cell(file_info.relative_path.as_posix())} | "
-            f"{_escape_markdown_table_cell(language)} | "
-            f"{file_info.line_count or 0} | "
-            f"{file_info.estimated_tokens or 0} |"
-        )
+        grouped.setdefault(language, []).append(file_info)
 
-    return "\n".join(lines)
+    return tuple(
+        (language, tuple(files))
+        for language, files in sorted(grouped.items(), key=lambda item: item[0])
+    )
 
 
-def _escape_markdown_table_cell(value: str) -> str:
-    """Escape Markdown table separators inside a cell."""
-    return value.replace("|", "\\|")
+def _format_file_summary_entry(file_info: FileInfo) -> str:
+    """Format one file summary bullet."""
+    path = _format_inline_code(file_info.relative_path.as_posix())
+    line_count = file_info.line_count or 0
+    token_count = file_info.estimated_tokens or 0
+    line_word = "line" if line_count == 1 else "lines"
+    token_word = "token" if token_count == 1 else "tokens"
 
+    return (
+        f"- {path} — "
+        f"{_format_number(line_count)} {line_word}, "
+        f"~{_format_number(token_count)} {token_word}"
+    )
+
+
+def _format_number(value: int) -> str:
+    """Format integers for human-readable export summaries."""
+    return f"{value:,}"
+
+
+def _format_inline_code(value: str) -> str:
+    """Format a value as Markdown inline code."""
+    return f"`{value.replace('`', '\\`')}`"
 
 def _render_repository_tree(context: FullExportContext) -> str:
     """Render a deterministic tree view of scanned Git-tracked files."""

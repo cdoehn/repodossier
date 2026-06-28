@@ -295,18 +295,24 @@ def test_render_full_export_renders_file_summary_table(tmp_path: Path) -> None:
     rendered = render_full_export(context)
 
     assert "# File Summary" in rendered
-    assert "| Path | Language | Lines | Tokens |" in rendered
-    assert "| --- | --- | ---: | ---: |" in rendered
-    assert "| README.md | Markdown | 3 | 10 |" in rendered
-    assert "| src/module.py | Python | 2 | 8 |" in rendered
-    assert "image.bin |" not in rendered
-    assert "File Summary details will be expanded" not in rendered
+    assert "Exported text files: 2" in rendered
+    assert "Total lines: 5" in rendered
+    assert "Estimated tokens: 18" in rendered
+    assert "## Markdown (1 file)" in rendered
+    assert "- `README.md` — 3 lines, ~10 tokens" in rendered
+    assert "## Python (1 file)" in rendered
+    assert "- `src/module.py` — 2 lines, ~8 tokens" in rendered
+    file_summary_section = rendered.split("# File Summary", 1)[1].split(
+        "# Repository Tree",
+        1,
+    )[0]
 
-    readme_position = rendered.index("| README.md | Markdown | 3 | 10 |")
-    module_position = rendered.index("| src/module.py | Python | 2 | 8 |")
+    assert "image.bin" not in file_summary_section
+    assert "File Summary details will be expanded" not in file_summary_section
+
+    readme_position = rendered.index("- `README.md` — 3 lines, ~10 tokens")
+    module_position = rendered.index("- `src/module.py` — 2 lines, ~8 tokens")
     assert readme_position < module_position
-
-
 def test_render_full_export_file_summary_handles_unknown_language_and_missing_counts(
     tmp_path: Path,
 ) -> None:
@@ -325,9 +331,8 @@ def test_render_full_export_file_summary_handles_unknown_language_and_missing_co
     context = create_full_export_context(repository_info, [file_info])
     rendered = render_full_export(context)
 
-    assert "| notes.unknown | Unknown | 0 | 0 |" in rendered
-
-
+    assert "## Unknown (1 file)" in rendered
+    assert "- `notes.unknown` — 0 lines, ~0 tokens" in rendered
 def test_render_full_export_file_summary_handles_no_exportable_text_files(
     tmp_path: Path,
 ) -> None:
@@ -365,9 +370,8 @@ def test_render_full_export_file_summary_escapes_markdown_table_pipes(
     context = create_full_export_context(repository_info, [file_info])
     rendered = render_full_export(context)
 
-    assert "| docs/weird\\|name.txt | Text | 1 | 2 |" in rendered
-
-
+    assert "## Text (1 file)" in rendered
+    assert "- `docs/weird|name.txt` — 1 line, ~2 tokens" in rendered
 def test_render_full_export_renders_repository_tree(tmp_path: Path) -> None:
     repository_info = make_repository_info(tmp_path)
     files = [
