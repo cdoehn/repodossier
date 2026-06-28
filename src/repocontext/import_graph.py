@@ -366,6 +366,47 @@ def resolve_relative_imports(
         for reference in references
     ]
 
+
+def resolve_import_reference(
+    reference: ImportReference,
+    module_map: Mapping[str, str | Path],
+) -> ImportReference:
+    """Resolve an import reference to a local file target when possible.
+
+    This is the unified resolver for callers that do not want to care whether
+    an import was absolute or relative. Local imports receive resolved_module
+    and resolved_path. External or unresolved imports are marked as not local.
+    """
+
+    if reference.is_relative or reference.level > 0:
+        return resolve_relative_import_reference(reference, module_map)
+
+    return resolve_absolute_import_reference(reference, module_map)
+
+
+def resolve_imports(
+    references: list[ImportReference] | tuple[ImportReference, ...],
+    module_map: Mapping[str, str | Path],
+) -> list[ImportReference]:
+    """Resolve absolute and relative imports against known local modules."""
+
+    return [
+        resolve_import_reference(reference, module_map)
+        for reference in references
+    ]
+
+
+def resolved_import_target(reference: ImportReference) -> tuple[str, Path] | None:
+    """Return the resolved local module and path for an import reference."""
+
+    if not reference.is_local:
+        return None
+
+    if reference.resolved_module is None or reference.resolved_path is None:
+        return None
+
+    return reference.resolved_module, reference.resolved_path
+
 def parse_imports_from_source(
     source: str,
     *,
@@ -454,6 +495,9 @@ __all__ = [
     "resolve_absolute_imports",
     "resolve_relative_import_reference",
     "resolve_relative_imports",
+    "resolve_import_reference",
+    "resolve_imports",
+    "resolved_import_target",
     "parse_imports_from_file",
     "parse_imports_from_source",
 ]

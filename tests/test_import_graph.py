@@ -12,6 +12,9 @@ from repocontext.import_graph import (
     resolve_absolute_imports,
     resolve_relative_import_reference,
     resolve_relative_imports,
+    resolve_import_reference,
+    resolve_imports,
+    resolved_import_target,
     parse_imports_from_file,
     parse_imports_from_source,
 )
@@ -590,6 +593,178 @@ def test_resolve_relative_imports_resolves_multiple_references() -> None:
     assert [reference.is_local for reference in resolved] == [True, False]
     assert resolved[0].resolved_module == "repocontext.scanner"
     assert resolved[1].resolved_module is None
+
+
+
+
+def test_resolve_import_reference_maps_absolute_import_to_file_target() -> None:
+    reference = ImportReference(
+        source_path="src/repocontext/cli.py",
+        source_module="repocontext.cli",
+        imported_module="repocontext.exporter",
+        import_type="import",
+        line_number=3,
+    )
+
+    resolved = resolve_import_reference(
+        reference,
+        {
+            "repocontext.exporter": Path("src/repocontext/exporter.py"),
+        },
+    )
+
+    assert resolved.is_local is True
+    assert resolved.resolved_module == "repocontext.exporter"
+    assert resolved.resolved_path == Path("src/repocontext/exporter.py")
+    assert resolved_import_target(resolved) == (
+        "repocontext.exporter",
+        Path("src/repocontext/exporter.py"),
+    )
+
+
+def test_resolve_import_reference_maps_relative_import_to_file_target() -> None:
+    reference = ImportReference(
+        source_path="src/repocontext/exporter.py",
+        source_module="repocontext.exporter",
+        imported_module="scanner",
+        imported_name="scan_files",
+        import_type="from",
+        level=1,
+        line_number=4,
+        is_relative=True,
+    )
+
+    resolved = resolve_import_reference(
+        reference,
+        {
+            "repocontext.scanner": Path("src/repocontext/scanner.py"),
+        },
+    )
+
+    assert resolved.is_local is True
+    assert resolved.resolved_module == "repocontext.scanner"
+    assert resolved.resolved_path == Path("src/repocontext/scanner.py")
+    assert resolved_import_target(resolved) == (
+        "repocontext.scanner",
+        Path("src/repocontext/scanner.py"),
+    )
+
+
+def test_resolve_import_reference_maps_from_package_import_to_submodule_file_target() -> None:
+    reference = ImportReference(
+        source_path="src/repocontext/cli.py",
+        source_module="repocontext.cli",
+        imported_module="repocontext",
+        imported_name="scanner",
+        import_type="from",
+        line_number=6,
+    )
+
+    resolved = resolve_import_reference(
+        reference,
+        {
+            "repocontext": Path("src/repocontext/__init__.py"),
+            "repocontext.scanner": Path("src/repocontext/scanner.py"),
+        },
+    )
+
+    assert resolved.is_local is True
+    assert resolved.resolved_module == "repocontext.scanner"
+    assert resolved.resolved_path == Path("src/repocontext/scanner.py")
+
+
+def test_resolve_import_reference_maps_external_import_to_no_file_target() -> None:
+    reference = ImportReference(
+        source_path="src/repocontext/cli.py",
+        source_module="repocontext.cli",
+        imported_module="argparse",
+        import_type="import",
+        line_number=1,
+    )
+
+    resolved = resolve_import_reference(
+        reference,
+        {
+            "repocontext.cli": Path("src/repocontext/cli.py"),
+        },
+    )
+
+    assert resolved.is_local is False
+    assert resolved.resolved_module is None
+    assert resolved.resolved_path is None
+    assert resolved_import_target(resolved) is None
+
+
+def test_resolve_import_reference_maps_unresolved_relative_import_to_no_file_target() -> None:
+    reference = ImportReference(
+        source_path="src/repocontext/exporter.py",
+        source_module="repocontext.exporter",
+        imported_module="missing",
+        imported_name="thing",
+        import_type="from",
+        level=1,
+        line_number=12,
+        is_relative=True,
+    )
+
+    resolved = resolve_import_reference(
+        reference,
+        {
+            "repocontext.scanner": Path("src/repocontext/scanner.py"),
+        },
+    )
+
+    assert resolved.is_local is False
+    assert resolved.resolved_module is None
+    assert resolved.resolved_path is None
+    assert resolved_import_target(resolved) is None
+
+
+def test_resolve_imports_maps_mixed_imports_to_file_targets() -> None:
+    references = [
+        ImportReference(
+            source_path="src/repocontext/cli.py",
+            source_module="repocontext.cli",
+            imported_module="repocontext.exporter",
+            import_type="import",
+            line_number=1,
+        ),
+        ImportReference(
+            source_path="src/repocontext/exporter.py",
+            source_module="repocontext.exporter",
+            imported_module="scanner",
+            imported_name="scan_files",
+            import_type="from",
+            level=1,
+            line_number=2,
+            is_relative=True,
+        ),
+        ImportReference(
+            source_path="src/repocontext/cli.py",
+            source_module="repocontext.cli",
+            imported_module="argparse",
+            import_type="import",
+            line_number=3,
+        ),
+    ]
+
+    resolved = resolve_imports(
+        references,
+        {
+            "repocontext.exporter": Path("src/repocontext/exporter.py"),
+            "repocontext.scanner": Path("src/repocontext/scanner.py"),
+        },
+    )
+
+    assert [reference.is_local for reference in resolved] == [True, True, False]
+    assert [
+        resolved_import_target(reference)
+        for reference in resolved
+    ] == [
+        ("repocontext.exporter", Path("src/repocontext/exporter.py")),
+        ("repocontext.scanner", Path("src/repocontext/scanner.py")),
+        None,
+    ]
 
 
 def test_parse_imports_from_source_detects_plain_imports() -> None:
