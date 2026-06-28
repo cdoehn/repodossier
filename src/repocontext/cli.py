@@ -7,7 +7,7 @@ from importlib import metadata
 from pathlib import Path
 from typing import Iterable, Optional
 
-from .exporters import generate_ai_export, generate_full_export
+from .exporters import generate_ai_export, generate_docs_export, generate_full_export
 from .git import RepositoryInfo, find_repository_root, get_repository_info
 from .gitignore import GitignoreUpdateError
 from .import_graph import build_import_graph, calculate_import_graph_metrics
@@ -142,6 +142,25 @@ def _handle_ai_export_command(_args: argparse.Namespace) -> int:
     return 0
 
 
+def _handle_docs_export_command(_args: argparse.Namespace) -> int:
+    """Run the documentation export command and write docs.txt."""
+    repository_root = _find_repository_root_or_report_error()
+    if repository_root is None:
+        return 1
+
+    try:
+        output_path = generate_docs_export(repository_root)
+    except GitignoreUpdateError as exc:
+        print(f"Error: Could not update .gitignore: {exc}")
+        return 1
+    except OSError as exc:
+        print(f"Error: Could not write docs.txt: {exc}")
+        return 1
+
+    print(f"Wrote {output_path}")
+    return 0
+
+
 def _handle_info_command(_args: argparse.Namespace) -> int:
     """Run the repository info command."""
     repository_root = _find_repository_root_or_report_error()
@@ -172,6 +191,9 @@ def _build_parser() -> argparse.ArgumentParser:
 
     ai_export_parser = subparsers.add_parser("export-ai", help="Generate ai.txt export")
     ai_export_parser.set_defaults(handler=_handle_ai_export_command)
+
+    docs_export_parser = subparsers.add_parser("export-docs", help="Generate docs.txt export")
+    docs_export_parser.set_defaults(handler=_handle_docs_export_command)
 
     parser.set_defaults(handler=_handle_full_export_command)
     return parser
