@@ -43,13 +43,13 @@ Implemented:
 - documentation-only `docs.txt` export
 - dependency detection from `pyproject.toml` and requirements files
 - database schema extraction from SQLite databases and SQL schema files
+- multi-signal important-file ranking for AI exports
 - CLI aliases for full and AI exports
 
 Planned but not complete yet:
 
 - `changed.txt`
 - secret detection
-- advanced important-file ranking
 - configuration via `.repocontext.yml`
 - split exports for very large repositories
 - Bash symbol and call graph support
@@ -195,6 +195,22 @@ The current `ai.txt` export contains:
 9. Notes
 
 The AI export is intentionally compact and does not include a complete source dump.
+
+### Important file ranking
+
+The `Important Files` section is produced by RepoContext's shared important-file ranking.
+
+The ranking combines these deterministic signals:
+
+- CLI and Python entrypoints from `pyproject.toml`, `__main__.py`, `main.py`, `cli.py`, `app.py`, `server.py`, `manage.py`, `wsgi.py`, and `asgi.py`
+- import graph centrality, especially files imported by several local modules
+- call graph centrality, especially files whose functions or methods are called by several local files
+- documentation relevance such as README, architecture, specification, roadmap, changelog, contributing, and docs files
+- structural project files such as `pyproject.toml`, `setup.py`, `setup.cfg`, requirements files, `Dockerfile`, `Makefile`, and package initializers
+
+Each ranked file carries a compact reason in `ai.txt`, for example `Project script entry point`, `Imported by 3 local files`, `Called by 2 local files`, `Primary project documentation`, or `Python project configuration`.
+
+Generated RepoContext exports such as `full.txt`, `ai.txt`, `docs.txt`, and `changed.txt` are excluded from the important-file ranking.
 
 ## Output: docs.txt
 

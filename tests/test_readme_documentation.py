@@ -95,3 +95,29 @@ def test_readme_lists_dependencies_in_full_and_ai_exports() -> None:
     assert "Dependencies" in full_output_section
     assert "Dependencies" in ai_output_section
 
+def test_readme_documents_multi_signal_important_file_ranking() -> None:
+    readme = Path("README.md").read_text(encoding="utf-8")
+
+    assert "multi-signal important-file ranking for AI exports" in readme
+    assert "## Output: ai.txt" in readme
+    assert "### Important file ranking" in readme
+    assert "The `Important Files` section is produced by RepoContext's shared important-file ranking." in readme
+
+    assert "CLI and Python entrypoints from `pyproject.toml`" in readme
+    assert "import graph centrality" in readme
+    assert "call graph centrality" in readme
+    assert "documentation relevance" in readme
+    assert "structural project files" in readme
+
+    assert "`full.txt`, `ai.txt`, `docs.txt`, and `changed.txt` are excluded" in readme
+
+
+def test_readme_no_longer_lists_important_file_ranking_as_planned() -> None:
+    readme = Path("README.md").read_text(encoding="utf-8")
+
+    planned_section = readme.split("Planned but not complete yet:", 1)[1].split(
+        "## Installation", 1
+    )[0]
+
+    assert "advanced important-file ranking" not in planned_section
+
