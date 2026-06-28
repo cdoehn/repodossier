@@ -12,6 +12,7 @@ from repocontext.git import RepositoryInfo, get_repository_info
 from repocontext.gitignore import ensure_repocontext_gitignore_entries
 from repocontext.models import FileInfo
 from repocontext.scanner import RepositoryScanner
+from repocontext.schema import analyze_database_schemas
 
 FULL_EXPORT_SECTION_ORDER: tuple[str, ...] = (
     "ai_quick_start",
@@ -19,6 +20,7 @@ FULL_EXPORT_SECTION_ORDER: tuple[str, ...] = (
     "file_summary",
     "repository_tree",
     "dependencies",
+    "database_schema",
     "complete_source_export",
     "warnings",
 )
@@ -29,6 +31,7 @@ FULL_EXPORT_SECTION_HEADINGS: dict[str, str] = {
     "file_summary": "# File Summary",
     "repository_tree": "# Repository Tree",
     "dependencies": "# Dependencies",
+    "database_schema": "# Database Schema",
     "complete_source_export": "# Complete Source Export",
     "warnings": "# Warnings",
 }
@@ -176,6 +179,7 @@ def render_full_export(context: FullExportContext) -> str:
         _render_file_summary(context),
         _render_repository_tree(context),
         _render_dependencies(context),
+        _render_database_schema(context),
         _render_complete_source_export(context),
         _render_warnings(context),
     ]
@@ -673,6 +677,189 @@ def _render_dependencies(context: FullExportContext) -> str:
         files=(file_info.relative_path for file_info in context.scanned_files),
     )
     return render_dependency_full_section(dependency_report).rstrip()
+
+
+def _render_database_schema(context: FullExportContext) -> str:
+    """Render database schema information for the Full Export."""
+
+    try:
+        schema_report = analyze_database_schemas(
+            context.repository_root,
+            files=context.scanned_files,
+        )
+    except Exception as exc:
+        return "\n".join(
+            [
+                FULL_EXPORT_SECTION_HEADINGS["database_schema"],
+                "",
+                "## Summary",
+                "",
+                "Database files: 0",
+                "SQL schema files: 0",
+                "Tables: 0",
+                "Views: 0",
+                "Warnings: 1",
+                "",
+                "## Schema Warnings",
+                "",
+                f"- Could not analyze database schemas: {type(exc).__name__}: {exc}",
+            ]
+        )
+
+    return _format_database_schema_full_section(schema_report)
+
+
+def _format_database_schema_full_section(schema_report) -> str:
+    """Format a DatabaseSchemaReport as the full.txt Database Schema section."""
+
+    lines = [
+        FULL_EXPORT_SECTION_HEADINGS["database_schema"],
+        "",
+        "## Summary",
+        "",
+        f"Database files: {len(schema_report.database_files)}",
+        f"SQL schema files: {len(schema_report.sql_schema_files)}",
+        f"Tables: {len(schema_report.tables)}",
+        f"Views: {len(schema_report.views)}",
+        f"Warnings: {len(schema_report.warnings)}",
+        "",
+        "## Database Files",
+        "",
+    ]
+
+    database_paths = tuple(schema_report.database_files) + tuple(schema_report.sql_schema_files)
+    if database_paths:
+        lines.extend(f"- {path}" for path in database_paths)
+    else:
+        lines.append("No database schema files detected.")
+
+    lines.extend(["", "## Tables", ""])
+    if schema_report.tables:
+        _append_schema_tables(lines, schema_report.tables)
+    else:
+        lines.append("No database tables detected.")
+
+    lines.extend(["", "## Views", ""])
+    if schema_report.views:
+        _append_schema_tables(lines, schema_report.views)
+    else:
+        lines.append("No database views detected.")
+
+    lines.extend(["", "## CREATE TABLE Statements", ""])
+    _append_create_statements(lines, schema_report.create_statements)
+
+    lines.extend(["", "## Schema Warnings", ""])
+    if schema_report.warnings:
+        lines.extend(f"- {warning}" for warning in schema_report.warnings)
+    else:
+        lines.append("No schema warnings.")
+
+    return "\n".join(lines).rstrip()
+
+
+def _append_schema_tables(lines: list[str], tables) -> None:
+    """Append formatted schema tables or views to the output lines."""
+
+    for table_index, table in enumerate(tables):
+        if table_index > 0:
+            lines.append("")
+
+        lines.append(f"### {table.name}")
+        lines.append(f"Source: {table.source_file or 'unknown'}")
+        lines.append(f"Type: {table.table_type}")
+        lines.append("")
+        lines.append("Columns:")
+
+        if table.columns:
+            for column in table.columns:
+                lines.append(f"- {_format_schema_column(column)}")
+        else:
+            lines.append("- none")
+
+        if table.foreign_keys:
+            lines.append("")
+            lines.append("Foreign keys:")
+            for foreign_key in table.foreign_keys:
+                lines.append(f"- {_format_schema_foreign_key(foreign_key)}")
+
+        if table.indexes:
+            lines.append("")
+            lines.append("Indexes:")
+            for index in table.indexes:
+                lines.append(f"- {_format_schema_index(index)}")
+
+
+def _format_schema_column(column) -> str:
+    """Format one database column in compact full.txt form."""
+
+    parts = [column.name]
+
+    if column.data_type:
+        parts.append(column.data_type)
+
+    if column.is_primary_key:
+        parts.append("PRIMARY KEY")
+
+    if column.nullable is False:
+        parts.append("NOT NULL")
+    elif column.nullable is True:
+        parts.append("NULL")
+
+    if column.default_value is not None:
+        parts.append(f"DEFAULT {column.default_value}")
+
+    return " ".join(parts)
+
+
+def _format_schema_foreign_key(foreign_key) -> str:
+    """Format one database foreign-key relationship."""
+
+    line = (
+        f"{foreign_key.from_column} -> "
+        f"{foreign_key.to_table}.{foreign_key.to_column}"
+    )
+
+    actions: list[str] = []
+    if foreign_key.on_update:
+        actions.append(f"ON UPDATE {foreign_key.on_update}")
+    if foreign_key.on_delete:
+        actions.append(f"ON DELETE {foreign_key.on_delete}")
+
+    if actions:
+        line += f" ({', '.join(actions)})"
+
+    return line
+
+
+def _format_schema_index(index) -> str:
+    """Format one database index."""
+
+    unique_prefix = "UNIQUE " if index.unique else ""
+    columns = ", ".join(index.columns) if index.columns else "unknown columns"
+    return f"{index.name} {unique_prefix}({columns})"
+
+
+def _append_create_statements(lines: list[str], create_statements) -> None:
+    """Append limited CREATE TABLE statements to the Database Schema section."""
+
+    if not create_statements:
+        lines.append("No CREATE TABLE statements detected.")
+        return
+
+    max_statements = 20
+    max_statement_length = 800
+
+    visible_statements = tuple(create_statements[:max_statements])
+    for statement_index, statement in enumerate(visible_statements, start=1):
+        compact_statement = " ".join(str(statement).split())
+        if len(compact_statement) > max_statement_length:
+            compact_statement = compact_statement[: max_statement_length - 4].rstrip() + " ..."
+
+        lines.append(f"{statement_index}. `{compact_statement}`")
+
+    remaining_count = len(create_statements) - len(visible_statements)
+    if remaining_count > 0:
+        lines.append(f"- ... {remaining_count} more")
 
 def _render_complete_source_export(context: FullExportContext) -> str:
     """Render the complete source dump for all exported text files."""

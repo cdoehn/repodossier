@@ -1,4 +1,5 @@
 from pathlib import Path
+import sqlite3
 
 from repocontext.exporters.full import (
     FULL_EXPORT_SECTION_HEADINGS,
@@ -39,6 +40,7 @@ def test_full_export_section_order_matches_milestone_3_structure() -> None:
         "file_summary",
         "repository_tree",
         "dependencies",
+        "database_schema",
         "complete_source_export",
         "warnings",
     )
@@ -51,6 +53,7 @@ def test_full_export_section_headings_are_markdown_headings() -> None:
         "# File Summary",
         "# Repository Tree",
         "# Dependencies",
+        "# Database Schema",
         "# Complete Source Export",
         "# Warnings",
     )
@@ -472,6 +475,148 @@ def test_render_full_export_repository_tree_handles_empty_repository(
     )[0]
     assert repository_tree_section.strip() == "."
 
+
+
+def test_render_full_export_renders_empty_database_schema_section(tmp_path: Path) -> None:
+    repository_info = make_repository_info(tmp_path)
+    readme = FileInfo(
+        relative_path=Path("README.md"),
+        absolute_path=tmp_path / "README.md",
+        is_text=True,
+        is_binary=False,
+        language="markdown",
+        line_count=1,
+        estimated_tokens=3,
+        content="# Example\n",
+    )
+
+    context = create_full_export_context(repository_info, [readme])
+    rendered = render_full_export(context)
+
+    assert "# Database Schema" in rendered
+    database_schema_section = rendered.split("# Database Schema", 1)[1].split(
+        "# Complete Source Export",
+        1,
+    )[0]
+
+    assert "## Summary" in database_schema_section
+    assert "Database files: 0" in database_schema_section
+    assert "SQL schema files: 0" in database_schema_section
+    assert "Tables: 0" in database_schema_section
+    assert "Views: 0" in database_schema_section
+    assert "No database schema files detected." in database_schema_section
+    assert "No schema warnings." in database_schema_section
+
+
+def test_render_full_export_renders_sqlite_database_schema_without_data(tmp_path: Path) -> None:
+    repository_info = make_repository_info(tmp_path)
+    database_path = tmp_path / "app.sqlite"
+
+    connection = sqlite3.connect(database_path)
+    try:
+        connection.execute("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT NOT NULL)")
+        connection.execute("INSERT INTO users (name) VALUES ('VerySecretUserName')")
+        connection.commit()
+    finally:
+        connection.close()
+
+    database_file = FileInfo(
+        relative_path=Path("app.sqlite"),
+        absolute_path=database_path,
+        is_text=False,
+        is_binary=True,
+        language=None,
+        content=None,
+    )
+
+    context = create_full_export_context(repository_info, [database_file])
+    rendered = render_full_export(context)
+    database_schema_section = rendered.split("# Database Schema", 1)[1].split(
+        "# Complete Source Export",
+        1,
+    )[0]
+
+    assert "Database files: 1" in database_schema_section
+    assert "- app.sqlite" in database_schema_section
+    assert "### users" in database_schema_section
+    assert "Source: app.sqlite" in database_schema_section
+    assert "- id INTEGER PRIMARY KEY NULL" in database_schema_section
+    assert "- name TEXT NOT NULL" in database_schema_section
+    assert "VerySecretUserName" not in rendered
+
+
+def test_render_full_export_renders_sql_schema_file_tables(tmp_path: Path) -> None:
+    repository_info = make_repository_info(tmp_path)
+    sql_path = tmp_path / "schema.sql"
+    sql_content = """
+    CREATE TABLE roles (
+        id INTEGER PRIMARY KEY,
+        name TEXT NOT NULL
+    );
+    """
+    sql_path.write_text(sql_content, encoding="utf-8")
+
+    sql_file = FileInfo(
+        relative_path=Path("schema.sql"),
+        absolute_path=sql_path,
+        is_text=True,
+        is_binary=False,
+        language="sql",
+        line_count=4,
+        estimated_tokens=12,
+        content=sql_content,
+    )
+
+    context = create_full_export_context(repository_info, [sql_file])
+    rendered = render_full_export(context)
+    database_schema_section = rendered.split("# Database Schema", 1)[1].split(
+        "# Complete Source Export",
+        1,
+    )[0]
+
+    assert "SQL schema files: 1" in database_schema_section
+    assert "- schema.sql" in database_schema_section
+    assert "### roles" in database_schema_section
+    assert "- id INTEGER PRIMARY KEY" in database_schema_section
+    assert "- name TEXT NOT NULL" in database_schema_section
+    assert "CREATE TABLE roles" in database_schema_section
+
+
+def test_render_full_export_renders_schema_warnings_for_bad_database(tmp_path: Path) -> None:
+    repository_info = make_repository_info(tmp_path)
+    broken_path = tmp_path / "broken.sqlite"
+    broken_path.write_bytes(b"not sqlite")
+
+    broken_file = FileInfo(
+        relative_path=Path("broken.sqlite"),
+        absolute_path=broken_path,
+        is_text=False,
+        is_binary=True,
+        language=None,
+        content=None,
+    )
+
+    context = create_full_export_context(repository_info, [broken_file])
+    rendered = render_full_export(context)
+    database_schema_section = rendered.split("# Database Schema", 1)[1].split(
+        "# Complete Source Export",
+        1,
+    )[0]
+
+    assert "Warnings: 1" in database_schema_section
+    assert "broken.sqlite: file extension suggests SQLite but magic header is missing" in database_schema_section
+
+
+def test_render_full_export_database_schema_appears_before_complete_source_export(
+    tmp_path: Path,
+) -> None:
+    repository_info = make_repository_info(tmp_path)
+    context = create_full_export_context(repository_info, [])
+
+    rendered = render_full_export(context)
+
+    assert rendered.index("# Dependencies") < rendered.index("# Database Schema")
+    assert rendered.index("# Database Schema") < rendered.index("# Complete Source Export")
 
 def test_render_full_export_renders_complete_source_export(tmp_path: Path) -> None:
     repository_info = make_repository_info(tmp_path)
