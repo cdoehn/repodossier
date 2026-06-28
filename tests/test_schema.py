@@ -8,6 +8,7 @@ import pytest
 
 from repocontext.schema import (
     DatabaseSchemaReport,
+    analyze_database_schemas,
     SchemaColumn,
     SchemaForeignKey,
     SchemaIndex,
@@ -561,6 +562,158 @@ def test_extract_sqlite_schema_file_does_not_export_table_data(tmp_path: Path) -
     assert "name" in report_text
     assert "VerySecretUserName" not in report_text
 
+
+
+def test_analyze_database_schemas_returns_empty_report_without_file_scope(tmp_path: Path) -> None:
+    database_path = tmp_path / "untracked.sqlite"
+    create_sqlite_database(database_path)
+
+    report = analyze_database_schemas(tmp_path)
+
+    assert report.is_empty() is True
+
+
+def test_analyze_database_schemas_combines_sqlite_and_sql_schema_files(tmp_path: Path) -> None:
+    database_path = tmp_path / "data" / "app.sqlite"
+    create_sqlite_database(database_path)
+
+    sql_path = tmp_path / "schema" / "schema.sql"
+    sql_path.parent.mkdir(parents=True)
+    sql_path.write_text(
+        """
+        CREATE TABLE roles (
+            id INTEGER PRIMARY KEY,
+            name TEXT NOT NULL
+        );
+        """,
+        encoding="utf-8",
+    )
+
+    report = analyze_database_schemas(
+        tmp_path,
+        files=[
+            Path("data/app.sqlite"),
+            Path("schema/schema.sql"),
+        ],
+    )
+
+    assert report.database_files == ("data/app.sqlite",)
+    assert report.sql_schema_files == ("schema/schema.sql",)
+    assert {table.name for table in report.tables} == {"roles", "users"}
+    assert any(table.source_file == "data/app.sqlite" for table in report.tables)
+    assert any(table.source_file == "schema/schema.sql" for table in report.tables)
+    assert len(report.create_statements) == 1
+    assert report.unsupported_files == ()
+    assert report.errors == ()
+
+
+def test_analyze_database_schemas_keeps_sql_results_when_sqlite_is_corrupt(tmp_path: Path) -> None:
+    corrupt_database_path = tmp_path / "broken.sqlite"
+    corrupt_database_path.write_bytes(b"SQLite format 3\x00" + b"broken data")
+
+    sql_path = tmp_path / "schema.sql"
+    sql_path.write_text(
+        """
+        CREATE TABLE audit_log (
+            id INTEGER PRIMARY KEY,
+            message TEXT NOT NULL
+        );
+        """,
+        encoding="utf-8",
+    )
+
+    report = analyze_database_schemas(
+        tmp_path,
+        files=[
+            Path("broken.sqlite"),
+            Path("schema.sql"),
+        ],
+    )
+
+    assert report.database_files == ("broken.sqlite",)
+    assert report.sql_schema_files == ("schema.sql",)
+    assert any(table.name == "audit_log" for table in report.tables)
+    assert any(
+        "could not read SQLite schema" in warning
+        or "could not open SQLite database" in warning
+        for warning in report.warnings
+    )
+
+
+def test_analyze_database_schemas_collects_unsupported_fake_database_warning(tmp_path: Path) -> None:
+    fake_database_path = tmp_path / "fake.db"
+    fake_database_path.write_bytes(b"not sqlite")
+
+    report = analyze_database_schemas(
+        tmp_path,
+        files=[Path("fake.db")],
+    )
+
+    assert report.database_files == ()
+    assert report.sql_schema_files == ()
+    assert report.unsupported_files == ("fake.db",)
+    assert "fake.db: file extension suggests SQLite but magic header is missing" in report.warnings
+
+
+def test_analyze_database_schemas_excludes_generated_exports(tmp_path: Path) -> None:
+    for file_name in ("full.txt", "ai.txt", "docs.txt", "changed.txt"):
+        (tmp_path / file_name).write_text(
+            "CREATE TABLE should_not_be_seen (id INTEGER PRIMARY KEY);",
+            encoding="utf-8",
+        )
+
+    report = analyze_database_schemas(
+        tmp_path,
+        files=[
+            Path("full.txt"),
+            Path("ai.txt"),
+            Path("docs.txt"),
+            Path("changed.txt"),
+        ],
+    )
+
+    assert report.is_empty() is True
+
+
+def test_analyze_database_schemas_accepts_fileinfo_like_objects(tmp_path: Path) -> None:
+    database_path = tmp_path / "data" / "app.sqlite"
+    create_sqlite_database(database_path)
+
+    sql_path = tmp_path / "schema.sql"
+    sql_path.write_text(
+        "CREATE TABLE roles (id INTEGER PRIMARY KEY);",
+        encoding="utf-8",
+    )
+
+    file_infos = [
+        FileInfoLike(relative_path=Path("data/app.sqlite"), absolute_path=database_path),
+        FileInfoLike(relative_path=Path("schema.sql"), absolute_path=sql_path),
+    ]
+
+    report = analyze_database_schemas(tmp_path, files=file_infos)
+
+    assert report.database_files == ("data/app.sqlite",)
+    assert report.sql_schema_files == ("schema.sql",)
+    assert {table.name for table in report.tables} == {"roles", "users"}
+
+
+def test_analyze_database_schemas_does_not_export_sqlite_table_data(tmp_path: Path) -> None:
+    database_path = tmp_path / "app.sqlite"
+
+    connection = sqlite3.connect(database_path)
+    try:
+        connection.execute("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT NOT NULL)")
+        connection.execute("INSERT INTO users (name) VALUES ('VerySecretUserName')")
+        connection.commit()
+    finally:
+        connection.close()
+
+    report = analyze_database_schemas(tmp_path, files=[Path("app.sqlite")])
+    report_text = repr(report)
+
+    assert "users" in report_text
+    assert "name" in report_text
+    assert "VerySecretUserName" not in report_text
 
 def test_discover_database_schema_files_does_not_scan_filesystem_without_explicit_files(tmp_path: Path) -> None:
     database_path = tmp_path / "untracked.sqlite"

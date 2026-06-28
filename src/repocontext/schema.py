@@ -1252,8 +1252,86 @@ def _extract_default_value(remainder: str) -> str | None:
     return value or None
 
 
+def analyze_database_schemas(
+    repo_root: str | Path,
+    files: Iterable[object] | None = None,
+) -> DatabaseSchemaReport:
+    """Analyze database schemas from scoped repository files.
+
+    This is the central Milestone 11 analyzer API. It intentionally uses the
+    provided file scope, usually Git-tracked scanner results, instead of doing
+    an unscoped filesystem scan. That keeps RepoContext's Git-tracked-only
+    contract intact.
+
+    The analyzer combines:
+    - SQLite schema extraction for SQLite database files
+    - best-effort CREATE TABLE parsing for SQL schema files
+    - warnings and unsupported-file information from discovery/extraction
+    """
+
+    root = Path(repo_root)
+    discovery_report = discover_database_schema_files(root, files=files)
+
+    reports: list[DatabaseSchemaReport] = [discovery_report]
+
+    for database_file in discovery_report.database_files:
+        reports.append(
+            extract_sqlite_schema_file(
+                root / database_file,
+                repo_root=root,
+            )
+        )
+
+    for sql_schema_file in discovery_report.sql_schema_files:
+        reports.append(
+            extract_sql_schema_file(
+                root / sql_schema_file,
+                repo_root=root,
+            )
+        )
+
+    return _merge_database_schema_reports(reports)
+
+
+def _merge_database_schema_reports(
+    reports: Iterable[DatabaseSchemaReport],
+) -> DatabaseSchemaReport:
+    """Merge multiple schema reports into one deterministic report."""
+
+    database_files: list[str] = []
+    tables: list[SchemaTable] = []
+    views: list[SchemaTable] = []
+    sql_schema_files: list[str] = []
+    create_statements: list[str] = []
+    warnings: list[str] = []
+    errors: list[str] = []
+    unsupported_files: list[str] = []
+
+    for report in reports:
+        database_files.extend(report.database_files)
+        tables.extend(report.tables)
+        views.extend(report.views)
+        sql_schema_files.extend(report.sql_schema_files)
+        create_statements.extend(report.create_statements)
+        warnings.extend(report.warnings)
+        errors.extend(report.errors)
+        unsupported_files.extend(report.unsupported_files)
+
+    return DatabaseSchemaReport(
+        database_files=tuple(database_files),
+        tables=tuple(tables),
+        views=tuple(views),
+        sql_schema_files=tuple(sql_schema_files),
+        create_statements=tuple(create_statements),
+        warnings=tuple(warnings),
+        errors=tuple(errors),
+        unsupported_files=tuple(unsupported_files),
+    )
+
+
 __all__ = [
     "DatabaseSchemaReport",
+    "analyze_database_schemas",
     "SQLITE_MAGIC_HEADER",
     "SQLITE_SCHEMA_EXTENSIONS",
     "SQL_SCHEMA_DIRECTORIES",
