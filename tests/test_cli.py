@@ -86,6 +86,55 @@ def test_cli_info_command_includes_import_graph_summary(
     assert "Analysis errors: 0" in output
 
 
+
+def write_call_graph_cli_fixture(repo_path: Path) -> None:
+    """Add a tiny Python package with a known imported function call."""
+
+    package_dir = repo_path / "src" / "app"
+    package_dir.mkdir(parents=True, exist_ok=True)
+
+    (package_dir / "__init__.py").write_text("", encoding="utf-8")
+    (package_dir / "helpers.py").write_text(
+        "def helper():\n"
+        "    return 'ok'\n",
+        encoding="utf-8",
+    )
+    (package_dir / "main.py").write_text(
+        "from app.helpers import helper\n"
+        "\n"
+        "def main():\n"
+        "    return helper()\n",
+        encoding="utf-8",
+    )
+
+    run_git_command(
+        repo_path,
+        "add",
+        "src/app/__init__.py",
+        "src/app/helpers.py",
+        "src/app/main.py",
+    )
+    run_git_command(
+        repo_path,
+        "commit",
+        "-m",
+        "Add call graph fixture",
+        env=COMMIT_ENV,
+    )
+
+
+def assert_full_export_contains_cli_call_graph(repo_path: Path) -> None:
+    """Assert that the CLI-generated full.txt includes Call Graph data."""
+
+    content = (repo_path / "full.txt").read_text(encoding="utf-8")
+    assert "## Call Graph" in content
+    assert "Internal calls by caller:" in content
+    assert "app.main.main (src/app/main.py)" in content
+    assert (
+        "  - line 4: calls app.helpers.helper "
+        "[function, imported_local]"
+    ) in content
+
 def test_cli_info_command_inside_repository(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
     repo_path = setup_repository(tmp_path / "repo")
     monkeypatch.chdir(repo_path)
@@ -107,6 +156,39 @@ def test_cli_info_command_inside_repository(tmp_path: Path, monkeypatch: pytest.
     assert "Commit date:" in output
     assert "Commit subject:" in output
     assert "Tracked files:" in output
+
+def test_cli_full_command_generates_call_graph_in_normal_export_flow(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    repo_path = setup_repository(tmp_path / "repo_cli_full_call_graph")
+    write_call_graph_cli_fixture(repo_path)
+    monkeypatch.chdir(repo_path)
+
+    exit_code = main(["full"])
+
+    assert exit_code == 0
+    assert_full_export_contains_cli_call_graph(repo_path)
+    captured = capsys.readouterr()
+    assert f"Wrote {repo_path / 'full.txt'}" in captured.out
+
+
+def test_cli_export_command_generates_call_graph_in_normal_export_flow(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    repo_path = setup_repository(tmp_path / "repo_cli_export_call_graph")
+    write_call_graph_cli_fixture(repo_path)
+    monkeypatch.chdir(repo_path)
+
+    exit_code = main(["export"])
+
+    assert exit_code == 0
+    assert_full_export_contains_cli_call_graph(repo_path)
+    captured = capsys.readouterr()
+    assert f"Wrote {repo_path / 'full.txt'}" in captured.out
 
 
 def test_cli_default_command_creates_full_export(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:

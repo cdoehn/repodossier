@@ -143,6 +143,12 @@ def _build_parser() -> argparse.ArgumentParser:
     info_parser = subparsers.add_parser("info", help="Show repository info")
     info_parser.set_defaults(handler=_handle_info_command)
 
+    full_parser = subparsers.add_parser("full", help="Generate full.txt export")
+    full_parser.set_defaults(handler=_handle_full_export_command)
+
+    export_parser = subparsers.add_parser("export", help="Generate full.txt export")
+    export_parser.set_defaults(handler=_handle_full_export_command)
+
     parser.set_defaults(handler=_handle_full_export_command)
     return parser
 
