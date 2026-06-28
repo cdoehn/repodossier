@@ -591,6 +591,19 @@ def test_documentation_ranking_prioritizes_readme_and_architecture_docs() -> Non
     )
 
 
+def test_python_files_with_milestone_in_name_do_not_get_documentation_score() -> None:
+    ranked = rank_important_files(
+        [
+            make_file(
+                "tests/test_call_graph_milestone7_acceptance.py",
+                content="def test_acceptance():\n    assert True\n",
+            )
+        ]
+    )
+
+    assert ranked == ()
+
+
 def test_structural_ranking_adds_project_configuration_reason() -> None:
     ranked = rank_important_files(
         [

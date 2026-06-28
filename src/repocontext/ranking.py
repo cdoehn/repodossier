@@ -675,11 +675,14 @@ def _score_entrypoint_path(
 
 
 def _score_documentation_path(path: Path) -> tuple[int, tuple[str, ...]]:
-    """Return documentation score and reasons for a path."""
+    """Return documentation score and reasons for a documentation-like path."""
 
     normalized_path = path.as_posix().lower()
     filename = path.name.lower()
     suffix = path.suffix.lower()
+
+    if not _is_documentation_like_path(path):
+        return 0, ()
 
     if filename == "license" or filename.startswith("license."):
         return 35, ("Project license",)
@@ -710,6 +713,22 @@ def _score_documentation_path(path: Path) -> tuple[int, tuple[str, ...]]:
 
     return 0, ()
 
+
+def _is_documentation_like_path(path: Path) -> bool:
+    """Return True when a path should be eligible for documentation scoring."""
+
+    filename = path.name.lower()
+    suffix = path.suffix.lower()
+
+    if suffix in DOCUMENTATION_EXTENSIONS:
+        return True
+
+    return filename in {
+        "readme",
+        "license",
+        "changelog",
+        "contributing",
+    }
 
 def _score_structural_path(file_info: object, path: Path) -> tuple[int, tuple[str, ...]]:
     """Return structural project score and reasons for a path."""
