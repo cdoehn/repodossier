@@ -167,7 +167,7 @@ def render_full_export(context: FullExportContext) -> str:
         _render_file_summary(context),
         _render_repository_tree(context),
         _render_complete_source_export(context),
-        _render_warnings_placeholder(context),
+        _render_warnings(context),
     ]
     return "\n\n".join(section.rstrip() for section in sections).rstrip() + "\n"
 
@@ -647,15 +647,41 @@ def _code_fence_language(language: str | None) -> str:
     return language_identifiers.get(language.lower(), "text")
 
 
-def _render_warnings_placeholder(context: FullExportContext) -> str:
+def _render_warnings(context: FullExportContext) -> str:
+    """Render collected Full Export warnings."""
+    warnings = _collect_warnings(context)
     lines = [
         FULL_EXPORT_SECTION_HEADINGS["warnings"],
         "",
     ]
 
-    if context.warnings:
-        lines.extend(f"- {warning}" for warning in context.warnings)
+    if warnings:
+        lines.extend(f"- {warning}" for warning in warnings)
     else:
-        lines.append("Warning rendering will be expanded in Milestone 3.8.")
+        lines.append("No warnings.")
 
     return "\n".join(lines)
+
+
+def _collect_warnings(context: FullExportContext) -> tuple[str, ...]:
+    """Collect automatic and explicitly supplied warnings for the Full Export."""
+    warnings: list[str] = list(context.warnings)
+
+    if context.tracked_file_count == 0:
+        warnings.append("No Git-tracked files found.")
+
+    for file_info in context.skipped_binary_files:
+        warnings.append(
+            f"Skipped binary file: {file_info.relative_path.as_posix()}"
+        )
+
+    for file_info in context.errored_files:
+        error_detail = file_info.error or "unknown error"
+        warnings.append(
+            f"Could not read file: {file_info.relative_path.as_posix()} ({error_detail})"
+        )
+
+    if context.tracked_file_count > 0 and not context.exported_text_files:
+        warnings.append("No exportable text files found.")
+
+    return tuple(warnings)

@@ -594,6 +594,103 @@ def test_render_full_export_complete_source_export_uses_text_for_unknown_languag
     assert "notes\n" in rendered
 
 
+def test_render_full_export_warnings_renders_no_warnings_state(tmp_path: Path) -> None:
+    repository_info = make_repository_info(tmp_path)
+    exported = FileInfo(
+        relative_path=Path("README.md"),
+        absolute_path=tmp_path / "README.md",
+        is_text=True,
+        is_binary=False,
+        language="markdown",
+        line_count=1,
+        estimated_tokens=3,
+        content="# Example\n",
+    )
+
+    context = create_full_export_context(repository_info, [exported])
+    rendered = render_full_export(context)
+
+    warnings_section = rendered.split("# Warnings", 1)[1]
+    assert "No warnings." in warnings_section
+    assert "Warning rendering will be expanded" not in warnings_section
+
+
+def test_render_full_export_warnings_reports_binary_and_errored_files(
+    tmp_path: Path,
+) -> None:
+    repository_info = make_repository_info(tmp_path)
+    exported = FileInfo(
+        relative_path=Path("README.md"),
+        absolute_path=tmp_path / "README.md",
+        is_text=True,
+        is_binary=False,
+        language="markdown",
+        line_count=1,
+        estimated_tokens=3,
+        content="# Example\n",
+    )
+    binary = FileInfo(
+        relative_path=Path("image.bin"),
+        absolute_path=tmp_path / "image.bin",
+        is_text=False,
+        is_binary=True,
+        content=None,
+    )
+    errored = FileInfo(
+        relative_path=Path("broken.txt"),
+        absolute_path=tmp_path / "broken.txt",
+        is_text=True,
+        is_binary=False,
+        content=None,
+        error="Permission denied",
+    )
+
+    context = create_full_export_context(
+        repository_info,
+        [exported, binary, errored],
+        warnings=["Manual warning"],
+    )
+    rendered = render_full_export(context)
+
+    warnings_section = rendered.split("# Warnings", 1)[1]
+    assert "- Manual warning" in warnings_section
+    assert "- Skipped binary file: image.bin" in warnings_section
+    assert "- Could not read file: broken.txt (Permission denied)" in warnings_section
+    assert "No warnings." not in warnings_section
+
+
+def test_render_full_export_warnings_reports_empty_repository(tmp_path: Path) -> None:
+    repository_info = make_repository_info(tmp_path)
+    repository_info.tracked_files.clear()
+
+    context = create_full_export_context(repository_info, [])
+    rendered = render_full_export(context)
+
+    warnings_section = rendered.split("# Warnings", 1)[1]
+    assert "- No Git-tracked files found." in warnings_section
+    assert "- No exportable text files found." not in warnings_section
+
+
+def test_render_full_export_warnings_reports_no_exportable_text_files(
+    tmp_path: Path,
+) -> None:
+    repository_info = make_repository_info(tmp_path)
+    binary = FileInfo(
+        relative_path=Path("image.bin"),
+        absolute_path=tmp_path / "image.bin",
+        is_text=False,
+        is_binary=True,
+        content=None,
+    )
+
+    context = create_full_export_context(repository_info, [binary])
+    rendered = render_full_export(context)
+
+    warnings_section = rendered.split("# Warnings", 1)[1]
+    assert "- Skipped binary file: image.bin" in warnings_section
+    assert "- No exportable text files found." in warnings_section
+
+
 def test_full_export_context_counts_file_types_from_scanned_files(tmp_path: Path) -> None:
     repository_info = make_repository_info(tmp_path)
     files = [
