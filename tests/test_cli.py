@@ -273,6 +273,100 @@ def test_cli_export_command_generates_call_graph_in_normal_export_flow(
     assert f"Wrote {repo_path / 'full.txt'}" in captured.out
 
 
+
+def test_cli_default_command_creates_ai_export_together_with_full_export(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    repo_path = setup_repository(tmp_path / "repo_default_ai_export")
+    package_dir = repo_path / "src" / "app"
+    package_dir.mkdir(parents=True)
+    (package_dir / "__init__.py").write_text("", encoding="utf-8")
+    (package_dir / "main.py").write_text(
+        "def main():\n"
+        "    return 1\n",
+        encoding="utf-8",
+    )
+    run_git_command(repo_path, "add", "src/app/__init__.py", "src/app/main.py")
+    run_git_command(repo_path, "commit", "-m", "Add Python package", env=COMMIT_ENV)
+    monkeypatch.chdir(repo_path)
+
+    exit_code = main([])
+
+    assert exit_code == 0
+
+    full_output_path = repo_path / "full.txt"
+    ai_output_path = repo_path / "ai.txt"
+
+    assert full_output_path.exists()
+    assert ai_output_path.exists()
+
+    ai_content = ai_output_path.read_text(encoding="utf-8")
+    assert ai_content.startswith("# AI CONTEXT\n")
+    assert "## Architecture Summary" in ai_content
+    assert "## Important Files" in ai_content
+    assert "## Symbol Index" in ai_content
+    assert "## Import Graph" in ai_content
+    assert "## Call Graph" in ai_content
+    assert "# Complete Source Export" not in ai_content
+
+    captured = capsys.readouterr()
+    assert f"Wrote {full_output_path}" in captured.out
+    assert f"Wrote {ai_output_path}" in captured.out
+
+
+def test_cli_full_command_creates_ai_export_together_with_full_export(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo_path = setup_repository(tmp_path / "repo_full_ai_export")
+    monkeypatch.chdir(repo_path)
+
+    exit_code = main(["full"])
+
+    assert exit_code == 0
+    assert (repo_path / "full.txt").exists()
+    assert (repo_path / "ai.txt").exists()
+    assert (repo_path / "ai.txt").read_text(encoding="utf-8").startswith("# AI CONTEXT\n")
+
+
+def test_cli_export_command_creates_ai_export_together_with_full_export(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo_path = setup_repository(tmp_path / "repo_export_ai_export")
+    monkeypatch.chdir(repo_path)
+
+    exit_code = main(["export"])
+
+    assert exit_code == 0
+    assert (repo_path / "full.txt").exists()
+    assert (repo_path / "ai.txt").exists()
+    assert (repo_path / "ai.txt").read_text(encoding="utf-8").startswith("# AI CONTEXT\n")
+
+
+def test_cli_export_ai_command_creates_only_ai_export(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    repo_path = setup_repository(tmp_path / "repo_export_ai_only")
+    monkeypatch.chdir(repo_path)
+
+    exit_code = main(["export-ai"])
+
+    assert exit_code == 0
+
+    ai_output_path = repo_path / "ai.txt"
+    assert ai_output_path.exists()
+    assert ai_output_path.read_text(encoding="utf-8").startswith("# AI CONTEXT\n")
+    assert not (repo_path / "full.txt").exists()
+
+    captured = capsys.readouterr()
+    assert f"Wrote {ai_output_path}" in captured.out
+
+
 def test_cli_default_command_creates_full_export(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
     repo_path = setup_repository(tmp_path / "repo_default")
     monkeypatch.chdir(repo_path)
@@ -346,6 +440,7 @@ def test_cli_default_command_gitignore_prevents_full_txt_untracked_status(
     assert exit_code == 0
     status_output = run_git_command(repo_path, "status", "--short").stdout
     assert "full.txt" not in status_output
+    assert "ai.txt" not in status_output
 
 
 def test_cli_default_command_writes_full_txt_to_repository_root_from_subdirectory(

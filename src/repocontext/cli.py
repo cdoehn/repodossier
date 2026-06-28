@@ -7,7 +7,7 @@ from importlib import metadata
 from pathlib import Path
 from typing import Iterable, Optional
 
-from .exporters import generate_full_export
+from .exporters import generate_ai_export, generate_full_export
 from .git import RepositoryInfo, find_repository_root, get_repository_info
 from .gitignore import GitignoreUpdateError
 from .import_graph import build_import_graph, calculate_import_graph_metrics
@@ -103,18 +103,39 @@ def _find_repository_root_or_report_error() -> Optional[Path]:
 
 
 def _handle_full_export_command(_args: argparse.Namespace) -> int:
-    """Run the default Full Export command."""
+    """Run the default export command and write full.txt plus ai.txt."""
     repository_root = _find_repository_root_or_report_error()
     if repository_root is None:
         return 1
 
     try:
-        output_path = generate_full_export(repository_root)
+        full_output_path = generate_full_export(repository_root)
+        ai_output_path = generate_ai_export(repository_root)
     except GitignoreUpdateError as exc:
         print(f"Error: Could not update .gitignore: {exc}")
         return 1
     except OSError as exc:
-        print(f"Error: Could not write full.txt: {exc}")
+        print(f"Error: Could not write export files: {exc}")
+        return 1
+
+    print(f"Wrote {full_output_path}")
+    print(f"Wrote {ai_output_path}")
+    return 0
+
+
+def _handle_ai_export_command(_args: argparse.Namespace) -> int:
+    """Run the AI Export command and write ai.txt."""
+    repository_root = _find_repository_root_or_report_error()
+    if repository_root is None:
+        return 1
+
+    try:
+        output_path = generate_ai_export(repository_root)
+    except GitignoreUpdateError as exc:
+        print(f"Error: Could not update .gitignore: {exc}")
+        return 1
+    except OSError as exc:
+        print(f"Error: Could not write ai.txt: {exc}")
         return 1
 
     print(f"Wrote {output_path}")
@@ -143,11 +164,14 @@ def _build_parser() -> argparse.ArgumentParser:
     info_parser = subparsers.add_parser("info", help="Show repository info")
     info_parser.set_defaults(handler=_handle_info_command)
 
-    full_parser = subparsers.add_parser("full", help="Generate full.txt export")
+    full_parser = subparsers.add_parser("full", help="Generate full.txt and ai.txt exports")
     full_parser.set_defaults(handler=_handle_full_export_command)
 
-    export_parser = subparsers.add_parser("export", help="Generate full.txt export")
+    export_parser = subparsers.add_parser("export", help="Generate full.txt and ai.txt exports")
     export_parser.set_defaults(handler=_handle_full_export_command)
+
+    ai_export_parser = subparsers.add_parser("export-ai", help="Generate ai.txt export")
+    ai_export_parser.set_defaults(handler=_handle_ai_export_command)
 
     parser.set_defaults(handler=_handle_full_export_command)
     return parser
