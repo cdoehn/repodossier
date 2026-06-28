@@ -1,3 +1,4 @@
+import subprocess
 from pathlib import Path
 
 from repocontext.exporters.ai import (
@@ -6,6 +7,7 @@ from repocontext.exporters.ai import (
     AI_EXPORT_SECTION_ORDER,
     AIExportContext,
     create_ai_export_context,
+    generate_ai_export,
     iter_ai_export_headings,
     render_ai_export,
     write_ai_export,
@@ -144,3 +146,40 @@ def test_write_ai_export_defaults_to_repository_root_ai_txt(tmp_path: Path) -> N
     assert output_path == tmp_path / AI_EXPORT_FILENAME
     assert output_path.read_text(encoding="utf-8").startswith("# AI CONTEXT\n")
     assert not (tmp_path / f".{AI_EXPORT_FILENAME}.tmp").exists()
+
+def test_generate_ai_export_writes_ai_txt_for_tracked_python_repo(tmp_path: Path) -> None:
+    subprocess.run(
+        ["git", "init"],
+        cwd=tmp_path,
+        check=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+
+    source_file = tmp_path / "app.py"
+    source_file.write_text("def main():\n    return 1\n", encoding="utf-8")
+
+    subprocess.run(
+        ["git", "add", "app.py"],
+        cwd=tmp_path,
+        check=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+
+    output_path = generate_ai_export(tmp_path)
+    rendered = output_path.read_text(encoding="utf-8")
+
+    assert output_path == tmp_path / "ai.txt"
+    assert output_path.exists()
+    assert rendered.startswith("# AI CONTEXT\n")
+    assert "## Architecture Summary" in rendered
+    assert "## Important Files" in rendered
+    assert "## Symbol Index" in rendered
+    assert "## Import Graph" in rendered
+    assert "## Call Graph" in rendered
+    assert rendered.strip()
+    assert "# Complete Source Export" not in rendered
+    assert "def main" not in rendered
