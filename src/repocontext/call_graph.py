@@ -7,8 +7,10 @@ sorts, groups, and serializes call graph edges.
 
 from __future__ import annotations
 
+import ast
 from collections import defaultdict
 from dataclasses import asdict, dataclass, field
+from pathlib import Path
 from typing import Any
 
 
@@ -148,3 +150,161 @@ class CallGraph:
             )
 
         return "\n".join(lines)
+
+class PythonCallVisitor(ast.NodeVisitor):
+    """Collect direct function calls while tracking Python caller context."""
+
+    def __init__(
+        self,
+        *,
+        source_path: str | Path,
+        module_name: str | None = None,
+    ) -> None:
+        self.source_path = Path(source_path).as_posix()
+        self.module_name = module_name
+        self.graph = CallGraph()
+        self._class_stack: list[str] = []
+        self._function_stack: list[tuple[str, str]] = []
+
+    def visit_ClassDef(self, node: ast.ClassDef) -> None:
+        """Track class context while visiting class bodies."""
+
+        self._class_stack.append(node.name)
+        self.generic_visit(node)
+        self._class_stack.pop()
+
+    def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
+        """Track normal function context while visiting function bodies."""
+
+        self._visit_function_node(node)
+
+    def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> None:
+        """Track async function context while visiting function bodies."""
+
+        self._visit_function_node(node)
+
+    def visit_Call(self, node: ast.Call) -> None:
+        """Record direct function calls such as foo()."""
+
+        if isinstance(node.func, ast.Name):
+            caller_name, caller_qualified_name = self._current_caller()
+            self.graph.add_edge(
+                CallEdge(
+                    caller_file=self.source_path,
+                    caller_name=caller_name,
+                    caller_qualified_name=caller_qualified_name,
+                    callee_name=node.func.id,
+                    callee_qualified_name=None,
+                    line_number=getattr(node, "lineno", None),
+                    call_type="function",
+                    confidence="unresolved",
+                )
+            )
+
+        self.generic_visit(node)
+
+    def _visit_function_node(
+        self,
+        node: ast.FunctionDef | ast.AsyncFunctionDef,
+    ) -> None:
+        """Push function or method context while visiting a body."""
+
+        caller_name, caller_qualified_name = self._function_context_for(node)
+        self._function_stack.append((caller_name, caller_qualified_name))
+        self.generic_visit(node)
+        self._function_stack.pop()
+
+    def _function_context_for(
+        self,
+        node: ast.FunctionDef | ast.AsyncFunctionDef,
+    ) -> tuple[str, str]:
+        """Return display and qualified context names for a function node."""
+
+        if self._function_stack:
+            parent_name, parent_qualified_name = self._function_stack[-1]
+            caller_name = f"{parent_name}.{node.name}"
+            caller_qualified_name = f"{parent_qualified_name}.{node.name}"
+            return caller_name, caller_qualified_name
+
+        if self._class_stack:
+            class_name = ".".join(self._class_stack)
+            caller_name = f"{class_name}.{node.name}"
+            return caller_name, self._qualify(caller_name)
+
+        return node.name, self._qualify(node.name)
+
+    def _current_caller(self) -> tuple[str, str]:
+        """Return the current caller context for a discovered call."""
+
+        if self._function_stack:
+            return self._function_stack[-1]
+
+        caller_name = "<module>"
+        return caller_name, self._qualify(caller_name)
+
+    def _qualify(self, name: str) -> str:
+        """Return a module-qualified name when a module name is known."""
+
+        if self.module_name:
+            return f"{self.module_name}.{name}"
+        return name
+
+
+def build_call_graph_from_ast(
+    tree: ast.AST,
+    *,
+    source_path: str | Path,
+    module_name: str | None = None,
+) -> CallGraph:
+    """Build a call graph from a parsed Python AST."""
+
+    visitor = PythonCallVisitor(
+        source_path=source_path,
+        module_name=module_name,
+    )
+    visitor.visit(tree)
+    return visitor.graph
+
+
+def parse_calls_from_source(
+    source: str,
+    *,
+    source_path: str | Path,
+    module_name: str | None = None,
+) -> CallGraph:
+    """Parse Python source text and return direct function call edges."""
+
+    tree = ast.parse(source, filename=str(source_path))
+    return build_call_graph_from_ast(
+        tree,
+        source_path=source_path,
+        module_name=module_name,
+    )
+
+
+def parse_calls_from_file(
+    source_path: str | Path,
+    *,
+    module_name: str | None = None,
+    encoding: str = "utf-8",
+) -> CallGraph:
+    """Read a Python file and return direct function call edges."""
+
+    path = Path(source_path)
+    source = path.read_text(encoding=encoding)
+    return parse_calls_from_source(
+        source,
+        source_path=path,
+        module_name=module_name,
+    )
+
+
+__all__ = [
+    "CallEdge",
+    "CallGraph",
+    "PythonCallVisitor",
+    "build_call_graph_from_ast",
+    "parse_calls_from_file",
+    "parse_calls_from_source",
+]
+

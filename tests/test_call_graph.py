@@ -1,4 +1,8 @@
-from repocontext.call_graph import CallEdge, CallGraph
+from repocontext.call_graph import (
+    CallEdge,
+    CallGraph,
+    parse_calls_from_source,
+)
 
 
 def test_call_edge_exposes_stable_caller_and_callee_keys():
@@ -146,3 +150,112 @@ def test_call_graph_text_output_is_grouped_and_stable():
 
 def test_empty_call_graph_text_is_explicit():
     assert CallGraph().to_text() == "No call graph edges found."
+
+def test_parse_calls_from_source_detects_direct_function_call():
+    source = (
+        "def helper():\n"
+        "    return 1\n"
+        "\n"
+        "def main():\n"
+        "    return helper()\n"
+    )
+
+    graph = parse_calls_from_source(
+        source,
+        source_path="src/app.py",
+        module_name="app",
+    )
+
+    assert graph.sorted_edges() == [
+        CallEdge(
+            caller_file="src/app.py",
+            caller_name="main",
+            caller_qualified_name="app.main",
+            callee_name="helper",
+            callee_qualified_name=None,
+            line_number=5,
+            call_type="function",
+            confidence="unresolved",
+        )
+    ]
+
+
+def test_parse_calls_from_source_tracks_module_level_caller_context():
+    source = (
+        "initialize()\n"
+        "\n"
+        "def main():\n"
+        "    run()\n"
+    )
+
+    graph = parse_calls_from_source(
+        source,
+        source_path="src/app.py",
+        module_name="app",
+    )
+
+    assert graph.sorted_edges() == [
+        CallEdge(
+            caller_file="src/app.py",
+            caller_name="<module>",
+            caller_qualified_name="app.<module>",
+            callee_name="initialize",
+            callee_qualified_name=None,
+            line_number=1,
+            call_type="function",
+            confidence="unresolved",
+        ),
+        CallEdge(
+            caller_file="src/app.py",
+            caller_name="main",
+            caller_qualified_name="app.main",
+            callee_name="run",
+            callee_qualified_name=None,
+            line_number=4,
+            call_type="function",
+            confidence="unresolved",
+        ),
+    ]
+
+
+def test_parse_calls_from_source_tracks_method_caller_context():
+    source = (
+        "class Service:\n"
+        "    def run(self):\n"
+        "        helper()\n"
+    )
+
+    graph = parse_calls_from_source(
+        source,
+        source_path="src/app.py",
+        module_name="app",
+    )
+
+    assert graph.sorted_edges() == [
+        CallEdge(
+            caller_file="src/app.py",
+            caller_name="Service.run",
+            caller_qualified_name="app.Service.run",
+            callee_name="helper",
+            callee_qualified_name=None,
+            line_number=3,
+            call_type="function",
+            confidence="unresolved",
+        )
+    ]
+
+
+def test_parse_calls_from_source_leaves_attribute_calls_for_later_milestone():
+    source = (
+        "def main():\n"
+        "    service.run()\n"
+    )
+
+    graph = parse_calls_from_source(
+        source,
+        source_path="src/app.py",
+        module_name="app",
+    )
+
+    assert graph.sorted_edges() == []
+
