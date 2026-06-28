@@ -63,6 +63,54 @@ def make_ai_export_context(tmp_path: Path) -> AIExportContext:
     return create_ai_export_context(full_context)
 
 
+
+def make_ai_export_context_from_files(
+    tmp_path: Path,
+    files: dict[str, str],
+) -> AIExportContext:
+    repository_info = RepositoryInfo(
+        name="example",
+        root_path=tmp_path,
+        is_current_directory_root=True,
+        branch="main",
+        commit_hash="b" * 40,
+        short_commit_hash="bbbbbbb",
+        remote_url=None,
+        is_dirty=False,
+        tracked_files=[
+            TrackedFile(path=Path(path))
+            for path in sorted(files)
+        ],
+        commit_metadata=None,
+    )
+
+    scanned_files = []
+    for path, content in sorted(files.items()):
+        suffix = Path(path).suffix.lower()
+        language = {
+            ".md": "markdown",
+            ".py": "python",
+            ".toml": "toml",
+            ".txt": "text",
+        }.get(suffix, "text")
+
+        scanned_files.append(
+            FileInfo(
+                relative_path=Path(path),
+                absolute_path=tmp_path / path,
+                is_text=True,
+                is_binary=False,
+                language=language,
+                line_count=len(content.splitlines()),
+                estimated_tokens=max(1, len(content) // 4),
+                content=content,
+            )
+        )
+
+    return create_ai_export_context(
+        create_full_export_context(repository_info, scanned_files)
+    )
+
 def test_ai_export_section_order_matches_milestone_8_structure() -> None:
     assert AI_EXPORT_SECTION_ORDER == (
         "project",
@@ -98,6 +146,81 @@ def test_create_ai_export_context_wraps_full_export_context(tmp_path: Path) -> N
     assert context.repository_root == tmp_path
     assert context.full_context.tracked_file_count == 2
 
+
+
+def test_architecture_summary_detects_python_cli_project(tmp_path: Path) -> None:
+    context = make_ai_export_context_from_files(
+        tmp_path,
+        {
+            "pyproject.toml": "[project.scripts]\nexample = \"example.cli:main\"\n",
+            "src/example/__init__.py": "",
+            "src/example/cli.py": "def main():\n    return 0\n",
+            "tests/test_cli.py": "def test_cli():\n    assert True\n",
+            "README.md": "# Example\n",
+        },
+    )
+
+    rendered = render_ai_export(context)
+
+    assert "## Architecture Summary" in rendered
+    assert "Detected project type: Python CLI project" in rendered
+    assert "Main entry points:" in rendered
+    assert "- example: example.cli:main" in rendered
+    assert "- src/example/cli.py" in rendered
+    assert "Top-level directories:" in rendered
+    assert "- src" in rendered
+    assert "- tests" in rendered
+    assert "Python package/module roots:" in rendered
+    assert "- src/example" in rendered
+    assert "Tests:" in rendered
+    assert "- tests/" in rendered
+    assert "Documentation:" in rendered
+    assert "- README.md" in rendered
+
+
+def test_architecture_summary_detects_python_project_without_pyproject(tmp_path: Path) -> None:
+    context = make_ai_export_context_from_files(
+        tmp_path,
+        {
+            "app.py": "def run():\n    return 1\n",
+        },
+    )
+
+    rendered = render_ai_export(context)
+
+    assert "Detected project type: Python project" in rendered
+    assert "Main entry points:" in rendered
+    assert "- none detected" in rendered
+
+
+def test_architecture_summary_detects_core_repocontext_areas(tmp_path: Path) -> None:
+    context = make_ai_export_context_from_files(
+        tmp_path,
+        {
+            "src/repocontext/__init__.py": "",
+            "src/repocontext/cli.py": "",
+            "src/repocontext/exporters/ai.py": "",
+            "src/repocontext/exporters/full.py": "",
+            "src/repocontext/git.py": "",
+            "src/repocontext/gitignore.py": "",
+            "src/repocontext/import_graph.py": "",
+            "src/repocontext/call_graph.py": "",
+            "src/repocontext/scanner.py": "",
+            "src/repocontext/symbols.py": "",
+        },
+    )
+
+    rendered = render_ai_export(context)
+
+    assert "- Command-line interface: src/repocontext/cli.py" in rendered
+    assert "- AI export generation: src/repocontext/exporters/ai.py" in rendered
+    assert "- Full export generation: src/repocontext/exporters/full.py" in rendered
+    assert "- Git repository discovery: src/repocontext/git.py" in rendered
+    assert "- .gitignore management: src/repocontext/gitignore.py" in rendered
+    assert "- Import graph analysis: src/repocontext/import_graph.py" in rendered
+    assert "- Call graph analysis: src/repocontext/call_graph.py" in rendered
+    assert "- File scanning: src/repocontext/scanner.py" in rendered
+    assert "- Symbol extraction: src/repocontext/symbols.py" in rendered
 
 def test_render_ai_export_contains_required_sections(tmp_path: Path) -> None:
     context = make_ai_export_context(tmp_path)

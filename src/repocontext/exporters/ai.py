@@ -81,7 +81,7 @@ def render_ai_export(context: AIExportContext) -> str:
     sections = [
         AI_EXPORT_DOCUMENT_HEADING,
         _render_project_section(context),
-        _render_architecture_summary_section(),
+        _render_architecture_summary_section(context),
         _render_important_files_section(),
         _render_symbol_index_section(),
         _render_import_graph_section(),
@@ -172,17 +172,274 @@ def _render_project_section(context: AIExportContext) -> str:
     )
 
 
-def _render_architecture_summary_section() -> str:
-    """Render the placeholder Architecture Summary section."""
+def _render_architecture_summary_section(context: AIExportContext) -> str:
+    """Render a compact architecture summary derived from repository files."""
 
-    return "\n".join(
-        [
-            AI_EXPORT_SECTION_HEADINGS["architecture_summary"],
-            "",
-            "Architecture summary generation is not implemented yet.",
-        ]
+    paths = _scanned_path_strings(context)
+    lines = [
+        AI_EXPORT_SECTION_HEADINGS["architecture_summary"],
+        "",
+        f"Detected project type: {_detect_architecture_project_type(context, paths)}",
+    ]
+
+    entrypoints = _detect_architecture_entrypoints(context)
+    lines.extend(["", "Main entry points:"])
+    if entrypoints:
+        lines.extend(f"- {entrypoint}" for entrypoint in entrypoints)
+    else:
+        lines.append("- none detected")
+
+    top_level_directories = _detect_top_level_directories(paths)
+    if top_level_directories:
+        lines.extend(["", "Top-level directories:"])
+        lines.extend(f"- {directory}" for directory in top_level_directories)
+
+    package_roots = _detect_python_package_roots(paths)
+    if package_roots:
+        lines.extend(["", "Python package/module roots:"])
+        lines.extend(f"- {package_root}" for package_root in package_roots)
+
+    core_areas = _detect_core_areas(paths)
+    if core_areas:
+        lines.extend(["", "Core areas:"])
+        lines.extend(f"- {core_area}" for core_area in core_areas)
+
+    test_locations = _detect_test_locations(paths)
+    if test_locations:
+        lines.extend(["", "Tests:"])
+        lines.extend(f"- {test_location}" for test_location in test_locations)
+
+    documentation_files = _detect_documentation_files(paths)
+    if documentation_files:
+        lines.extend(["", "Documentation:"])
+        lines.extend(f"- {documentation_file}" for documentation_file in documentation_files)
+
+    if not paths:
+        lines.extend(["", "No scanned files available."])
+
+    return "\n".join(lines)
+
+
+def _scanned_path_strings(context: AIExportContext) -> tuple[str, ...]:
+    """Return scanned repository-relative paths in deterministic order."""
+
+    return tuple(
+        sorted(
+            file_info.relative_path.as_posix()
+            for file_info in context.full_context.sorted_files
+        )
     )
 
+
+def _lower_path_set(paths: tuple[str, ...]) -> set[str]:
+    """Return lowercase path strings for case-insensitive detection."""
+
+    return {path.lower() for path in paths}
+
+
+def _detect_architecture_project_type(
+    context: AIExportContext,
+    paths: tuple[str, ...],
+) -> str:
+    """Infer a conservative project type from files that exist in the repo."""
+
+    lower_paths = _lower_path_set(paths)
+    has_python = any(path.endswith(".py") for path in lower_paths)
+    has_pyproject = "pyproject.toml" in lower_paths
+    has_setup_py = "setup.py" in lower_paths
+    has_scripts = bool(_parse_project_scripts(_content_for_path(context, "pyproject.toml")))
+    has_cli_file = any(
+        path == "cli.py" or path.endswith("/cli.py") or path.endswith("/__main__.py")
+        for path in lower_paths
+    )
+
+    if has_python and has_pyproject and (has_scripts or has_cli_file):
+        return "Python CLI project"
+
+    if has_python and (has_pyproject or has_setup_py):
+        return "Python package"
+
+    if has_python:
+        return "Python project"
+
+    if paths and all(
+        path.endswith((".md", ".txt")) or "." not in Path(path).name
+        for path in lower_paths
+    ):
+        return "Documentation-oriented repository"
+
+    return "Git repository"
+
+
+def _content_for_path(context: AIExportContext, relative_path: str) -> str | None:
+    """Return scanned file content for a repository-relative path."""
+
+    target_path = relative_path.lower()
+    for file_info in context.full_context.exported_text_files:
+        if file_info.relative_path.as_posix().lower() == target_path:
+            return file_info.content
+    return None
+
+
+def _parse_project_scripts(pyproject_content: str | None) -> tuple[str, ...]:
+    """Parse simple [project.scripts] entries from pyproject.toml text."""
+
+    if not pyproject_content:
+        return ()
+
+    scripts: list[str] = []
+    in_scripts_section = False
+
+    for raw_line in pyproject_content.splitlines():
+        line = raw_line.strip()
+
+        if not line or line.startswith("#"):
+            continue
+
+        if line.startswith("[") and line.endswith("]"):
+            in_scripts_section = line == "[project.scripts]"
+            continue
+
+        if not in_scripts_section or "=" not in line:
+            continue
+
+        script_name, raw_target = line.split("=", 1)
+        script_name = script_name.strip()
+        target = raw_target.strip().strip('"').strip("'")
+
+        if script_name and target:
+            scripts.append(f"{script_name}: {target}")
+        elif script_name:
+            scripts.append(script_name)
+
+    return tuple(sorted(dict.fromkeys(scripts)))
+
+
+def _detect_architecture_entrypoints(context: AIExportContext) -> tuple[str, ...]:
+    """Detect likely entrypoints from project scripts and source paths."""
+
+    entrypoints: list[str] = []
+
+    for script in _parse_project_scripts(_content_for_path(context, "pyproject.toml")):
+        _append_unique(entrypoints, script)
+
+    for path in _scanned_path_strings(context):
+        lower_path = path.lower()
+        if lower_path == "cli.py" or lower_path.endswith("/cli.py"):
+            _append_unique(entrypoints, path)
+        elif lower_path == "__main__.py" or lower_path.endswith("/__main__.py"):
+            _append_unique(entrypoints, path)
+
+    return tuple(entrypoints)
+
+
+def _detect_top_level_directories(paths: tuple[str, ...]) -> tuple[str, ...]:
+    """Return top-level directories present in scanned paths."""
+
+    directories = {
+        Path(path).parts[0]
+        for path in paths
+        if len(Path(path).parts) > 1
+    }
+    return tuple(sorted(directories))
+
+
+def _detect_python_package_roots(paths: tuple[str, ...]) -> tuple[str, ...]:
+    """Detect Python package roots from __init__.py files."""
+
+    package_roots: list[str] = []
+
+    for path in paths:
+        path_obj = Path(path)
+        if path_obj.name != "__init__.py":
+            continue
+
+        parent = path_obj.parent.as_posix()
+        if parent and parent != ".":
+            _append_unique(package_roots, parent)
+
+    return tuple(package_roots)
+
+
+def _detect_core_areas(paths: tuple[str, ...]) -> tuple[str, ...]:
+    """Detect known RepoContext core areas from existing module filenames."""
+
+    area_rules: tuple[tuple[str, str], ...] = (
+        ("git.py", "Git repository discovery"),
+        ("scanner.py", "File scanning"),
+        ("symbols.py", "Symbol extraction"),
+        ("import_graph.py", "Import graph analysis"),
+        ("call_graph.py", "Call graph analysis"),
+        ("gitignore.py", ".gitignore management"),
+        ("exporters/full.py", "Full export generation"),
+        ("exporters/ai.py", "AI export generation"),
+        ("cli.py", "Command-line interface"),
+    )
+
+    core_areas: list[str] = []
+    lower_to_original = {path.lower(): path for path in paths}
+
+    for suffix, label in area_rules:
+        for lower_path, original_path in sorted(lower_to_original.items()):
+            if lower_path.endswith(suffix):
+                _append_unique(core_areas, f"{label}: {original_path}")
+                break
+
+    return tuple(core_areas)
+
+
+def _detect_test_locations(paths: tuple[str, ...]) -> tuple[str, ...]:
+    """Detect test locations from scanned paths."""
+
+    lower_paths = _lower_path_set(paths)
+    locations: list[str] = []
+
+    if any(path == "tests" or path.startswith("tests/") for path in lower_paths):
+        locations.append("tests/")
+
+    for path in paths:
+        name = Path(path).name.lower()
+        if name.startswith("test_") and name.endswith(".py"):
+            _append_unique(locations, path)
+
+    return tuple(locations[:10])
+
+
+def _detect_documentation_files(paths: tuple[str, ...]) -> tuple[str, ...]:
+    """Detect documentation files without inventing project details."""
+
+    documentation_files: list[str] = []
+    documentation_names = (
+        "readme",
+        "architecture",
+        "spec",
+        "tasks",
+        "changelog",
+        "roadmap",
+        "milestone",
+    )
+
+    for path in paths:
+        lower_name = Path(path).name.lower()
+        stem = Path(lower_name).stem
+
+        if lower_name in {"license", "licence"}:
+            _append_unique(documentation_files, path)
+            continue
+
+        if lower_name.endswith((".md", ".txt")) and any(
+            marker in stem for marker in documentation_names
+        ):
+            _append_unique(documentation_files, path)
+
+    return tuple(documentation_files[:12])
+
+
+def _append_unique(items: list[str], value: str) -> None:
+    """Append a value once while preserving list order."""
+
+    if value not in items:
+        items.append(value)
 
 def _render_important_files_section() -> str:
     """Render the placeholder Important Files section."""
