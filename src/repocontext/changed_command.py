@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from argparse import Namespace
+from argparse import Namespace, RawDescriptionHelpFormatter
 from pathlib import Path
 from typing import Any
 
@@ -14,7 +14,18 @@ def add_changed_subparser(subparsers: Any) -> Any:
     parser = subparsers.add_parser(
         "changed",
         help="Generate changed.txt for git changes.",
-        description="Generate changed.txt with changed files, diffs, and contents.",
+        description=(
+            "Generate changed.txt with changed files, unified diffs, "
+            "and changed file contents."
+        ),
+        epilog=(
+            "Examples:\n"
+            "  repocontext changed\n"
+            "  repocontext changed --branch main\n"
+            "  repocontext changed --output review-changes.txt\n"
+            "  repocontext changed --no-diff"
+        ),
+        formatter_class=RawDescriptionHelpFormatter,
     )
     parser.add_argument(
         "--output",
@@ -24,7 +35,7 @@ def add_changed_subparser(subparsers: Any) -> Any:
     parser.add_argument(
         "--branch",
         default=None,
-        help="Compare against a branch using git's three-dot branch...HEAD diff.",
+        help="Compare against a branch using git's three-dot branch...HEAD diff, for example --branch main.",
     )
 
     diff_group = parser.add_mutually_exclusive_group()
@@ -39,7 +50,7 @@ def add_changed_subparser(subparsers: Any) -> Any:
         "--no-diff",
         dest="include_diff",
         action="store_false",
-        help="Do not include unified git diff output.",
+        help="Do not include the unified Git diff section in changed.txt.",
     )
 
     parser.set_defaults(

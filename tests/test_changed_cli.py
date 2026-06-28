@@ -117,3 +117,44 @@ def test_run_changed_command_ensures_repocontext_gitignore_entries(
     assert status == 0
     assert ensured_roots == [tmp_path]
 
+
+def test_changed_help_documents_all_changed_export_options(capsys) -> None:
+    parser = ArgumentParser(prog="repocontext")
+    subparsers = parser.add_subparsers(dest="command")
+    add_changed_subparser(subparsers)
+
+    with pytest.raises(SystemExit) as exc_info:
+        parser.parse_args(["changed", "--help"])
+
+    assert exc_info.value.code == 0
+
+    help_text = capsys.readouterr().out
+
+    assert "Generate changed.txt with changed files, unified diffs, and changed file contents." in help_text
+    assert "--output OUTPUT" in help_text
+    assert "Defaults to changed.txt" in help_text
+    assert "--branch BRANCH" in help_text
+    assert "branch...HEAD" in help_text
+    assert "--include-diff" in help_text
+    assert "--no-diff" in help_text
+    assert "unified Git diff section" in help_text
+
+
+def test_changed_help_documents_usage_examples(capsys) -> None:
+    parser = ArgumentParser(prog="repocontext")
+    subparsers = parser.add_subparsers(dest="command")
+    add_changed_subparser(subparsers)
+
+    with pytest.raises(SystemExit) as exc_info:
+        parser.parse_args(["changed", "--help"])
+
+    assert exc_info.value.code == 0
+
+    help_text = capsys.readouterr().out
+
+    assert "Examples:" in help_text
+    assert "repocontext changed" in help_text
+    assert "repocontext changed --branch main" in help_text
+    assert "repocontext changed --output review-changes.txt" in help_text
+    assert "repocontext changed --no-diff" in help_text
+
