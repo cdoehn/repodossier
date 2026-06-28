@@ -232,3 +232,102 @@ def get_repository_info(repository_root: Path) -> RepositoryInfo:
         tracked_files=list_tracked_files(resolved_repository_root),
         commit_metadata=get_current_commit_metadata(resolved_repository_root),
     )
+
+# Changed export git support
+
+from dataclasses import dataclass
+
+
+@dataclass(frozen=True)
+class ChangedFile:
+    """A file changed relative to the current git working tree state."""
+
+    path: str
+    status: str
+    is_tracked: bool = True
+    is_untracked: bool = False
+    is_deleted: bool = False
+
+
+def _run_git_output(repo_path: str | Path, args: list[str]) -> str:
+    """Run a git command and return stdout as text."""
+    result = subprocess.run(
+        ["git", *args],
+        cwd=Path(repo_path),
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    return result.stdout
+
+
+def _parse_porcelain_changed_file(line: str) -> ChangedFile | None:
+    """Parse one git status --porcelain=v1 line."""
+    if not line:
+        return None
+
+    if line.startswith("?? "):
+        path = line[3:].strip()
+        if not path:
+            return None
+        return ChangedFile(
+            path=path,
+            status="untracked",
+            is_tracked=False,
+            is_untracked=True,
+            is_deleted=False,
+        )
+
+    if len(line) < 4:
+        return None
+
+    index_status = line[0]
+    working_tree_status = line[1]
+    raw_path = line[3:].strip()
+
+    if " -> " in raw_path:
+        raw_path = raw_path.split(" -> ", 1)[1].strip()
+
+    if not raw_path:
+        return None
+
+    status_pair = index_status + working_tree_status
+
+    if "D" in status_pair:
+        status = "deleted"
+    elif "R" in status_pair:
+        status = "renamed"
+    elif "A" in status_pair:
+        status = "added"
+    else:
+        status = "modified"
+
+    return ChangedFile(
+        path=raw_path,
+        status=status,
+        is_tracked=True,
+        is_untracked=False,
+        is_deleted=status == "deleted",
+    )
+
+
+def get_changed_files(repo_path: str | Path = ".") -> list[ChangedFile]:
+    """Return changed, staged, unstaged, deleted, and untracked files.
+
+    Ignored files are excluded by git via --untracked-files=all and the
+    repository's standard ignore rules.
+    """
+    output = _run_git_output(
+        repo_path,
+        ["status", "--porcelain=v1", "--untracked-files=all"],
+    )
+
+    by_path: dict[str, ChangedFile] = {}
+    for line in output.splitlines():
+        changed_file = _parse_porcelain_changed_file(line)
+        if changed_file is None:
+            continue
+        by_path[changed_file.path] = changed_file
+
+    return [by_path[path] for path in sorted(by_path)]
+
