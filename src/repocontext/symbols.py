@@ -7,7 +7,7 @@ It intentionally does not execute project code.
 from __future__ import annotations
 
 import ast
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from collections.abc import Iterable
 from pathlib import Path
 
@@ -159,26 +159,77 @@ def _is_python_file(path: Path) -> bool:
     return path.suffix == ".py"
 
 
-def build_symbol_index(files: Iterable[str | Path]) -> list[FileSymbolIndex]:
-    """Build a symbol index for a collection of files.
+def _sort_symbols(symbols: list[SymbolInfo]) -> list[SymbolInfo]:
+    """Return symbols in a deterministic order."""
+
+    return sorted(
+        symbols,
+        key=lambda symbol: (
+            symbol.line_start,
+            symbol.kind,
+            symbol.name,
+            symbol.parent or "",
+        ),
+    )
+
+
+def _display_path(path: Path, *, base_path: str | Path | None = None) -> str:
+    """Return a stable display path for symbol index output.
+
+    When base_path is given and path is inside it, the returned path is
+    relative and POSIX-style. Otherwise the original path string is kept.
+    """
+
+    if base_path is None:
+        return str(path)
+
+    try:
+        return path.resolve().relative_to(Path(base_path).resolve()).as_posix()
+    except (OSError, ValueError):
+        return str(path)
+
+
+def _with_file_path(index: FileSymbolIndex, file_path: str) -> FileSymbolIndex:
+    """Return an index whose file path is applied to all contained symbols."""
+
+    return FileSymbolIndex(
+        file_path=file_path,
+        symbols=[
+            replace(symbol, file_path=file_path)
+            for symbol in _sort_symbols(index.symbols)
+        ],
+        errors=list(index.errors),
+    )
+
+
+def build_symbol_index(
+    files: Iterable[str | Path],
+    *,
+    base_path: str | Path | None = None,
+) -> list[FileSymbolIndex]:
+    """Build a deterministic symbol index for a collection of files.
 
     Only Python files are analyzed. Non-Python paths are skipped.
     Each Python file produces one FileSymbolIndex, including files that
     contain syntax errors or cannot be read, so one bad file does not
     abort the full index build.
+
+    If base_path is provided, file paths in the returned index are made
+    relative to that base path when possible.
     """
+
+    python_files = sorted(
+        (Path(file) for file in files if _is_python_file(Path(file))),
+        key=lambda path: _display_path(path, base_path=base_path),
+    )
 
     indexes: list[FileSymbolIndex] = []
 
-    for file in files:
-        path = Path(file)
+    for path in python_files:
+        display_path = _display_path(path, base_path=base_path)
+        indexes.append(_with_file_path(extract_symbols_from_file(path), display_path))
 
-        if not _is_python_file(path):
-            continue
-
-        indexes.append(extract_symbols_from_file(path))
-
-    return indexes
+    return sorted(indexes, key=lambda index: index.file_path)
 
 
 def extract_symbols_from_file(path: str | Path) -> FileSymbolIndex:
@@ -212,5 +263,5 @@ def extract_symbols_from_file(path: str | Path) -> FileSymbolIndex:
             errors=[_format_syntax_error(error)],
         )
 
-    symbols = _extract_top_level_symbols(tree, file_path=file_path_str)
+    symbols = _sort_symbols(_extract_top_level_symbols(tree, file_path=file_path_str))
     return FileSymbolIndex(file_path=file_path_str, symbols=symbols)

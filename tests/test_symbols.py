@@ -475,19 +475,19 @@ def test_build_symbol_index_keeps_going_after_syntax_error(tmp_path):
     indexes = build_symbol_index([good_file, broken_file, another_good_file])
 
     assert [index.file_path for index in indexes] == [
-        str(good_file),
-        str(broken_file),
         str(another_good_file),
+        str(broken_file),
+        str(good_file),
     ]
 
-    assert [symbol.name for symbol in indexes[0].symbols] == ["ok"]
+    assert [symbol.name for symbol in indexes[0].symbols] == ["Fine"]
     assert indexes[0].errors == []
 
     assert indexes[1].symbols == []
     assert len(indexes[1].errors) == 1
     assert indexes[1].errors[0].startswith("SyntaxError")
 
-    assert [symbol.name for symbol in indexes[2].symbols] == ["Fine"]
+    assert [symbol.name for symbol in indexes[2].symbols] == ["ok"]
     assert indexes[2].errors == []
 
 
@@ -528,6 +528,137 @@ def test_build_symbol_index_accepts_string_paths(tmp_path):
 
     assert [index.file_path for index in indexes] == [str(path)]
     assert [symbol.name for symbol in indexes[0].symbols] == ["StringPath"]
+
+
+def test_build_symbol_index_sorts_files_by_path(tmp_path):
+    z_file = tmp_path / "z_module.py"
+    z_file.write_text(
+        "def zed():\n"
+        "    return 'z'\n",
+        encoding="utf-8",
+    )
+
+    a_file = tmp_path / "a_module.py"
+    a_file.write_text(
+        "def alpha():\n"
+        "    return 'a'\n",
+        encoding="utf-8",
+    )
+
+    indexes = build_symbol_index([z_file, a_file])
+
+    assert [index.file_path for index in indexes] == [
+        str(a_file),
+        str(z_file),
+    ]
+    assert [[symbol.name for symbol in index.symbols] for index in indexes] == [
+        ["alpha"],
+        ["zed"],
+    ]
+
+
+def test_build_symbol_index_uses_relative_paths_when_base_path_is_given(tmp_path):
+    repo = tmp_path / "repo"
+    package = repo / "src" / "example"
+    package.mkdir(parents=True)
+
+    module = package / "module.py"
+    module.write_text(
+        "class RelativePath:\n"
+        "    def load(self):\n"
+        "        return None\n",
+        encoding="utf-8",
+    )
+
+    indexes = build_symbol_index([module], base_path=repo)
+
+    assert [index.file_path for index in indexes] == ["src/example/module.py"]
+    assert [symbol.file_path for symbol in indexes[0].symbols] == [
+        "src/example/module.py",
+        "src/example/module.py",
+    ]
+
+
+def test_extract_symbols_sorts_symbols_stably_within_file(tmp_path):
+    path = tmp_path / "ordered_symbols.py"
+    path.write_text(
+        "class First:\n"
+        "    def method(self):\n"
+        "        return None\n"
+        "\n"
+        "def second():\n"
+        "    return None\n"
+        "\n"
+        "class Third:\n"
+        "    async def run(self):\n"
+        "        return None\n",
+        encoding="utf-8",
+    )
+
+    index = extract_symbols_from_file(path)
+
+    assert index.errors == []
+    assert [
+        (symbol.line_start, symbol.kind, symbol.name, symbol.parent)
+        for symbol in index.symbols
+    ] == [
+        (1, "class", "First", None),
+        (2, "method", "method", "First"),
+        (5, "function", "second", None),
+        (8, "class", "Third", None),
+        (9, "method", "run", "Third"),
+    ]
+
+
+def test_build_symbol_index_keeps_duplicate_function_names_across_files(tmp_path):
+    first = tmp_path / "first.py"
+    first.write_text(
+        "def main():\n"
+        "    return 1\n",
+        encoding="utf-8",
+    )
+
+    second = tmp_path / "second.py"
+    second.write_text(
+        "def main():\n"
+        "    return 2\n",
+        encoding="utf-8",
+    )
+
+    indexes = build_symbol_index([second, first])
+
+    assert [index.file_path for index in indexes] == [str(first), str(second)]
+    assert [[symbol.name for symbol in index.symbols] for index in indexes] == [
+        ["main"],
+        ["main"],
+    ]
+
+
+def test_extract_symbols_keeps_duplicate_method_names_across_classes(tmp_path):
+    path = tmp_path / "duplicate_methods.py"
+    path.write_text(
+        "class First:\n"
+        "    def load(self):\n"
+        "        return 1\n"
+        "\n"
+        "class Second:\n"
+        "    def load(self):\n"
+        "        return 2\n",
+        encoding="utf-8",
+    )
+
+    index = extract_symbols_from_file(path)
+
+    assert index.errors == []
+    assert [
+        (symbol.name, symbol.kind, symbol.parent)
+        for symbol in index.symbols
+    ] == [
+        ("First", "class", None),
+        ("load", "method", "First"),
+        ("Second", "class", None),
+        ("load", "method", "Second"),
+    ]
 
 
 def test_extract_symbols_from_syntax_error_file(tmp_path):
