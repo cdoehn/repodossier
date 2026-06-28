@@ -176,17 +176,44 @@ def write_full_export(
     context: FullExportContext,
     output_path: Path | str | None = None,
 ) -> Path:
-    """Write the rendered Full Export to full.txt and return its path."""
-    resolved_output_path = (
-        Path(output_path).resolve()
-        if output_path is not None
-        else context.repository_root / "full.txt"
-    )
+    """Write the rendered Full Export atomically and return its path."""
+    resolved_output_path = _resolve_full_export_output_path(context, output_path)
+    temporary_output_path = _temporary_full_export_output_path(resolved_output_path)
     rendered_export = render_full_export(context)
-    resolved_output_path.write_text(rendered_export, encoding="utf-8")
+
+    try:
+        resolved_output_path.parent.mkdir(parents=True, exist_ok=True)
+        temporary_output_path.write_text(rendered_export, encoding="utf-8")
+        temporary_output_path.replace(resolved_output_path)
+    except OSError:
+        _remove_temporary_output_file(temporary_output_path)
+        raise
+
     return resolved_output_path
 
 
+def _resolve_full_export_output_path(
+    context: FullExportContext,
+    output_path: Path | str | None,
+) -> Path:
+    """Resolve the final Full Export output path."""
+    if output_path is not None:
+        return Path(output_path).resolve()
+
+    return context.repository_root / "full.txt"
+
+
+def _temporary_full_export_output_path(output_path: Path) -> Path:
+    """Return the temporary path used for atomic Full Export writes."""
+    return output_path.with_name(f".{output_path.name}.tmp")
+
+
+def _remove_temporary_output_file(temporary_output_path: Path) -> None:
+    """Best-effort cleanup for a failed temporary export write."""
+    try:
+        temporary_output_path.unlink(missing_ok=True)
+    except OSError:
+        pass
 def generate_full_export(repository_root: Path | str) -> Path:
     """Build, render, and write the Full Export for a repository."""
     context = build_full_export_context(repository_root)

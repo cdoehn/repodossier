@@ -691,6 +691,76 @@ def test_render_full_export_warnings_reports_no_exportable_text_files(
     assert "- No exportable text files found." in warnings_section
 
 
+def test_write_full_export_overwrites_existing_full_txt(tmp_path: Path) -> None:
+    repository_info = make_repository_info(tmp_path)
+    existing_output = tmp_path / "full.txt"
+    existing_output.write_text("old export\n", encoding="utf-8")
+    file_info = FileInfo(
+        relative_path=Path("README.md"),
+        absolute_path=tmp_path / "README.md",
+        is_text=True,
+        is_binary=False,
+        language="markdown",
+        line_count=1,
+        estimated_tokens=3,
+        content="# New Export\n",
+    )
+    context = create_full_export_context(repository_info, [file_info])
+
+    output_path = write_full_export(context)
+
+    assert output_path == existing_output
+    content = output_path.read_text(encoding="utf-8")
+    assert "old export" not in content
+    assert "# New Export" in content
+
+
+def test_write_full_export_uses_atomic_temporary_file_and_cleans_it_up(
+    tmp_path: Path,
+) -> None:
+    repository_info = make_repository_info(tmp_path)
+    context = create_full_export_context(repository_info, [])
+
+    output_path = write_full_export(context)
+
+    temporary_path = tmp_path / ".full.txt.tmp"
+    assert output_path == tmp_path / "full.txt"
+    assert output_path.exists()
+    assert not temporary_path.exists()
+
+
+def test_write_full_export_supports_custom_output_path(tmp_path: Path) -> None:
+    repository_info = make_repository_info(tmp_path)
+    context = create_full_export_context(repository_info, [])
+    custom_output = tmp_path / "exports" / "custom-full.txt"
+
+    output_path = write_full_export(context, custom_output)
+
+    assert output_path == custom_output.resolve()
+    assert custom_output.exists()
+    assert "# AI Quick Start" in custom_output.read_text(encoding="utf-8")
+    assert not (tmp_path / "full.txt").exists()
+
+
+def test_write_full_export_writes_utf8_output(tmp_path: Path) -> None:
+    repository_info = make_repository_info(tmp_path)
+    unicode_file = FileInfo(
+        relative_path=Path("unicode.txt"),
+        absolute_path=tmp_path / "unicode.txt",
+        is_text=True,
+        is_binary=False,
+        language="text",
+        line_count=1,
+        estimated_tokens=8,
+        content="äöü ÄÖÜ 😀 こんにちは\n",
+    )
+    context = create_full_export_context(repository_info, [unicode_file])
+
+    output_path = write_full_export(context)
+
+    assert "äöü ÄÖÜ 😀 こんにちは" in output_path.read_text(encoding="utf-8")
+
+
 def test_full_export_context_counts_file_types_from_scanned_files(tmp_path: Path) -> None:
     repository_info = make_repository_info(tmp_path)
     files = [
