@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from repocontext.git import ChangedFile, get_changed_files
+from repocontext.git import ChangedFile, get_changed_files, get_changed_files_against_branch
 
 
 ScannerFunction = Callable[[Path], Any]
@@ -81,12 +81,19 @@ def collect_changed_file_scans(
     repo_path: str | Path = ".",
     *,
     changed_files: Sequence[ChangedFile] | None = None,
+    branch: str | None = None,
     scanner: ScannerFunction | None = None,
 ) -> list[ChangedFileScan]:
-    """Return scanner metadata for all changed files in stable path order."""
+    """Return scanner metadata for changed files in stable path order."""
 
     repo = Path(repo_path)
-    files = list(changed_files) if changed_files is not None else get_changed_files(repo)
+
+    if changed_files is not None:
+        files = list(changed_files)
+    elif branch:
+        files = get_changed_files_against_branch(repo, branch)
+    else:
+        files = get_changed_files(repo)
 
     return [
         scan_changed_file(repo, changed_file, scanner=scanner)

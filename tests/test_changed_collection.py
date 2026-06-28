@@ -110,3 +110,31 @@ def test_changed_file_scan_exposes_binary_flag_from_file_info(tmp_path: Path) ->
     )
 
     assert result.is_binary is True
+
+
+def test_collect_changed_file_scans_uses_branch_comparison_when_branch_is_given(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / "feature.py").write_text("feature\n", encoding="utf-8")
+
+    def fake_get_changed_files_against_branch(path: Path, branch: str) -> list[ChangedFile]:
+        assert path == repo
+        assert branch == "main"
+        return [ChangedFile(path="feature.py", status="modified")]
+
+    monkeypatch.setattr(
+        "repocontext.changed.get_changed_files_against_branch",
+        fake_get_changed_files_against_branch,
+    )
+
+    result = collect_changed_file_scans(
+        repo,
+        branch="main",
+        scanner=lambda path: DummyFileInfo(path),
+    )
+
+    assert [item.path for item in result] == ["feature.py"]
+

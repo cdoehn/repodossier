@@ -238,3 +238,45 @@ def test_render_changed_export_marks_missing_diff_for_untracked_file(
     assert "## notes.txt" in output
     assert "No git diff available for this file." in output
 
+
+def test_render_changed_export_uses_branch_compare_mode_and_branch_diff(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    (tmp_path / "app.py").write_text("print('feature')\n", encoding="utf-8")
+    scans = [make_scan("app.py", "modified", file_info=DummyFileInfo())]
+
+    def fake_get_diff_against_branch(repo_path: Path, branch: str, path: str | None = None) -> str:
+        assert repo_path == tmp_path
+        assert branch == "main"
+        assert path == "app.py"
+        return "diff --git a/app.py b/app.py\n-print('main')\n+print('feature')\n"
+
+    monkeypatch.setattr(
+        "repocontext.changed_exporter.get_diff_against_branch",
+        fake_get_diff_against_branch,
+    )
+
+    output = render_changed_export(tmp_path, scans=scans, branch="main")
+
+    assert "Compare Mode: Against branch: main" in output
+    assert "+print('feature')" in output
+
+
+def test_write_changed_export_accepts_branch_argument(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    output_path = tmp_path / "changed.txt"
+    (tmp_path / "app.py").write_text("print('feature')\n", encoding="utf-8")
+    scans = [make_scan("app.py", "modified", file_info=DummyFileInfo())]
+
+    monkeypatch.setattr(
+        "repocontext.changed_exporter.get_diff_against_branch",
+        lambda repo_path, branch, path=None: "",
+    )
+
+    write_changed_export(tmp_path, output_path, scans=scans, branch="main", include_diff=True)
+
+    assert "Compare Mode: Against branch: main" in output_path.read_text(encoding="utf-8")
+

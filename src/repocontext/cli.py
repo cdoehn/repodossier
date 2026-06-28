@@ -13,6 +13,7 @@ from .exporters import generate_ai_export, generate_docs_export, generate_full_e
 from .git import RepositoryInfo, find_repository_root, get_repository_info
 from .gitignore import GitignoreUpdateError
 from .import_graph import build_import_graph, calculate_import_graph_metrics
+from repocontext.changed_command import add_changed_subparser, run_changed_command
 
 
 _FALLBACK_VERSION = "0.1.0.dev0"
@@ -181,6 +182,8 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--version", action="version", version=_determine_version())
 
     subparsers = parser.add_subparsers(dest="command")
+
+    add_changed_subparser(subparsers)
 
     info_parser = subparsers.add_parser("info", help="Show repository info")
     info_parser.set_defaults(handler=_handle_info_command)

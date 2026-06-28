@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from repocontext.changed import ChangedFileScan, collect_changed_file_scans
-from repocontext.git import get_diff
+from repocontext.git import get_diff, get_diff_against_branch
 
 
 def _metadata_value(file_info: Any | None, names: Sequence[str], default: Any = None) -> Any:
@@ -100,6 +100,8 @@ def _append_git_diff(
     lines: list[str],
     repo_path: Path,
     scans: Sequence[ChangedFileScan],
+    *,
+    branch: str | None = None,
 ) -> None:
     lines.extend(["# Git Diff", ""])
 
@@ -114,7 +116,10 @@ def _append_git_diff(
         return
 
     for scan in diffable_scans:
-        diff_text = get_diff(repo_path, scan.path)
+        if branch:
+            diff_text = get_diff_against_branch(repo_path, branch, scan.path)
+        else:
+            diff_text = get_diff(repo_path, scan.path)
 
         lines.extend(
             [
@@ -208,13 +213,20 @@ def render_changed_export(
     repo_path: str | Path = ".",
     *,
     scans: Sequence[ChangedFileScan] | None = None,
-    compare_mode: str = "Working tree",
+    compare_mode: str | None = None,
     include_diff: bool = True,
+    branch: str | None = None,
 ) -> str:
     """Render the changed export as text."""
 
     repo = Path(repo_path)
-    changed_scans = list(scans) if scans is not None else collect_changed_file_scans(repo)
+    if compare_mode is None:
+        compare_mode = f"Against branch: {branch}" if branch else "Working tree"
+    changed_scans = (
+        list(scans)
+        if scans is not None
+        else collect_changed_file_scans(repo, branch=branch)
+    )
 
     lines: list[str] = [
         "# Changed Export",
@@ -228,7 +240,7 @@ def render_changed_export(
     _append_file_overview(lines, changed_scans)
 
     if include_diff:
-        _append_git_diff(lines, repo, changed_scans)
+        _append_git_diff(lines, repo, changed_scans, branch=branch)
 
     _append_changed_file_contents(lines, repo, changed_scans)
     _append_deleted_files(lines, changed_scans)
@@ -242,8 +254,9 @@ def write_changed_export(
     output_path: str | Path = "changed.txt",
     *,
     scans: Sequence[ChangedFileScan] | None = None,
-    compare_mode: str = "Working tree",
+    compare_mode: str | None = None,
     include_diff: bool = True,
+    branch: str | None = None,
 ) -> Path:
     """Write changed.txt and return the output path."""
 
@@ -254,6 +267,7 @@ def write_changed_export(
             scans=scans,
             compare_mode=compare_mode,
             include_diff=include_diff,
+            branch=branch,
         ),
         encoding="utf-8",
     )
