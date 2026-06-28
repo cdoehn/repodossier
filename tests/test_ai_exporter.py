@@ -511,6 +511,93 @@ def test_call_graph_output_is_deterministic(tmp_path: Path) -> None:
 
     assert first_render == second_render
 
+
+def test_ai_export_filters_generated_export_files_from_analysis_inputs(tmp_path: Path) -> None:
+    context = make_ai_export_context_from_files(
+        tmp_path,
+        {
+            "ai.txt": "# AI CONTEXT\nSENTINEL_EXISTING_AI_EXPORT\n",
+            "full.txt": "# Complete Source Export\nSENTINEL_EXISTING_FULL_EXPORT\n",
+            "docs.txt": "SENTINEL_EXISTING_DOCS_EXPORT\n",
+            "changed.txt": "SENTINEL_EXISTING_CHANGED_EXPORT\n",
+            "src/example/app.py": "def main():\n    return 1\n",
+        },
+    )
+
+    rendered = render_ai_export(context)
+
+    assert "Scanned files: 1" in rendered
+    assert "SENTINEL_EXISTING_AI_EXPORT" not in rendered
+    assert "SENTINEL_EXISTING_FULL_EXPORT" not in rendered
+    assert "SENTINEL_EXISTING_DOCS_EXPORT" not in rendered
+    assert "SENTINEL_EXISTING_CHANGED_EXPORT" not in rendered
+
+    important_files_section = rendered.split("## Important Files", 1)[1].split("## Symbol Index", 1)[0]
+    symbol_index_section = rendered.split("## Symbol Index", 1)[1].split("## Import Graph", 1)[0]
+    import_graph_section = rendered.split("## Import Graph", 1)[1].split("## Call Graph", 1)[0]
+    call_graph_section = rendered.split("## Call Graph", 1)[1].split("## Notes", 1)[0]
+
+    assert "ai.txt" not in important_files_section
+    assert "full.txt" not in important_files_section
+    assert "docs.txt" not in important_files_section
+    assert "changed.txt" not in important_files_section
+
+    assert "### ai.txt" not in symbol_index_section
+    assert "### full.txt" not in symbol_index_section
+    assert "### docs.txt" not in symbol_index_section
+    assert "### changed.txt" not in symbol_index_section
+
+    assert "ai.txt" not in import_graph_section
+    assert "full.txt" not in import_graph_section
+    assert "docs.txt" not in import_graph_section
+    assert "changed.txt" not in import_graph_section
+
+    assert "ai.txt" not in call_graph_section
+    assert "full.txt" not in call_graph_section
+    assert "docs.txt" not in call_graph_section
+    assert "changed.txt" not in call_graph_section
+
+
+def test_generate_ai_export_is_stable_when_ai_txt_already_exists(tmp_path: Path) -> None:
+    subprocess.run(
+        ["git", "init"],
+        cwd=tmp_path,
+        check=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+
+    source_file = tmp_path / "app.py"
+    source_file.write_text("def main():\n    return 1\n", encoding="utf-8")
+
+    existing_ai_export = tmp_path / "ai.txt"
+    existing_ai_export.write_text(
+        "# AI CONTEXT\nSENTINEL_PREVIOUS_AI_EXPORT\n",
+        encoding="utf-8",
+    )
+
+    subprocess.run(
+        ["git", "add", "app.py"],
+        cwd=tmp_path,
+        check=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+
+    output_path = generate_ai_export(tmp_path)
+    first_render = output_path.read_text(encoding="utf-8")
+
+    output_path = generate_ai_export(tmp_path)
+    second_render = output_path.read_text(encoding="utf-8")
+
+    assert first_render == second_render
+    assert first_render.count("# AI CONTEXT") == 1
+    assert "SENTINEL_PREVIOUS_AI_EXPORT" not in first_render
+    assert "# Complete Source Export" not in first_render
+
+
 def test_render_ai_export_contains_required_sections(tmp_path: Path) -> None:
     context = make_ai_export_context(tmp_path)
 

@@ -6,7 +6,7 @@ sections for language models without embedding complete source dumps.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 from repocontext.gitignore import ensure_repocontext_gitignore_entries
@@ -81,10 +81,33 @@ def iter_ai_export_headings() -> tuple[str, ...]:
 
 
 def create_ai_export_context(full_context: FullExportContext) -> AIExportContext:
-    """Create an AI export context from an existing Full Export context."""
+    """Create an AI export context from an already-built full export context."""
 
-    return AIExportContext(full_context=full_context)
+    return AIExportContext(
+        full_context=_filter_ai_export_input_context(full_context)
+    )
 
+
+def _filter_ai_export_input_context(full_context: FullExportContext) -> FullExportContext:
+    """Exclude generated RepoContext export files from AI-export analysis input."""
+
+    filtered_scanned_files = tuple(
+        file_info
+        for file_info in full_context.scanned_files
+        if not _is_generated_export_file_path(file_info.relative_path)
+    )
+
+    if filtered_scanned_files == full_context.scanned_files:
+        return full_context
+
+    return replace(full_context, scanned_files=filtered_scanned_files)
+
+
+def _is_generated_export_file_path(relative_path: object) -> bool:
+    """Return True when a repository-root path is a generated RepoContext export."""
+
+    path = Path(relative_path)
+    return path.as_posix().lower() in GENERATED_EXPORT_FILENAMES
 
 def build_ai_export_context(repository_root: Path | str) -> AIExportContext:
     """Build the AI export context for a Git repository."""
