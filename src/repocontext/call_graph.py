@@ -271,12 +271,16 @@ class PythonCallVisitor(ast.NodeVisitor):
         self.generic_visit(node)
 
     def _resolve_function_call(self, callee_name: str) -> tuple[str | None, str]:
-        """Resolve direct calls to local or imported local functions."""
+        """Resolve direct calls to local, imported local, or external functions."""
 
         candidate_count = self.known_function_counts.get(callee_name, 0)
         imported_alias = self.imported_function_aliases.get(callee_name)
+        import_alias = self.import_aliases.get(callee_name)
 
-        if candidate_count == 1 and imported_alias is not None:
+        if candidate_count == 1 and (
+            imported_alias is not None
+            or self._is_external_import_alias(import_alias)
+        ):
             return None, "ambiguous"
 
         if candidate_count == 1:
@@ -287,6 +291,9 @@ class PythonCallVisitor(ast.NodeVisitor):
 
         if imported_alias is not None:
             return imported_alias.qualified_name, "imported_local"
+
+        if self._is_external_import_alias(import_alias):
+            return import_alias.qualified_name, "external"
 
         return None, "unresolved"
 
@@ -303,6 +310,10 @@ class PythonCallVisitor(ast.NodeVisitor):
         cls_target = self._class_method_target(node)
         if cls_target is not None:
             return self._resolve_known_method(cls_target, node.func.attr)
+
+        external_alias = self._external_attribute_base_import_alias(node)
+        if external_alias is not None:
+            return f"{external_alias.qualified_name}.{node.func.attr}", "external"
 
         if self._is_chained_method_call(node):
             return None, "unresolved_method"
@@ -334,6 +345,30 @@ class PythonCallVisitor(ast.NodeVisitor):
             return False
 
         return isinstance(node.func.value, ast.Call)
+
+
+    def _is_external_import_alias(self, import_alias: ImportAlias | None) -> bool:
+        """Return True when an alias is known to refer outside the local repo."""
+
+        return import_alias is not None and import_alias.is_local is False
+
+    def _external_attribute_base_import_alias(
+        self,
+        node: ast.Call,
+    ) -> ImportAlias | None:
+        """Return an external import alias used as the base of attr calls."""
+
+        if not isinstance(node.func, ast.Attribute):
+            return None
+
+        if not isinstance(node.func.value, ast.Name):
+            return None
+
+        import_alias = self.import_aliases.get(node.func.value.id)
+        if self._is_external_import_alias(import_alias):
+            return import_alias
+
+        return None
 
     def _is_self_method_call(self, node: ast.Call) -> bool:
         """Return True when the call is self.method() inside a class."""

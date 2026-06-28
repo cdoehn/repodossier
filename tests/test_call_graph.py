@@ -1609,3 +1609,173 @@ def test_parse_calls_from_source_marks_local_and_imported_same_name_ambiguous(tm
         )
     ]
 
+def test_parse_calls_from_source_marks_from_import_call_as_external():
+    source = (
+        "from pathlib import Path\n"
+        "\n"
+        "def main():\n"
+        "    return Path('x')\n"
+    )
+
+    graph = parse_calls_from_source(
+        source,
+        source_path="src/app.py",
+        module_name="app",
+        import_graph=object(),
+    )
+
+    assert graph.sorted_edges() == [
+        CallEdge(
+            caller_file="src/app.py",
+            caller_name="main",
+            caller_qualified_name="app.main",
+            callee_name="Path",
+            callee_qualified_name="pathlib.Path",
+            line_number=4,
+            call_type="function",
+            confidence="external",
+        )
+    ]
+
+
+def test_parse_calls_from_source_marks_import_alias_attribute_call_as_external():
+    source = (
+        "import pathlib as pl\n"
+        "\n"
+        "def main():\n"
+        "    return pl.Path('x')\n"
+    )
+
+    graph = parse_calls_from_source(
+        source,
+        source_path="src/app.py",
+        module_name="app",
+        import_graph=object(),
+    )
+
+    assert graph.sorted_edges() == [
+        CallEdge(
+            caller_file="src/app.py",
+            caller_name="main",
+            caller_qualified_name="app.main",
+            callee_name="Path",
+            callee_qualified_name="pathlib.Path",
+            line_number=4,
+            call_type="method",
+            confidence="external",
+        )
+    ]
+
+
+def test_parse_calls_from_source_marks_plain_import_attribute_call_as_external():
+    source = (
+        "import subprocess\n"
+        "\n"
+        "def main():\n"
+        "    return subprocess.run(['echo', 'ok'])\n"
+    )
+
+    graph = parse_calls_from_source(
+        source,
+        source_path="src/app.py",
+        module_name="app",
+        import_graph=object(),
+    )
+
+    assert graph.sorted_edges() == [
+        CallEdge(
+            caller_file="src/app.py",
+            caller_name="main",
+            caller_qualified_name="app.main",
+            callee_name="run",
+            callee_qualified_name="subprocess.run",
+            line_number=4,
+            call_type="method",
+            confidence="external",
+        )
+    ]
+
+
+def test_parse_calls_from_source_keeps_local_import_alias_attribute_call_unresolved_not_external(tmp_path):
+    source_root = tmp_path / "src" / "repocontext"
+    source_root.mkdir(parents=True)
+    scanner_path = source_root / "scanner.py"
+    app_path = source_root / "app.py"
+
+    scanner_path.write_text(
+        "def scan_single_file():\n"
+        "    return None\n",
+        encoding="utf-8",
+    )
+    app_source = (
+        "import repocontext.scanner as scanner\n"
+        "\n"
+        "def main():\n"
+        "    return scanner.scan_single_file()\n"
+    )
+    app_path.write_text(app_source, encoding="utf-8")
+
+    import_graph = build_import_graph(
+        [scanner_path, app_path],
+        repo_root=tmp_path,
+    )
+
+    graph = parse_calls_from_source(
+        app_source,
+        source_path=app_path,
+        module_name="repocontext.app",
+        import_graph=import_graph,
+    )
+
+    assert graph.sorted_edges() == [
+        CallEdge(
+            caller_file=app_path.as_posix(),
+            caller_name="main",
+            caller_qualified_name="repocontext.app.main",
+            callee_name="scan_single_file",
+            callee_qualified_name=None,
+            line_number=4,
+            call_type="method",
+            confidence="unresolved",
+        )
+    ]
+
+
+def test_parse_calls_from_source_marks_external_alias_and_chain_conservatively():
+    source = (
+        "from pathlib import Path\n"
+        "\n"
+        "def main():\n"
+        "    return Path('x').read_text()\n"
+    )
+
+    graph = parse_calls_from_source(
+        source,
+        source_path="src/app.py",
+        module_name="app",
+        import_graph=object(),
+    )
+
+    assert graph.sorted_edges() == [
+        CallEdge(
+            caller_file="src/app.py",
+            caller_name="main",
+            caller_qualified_name="app.main",
+            callee_name="Path",
+            callee_qualified_name="pathlib.Path",
+            line_number=4,
+            call_type="function",
+            confidence="external",
+        ),
+        CallEdge(
+            caller_file="src/app.py",
+            caller_name="main",
+            caller_qualified_name="app.main",
+            callee_name="read_text",
+            callee_qualified_name=None,
+            line_number=4,
+            call_type="method",
+            confidence="unresolved_method",
+        ),
+    ]
+
