@@ -38,6 +38,17 @@ AI_EXPORT_SECTION_HEADINGS: dict[str, str] = {
 }
 
 
+IMPORTANT_FILES_LIMIT = 20
+GENERATED_EXPORT_FILENAMES: frozenset[str] = frozenset(
+    {
+        "full.txt",
+        "ai.txt",
+        "docs.txt",
+        "changed.txt",
+    }
+)
+
+
 @dataclass(frozen=True)
 class AIExportContext:
     """Data required to render the compact AI export."""
@@ -82,7 +93,7 @@ def render_ai_export(context: AIExportContext) -> str:
         AI_EXPORT_DOCUMENT_HEADING,
         _render_project_section(context),
         _render_architecture_summary_section(context),
-        _render_important_files_section(),
+        _render_important_files_section(context),
         _render_symbol_index_section(),
         _render_import_graph_section(),
         _render_call_graph_section(),
@@ -441,17 +452,265 @@ def _append_unique(items: list[str], value: str) -> None:
     if value not in items:
         items.append(value)
 
-def _render_important_files_section() -> str:
-    """Render the placeholder Important Files section."""
+def _render_important_files_section(context: AIExportContext) -> str:
+    """Render a compact, deterministic important-file ranking."""
 
-    return "\n".join(
-        [
-            AI_EXPORT_SECTION_HEADINGS["important_files"],
-            "",
-            "Important file ranking is not implemented yet.",
-        ]
+    ranked_files = _rank_important_files(context, limit=IMPORTANT_FILES_LIMIT)
+
+    lines = [
+        AI_EXPORT_SECTION_HEADINGS["important_files"],
+        "",
+    ]
+
+    if not ranked_files:
+        lines.append("No important files detected.")
+        return "\n".join(lines)
+
+    for path, reason, _score in ranked_files:
+        lines.append(f"- {path}")
+        lines.append(f"  Reason: {reason}")
+
+    return "\n".join(lines)
+
+
+def _rank_important_files(
+    context: AIExportContext,
+    *,
+    limit: int,
+) -> tuple[tuple[str, str, int], ...]:
+    """Return important files as path, reason, score tuples."""
+
+    candidates: list[tuple[int, str, str]] = []
+
+    for file_info in context.full_context.sorted_files:
+        if not _is_ai_important_file_candidate(file_info):
+            continue
+
+        path = file_info.relative_path.as_posix()
+        score, reasons = _score_important_file(context, file_info)
+        if score <= 0:
+            continue
+
+        candidates.append((score, path, "; ".join(reasons)))
+
+    candidates.sort(key=lambda item: (-item[0], item[1]))
+
+    return tuple(
+        (path, reason, score)
+        for score, path, reason in candidates[:limit]
     )
 
+
+def _is_ai_important_file_candidate(file_info: object) -> bool:
+    """Return True when a file can appear in the Important Files section."""
+
+    relative_path = getattr(file_info, "relative_path", None)
+    if relative_path is None:
+        return False
+
+    path = Path(relative_path)
+    filename = path.name.lower()
+    path_string = path.as_posix().lower()
+
+    if filename in GENERATED_EXPORT_FILENAMES:
+        return False
+
+    if path_string in {
+        "project_bundle.txt",
+        "bundle_project.sh",
+    }:
+        return False
+
+    if getattr(file_info, "is_binary", False) is True:
+        return False
+
+    if getattr(file_info, "is_text", True) is False:
+        return False
+
+    if getattr(file_info, "error", None) is not None:
+        return False
+
+    return True
+
+
+def _score_important_file(
+    context: AIExportContext,
+    file_info: object,
+) -> tuple[int, tuple[str, ...]]:
+    """Score one file and return human-readable reasons."""
+
+    path = Path(getattr(file_info, "relative_path")).as_posix()
+    lower_path = path.lower()
+    filename = Path(lower_path).name
+    content = getattr(file_info, "content", None) or ""
+
+    score = 0
+    reasons: list[str] = []
+
+    if filename == "pyproject.toml":
+        score += 100
+        reasons.append("Python project configuration")
+
+    if filename == "setup.py":
+        score += 95
+        reasons.append("Python packaging entry point")
+
+    if filename in {"requirements.txt", "requirements-dev.txt"}:
+        score += 90
+        reasons.append("Python dependency list")
+
+    if filename == "readme.md" or filename == "readme.txt":
+        score += 85
+        reasons.append("Primary project documentation")
+
+    if "architecture" in filename:
+        score += 80
+        reasons.append("Architecture documentation")
+
+    if "spec" in filename:
+        score += 75
+        reasons.append("Project specification")
+
+    if "tasks" in filename or "roadmap" in filename or "milestone" in filename:
+        score += 60
+        reasons.append("Planning or roadmap documentation")
+
+    if filename == "cli.py" or lower_path.endswith("/cli.py"):
+        score += 80
+        reasons.append("CLI entry point")
+
+    if filename == "__main__.py":
+        score += 70
+        reasons.append("Python module execution entry point")
+
+    if lower_path.endswith("exporters/full.py"):
+        score += 75
+        reasons.append("Full export pipeline implementation")
+
+    if lower_path.endswith("exporters/ai.py"):
+        score += 75
+        reasons.append("AI export pipeline implementation")
+
+    if lower_path.endswith("scanner.py"):
+        score += 65
+        reasons.append("Repository file scanning implementation")
+
+    if lower_path.endswith("git.py"):
+        score += 60
+        reasons.append("Git repository discovery implementation")
+
+    if lower_path.endswith("symbols.py"):
+        score += 60
+        reasons.append("Symbol extraction implementation")
+
+    if lower_path.endswith("import_graph.py"):
+        score += 60
+        reasons.append("Import graph implementation")
+
+    if lower_path.endswith("call_graph.py"):
+        score += 60
+        reasons.append("Call graph implementation")
+
+    if lower_path.startswith("tests/") and filename.startswith("test_"):
+        score += 35
+        reasons.append("Automated test coverage")
+
+    symbol_count = _count_python_symbol_like_lines(file_info)
+    if symbol_count:
+        score += min(symbol_count, 20)
+        reasons.append(f"Contains {symbol_count} Python symbol-like definitions")
+
+    incoming_import_count = _count_incoming_import_mentions(context, path)
+    if incoming_import_count:
+        score += min(incoming_import_count * 4, 40)
+        reasons.append(f"Imported by {incoming_import_count} scanned file(s)")
+
+    line_count = getattr(file_info, "line_count", None) or 0
+    if line_count >= 300 and lower_path.endswith(".py"):
+        score += 10
+        reasons.append("Large Python implementation file")
+
+    if not reasons:
+        return 0, ()
+
+    return score, tuple(reasons)
+
+
+def _count_python_symbol_like_lines(file_info: object) -> int:
+    """Count simple Python def/class lines without executing code."""
+
+    language = (getattr(file_info, "language", None) or "").lower()
+    relative_path = getattr(file_info, "relative_path", None)
+    suffix = Path(relative_path).suffix.lower() if relative_path is not None else ""
+
+    if language != "python" and suffix != ".py":
+        return 0
+
+    content = getattr(file_info, "content", None) or ""
+
+    count = 0
+    for raw_line in content.splitlines():
+        line = raw_line.strip()
+        if line.startswith(("def ", "async def ", "class ")):
+            count += 1
+
+    return count
+
+
+def _count_incoming_import_mentions(context: AIExportContext, path: str) -> int:
+    """Count scanned files that appear to import a local Python module path."""
+
+    if not path.endswith(".py"):
+        return 0
+
+    module_name = _module_name_from_ai_export_path(path)
+    if not module_name:
+        return 0
+
+    import_needle = f"import {module_name}"
+    from_needle = f"from {module_name} import"
+    short_module_name = module_name.rsplit(".", 1)[-1]
+    short_from_needle = f"from .{short_module_name} import"
+
+    count = 0
+    for file_info in context.full_context.exported_text_files:
+        candidate_path = file_info.relative_path.as_posix()
+        if candidate_path == path:
+            continue
+
+        content = file_info.content or ""
+        if (
+            import_needle in content
+            or from_needle in content
+            or short_from_needle in content
+        ):
+            count += 1
+
+    return count
+
+
+def _module_name_from_ai_export_path(path: str) -> str | None:
+    """Convert a Python path into a best-effort module name."""
+
+    path_obj = Path(path)
+    if path_obj.suffix != ".py":
+        return None
+
+    parts = list(path_obj.with_suffix("").parts)
+
+    if parts and parts[0] == "src":
+        parts = parts[1:]
+
+    if parts and parts[-1] == "__init__":
+        parts = parts[:-1]
+
+    if not parts:
+        return None
+
+    if not all(part.isidentifier() for part in parts):
+        return None
+
+    return ".".join(parts)
 
 def _render_symbol_index_section() -> str:
     """Render the placeholder Symbol Index section."""

@@ -222,6 +222,70 @@ def test_architecture_summary_detects_core_repocontext_areas(tmp_path: Path) -> 
     assert "- File scanning: src/repocontext/scanner.py" in rendered
     assert "- Symbol extraction: src/repocontext/symbols.py" in rendered
 
+
+def test_important_files_prioritizes_project_config_docs_and_entrypoints(tmp_path: Path) -> None:
+    context = make_ai_export_context_from_files(
+        tmp_path,
+        {
+            "pyproject.toml": "[project]\nname = \"example\"\n",
+            "README.md": "# Example\n",
+            "src/example/__init__.py": "",
+            "src/example/cli.py": "def main():\n    return 0\n",
+            "src/example/scanner.py": "def scan():\n    return []\n",
+        },
+    )
+
+    rendered = render_ai_export(context)
+
+    assert "## Important Files" in rendered
+    assert "- pyproject.toml\n  Reason: Python project configuration" in rendered
+    assert "- README.md\n  Reason: Primary project documentation" in rendered
+    assert "- src/example/cli.py" in rendered
+    assert "CLI entry point" in rendered
+    assert "- src/example/scanner.py" in rendered
+    assert "Repository file scanning implementation" in rendered
+
+
+def test_important_files_excludes_generated_exports(tmp_path: Path) -> None:
+    context = make_ai_export_context_from_files(
+        tmp_path,
+        {
+            "pyproject.toml": "[project]\nname = \"example\"\n",
+            "full.txt": "generated full export\n",
+            "ai.txt": "generated ai export\n",
+            "docs.txt": "generated docs export\n",
+            "changed.txt": "generated changed export\n",
+        },
+    )
+
+    rendered = render_ai_export(context)
+    important_files_section = rendered.split("## Important Files", 1)[1].split("## Symbol Index", 1)[0]
+
+    assert "pyproject.toml" in important_files_section
+    assert "full.txt" not in important_files_section
+    assert "ai.txt" not in important_files_section
+    assert "docs.txt" not in important_files_section
+    assert "changed.txt" not in important_files_section
+
+
+def test_important_files_ranking_is_deterministic(tmp_path: Path) -> None:
+    context = make_ai_export_context_from_files(
+        tmp_path,
+        {
+            "src/example/b.py": "def b():\n    return 2\n",
+            "src/example/a.py": "def a():\n    return 1\n",
+            "README.md": "# Example\n",
+            "pyproject.toml": "[project]\nname = \"example\"\n",
+        },
+    )
+
+    first_render = render_ai_export(context)
+    second_render = render_ai_export(context)
+
+    assert first_render == second_render
+    important_files_section = first_render.split("## Important Files", 1)[1].split("## Symbol Index", 1)[0]
+    assert important_files_section.index("- pyproject.toml") < important_files_section.index("- README.md")
+
 def test_render_ai_export_contains_required_sections(tmp_path: Path) -> None:
     context = make_ai_export_context(tmp_path)
 
