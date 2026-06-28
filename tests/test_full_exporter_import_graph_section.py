@@ -596,6 +596,89 @@ def test_format_call_graph_section_shows_none_for_empty_noisy_groups() -> None:
     assert "Ambiguous calls:\n- none" in section
     assert "Unresolved calls:\n- none" in section
 
+def test_format_call_graph_section_is_deterministic_for_unsorted_edges() -> None:
+    first_graph = CallGraph(
+        [
+            CallEdge(
+                caller_file="src/app/b.py",
+                caller_name="run",
+                caller_qualified_name="app.b.run",
+                callee_name="Path",
+                callee_qualified_name="pathlib.Path",
+                line_number=8,
+                call_type="function",
+                confidence="external",
+            ),
+            CallEdge(
+                caller_file="src/app/a.py",
+                caller_name="main",
+                caller_qualified_name="app.a.main",
+                callee_name="helper",
+                callee_qualified_name="app.a.helper",
+                line_number=3,
+                call_type="function",
+                confidence="local",
+            ),
+            CallEdge(
+                caller_file="src/app/a.py",
+                caller_name="main",
+                caller_qualified_name="app.a.main",
+                callee_name="missing",
+                callee_qualified_name=None,
+                line_number=4,
+                call_type="function",
+                confidence="unresolved",
+            ),
+        ]
+    )
+    second_graph = CallGraph(list(reversed(first_graph.edges)))
+
+    assert _format_call_graph_section(first_graph) == _format_call_graph_section(second_graph)
+
+
+def test_format_call_graph_section_keeps_deterministic_group_order() -> None:
+    graph = CallGraph(
+        [
+            CallEdge(
+                caller_file="src/app/z.py",
+                caller_name="run",
+                caller_qualified_name="app.z.run",
+                callee_name="z_helper",
+                callee_qualified_name="app.z.z_helper",
+                line_number=5,
+                call_type="function",
+                confidence="local",
+            ),
+            CallEdge(
+                caller_file="src/app/a.py",
+                caller_name="main",
+                caller_qualified_name="app.a.main",
+                callee_name="a_helper",
+                callee_qualified_name="app.a.a_helper",
+                line_number=2,
+                call_type="function",
+                confidence="local",
+            ),
+        ]
+    )
+
+    section = _format_call_graph_section(graph)
+
+    assert section.index("app.a.main (src/app/a.py)") < section.index("app.z.run (src/app/z.py)")
+
+
+def test_render_full_export_call_graph_section_is_deterministic_for_file_order(
+    tmp_path: Path,
+) -> None:
+    context = _make_call_graph_full_export_context(tmp_path)
+    reversed_context = create_full_export_context(
+        context.repository_info,
+        tuple(reversed(context.scanned_files)),
+        context.warnings,
+    )
+
+    assert render_full_export(context) == render_full_export(reversed_context)
+
 
 def _make_call_graph_full_export_context(repo_root: Path):
     files = [
