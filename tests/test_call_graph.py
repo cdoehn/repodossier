@@ -3,7 +3,9 @@ import ast
 from repocontext.call_graph import (
     CallEdge,
     CallGraph,
+    ImportAlias,
     build_call_graph_from_ast,
+    collect_import_aliases_from_source,
     parse_calls_from_source,
 )
 from repocontext.symbols import FileSymbolIndex, SymbolInfo
@@ -1051,6 +1053,148 @@ def test_build_call_graph_from_ast_uses_symbol_index_for_same_class_method_resol
             line_number=3,
             call_type="method",
             confidence="local_method",
+        )
+    ]
+
+def test_collect_import_aliases_from_source_collects_plain_import():
+    aliases = collect_import_aliases_from_source(
+        "import pathlib\n",
+        source_path="src/app.py",
+    )
+
+    assert aliases == {
+        "pathlib": ImportAlias(
+            local_name="pathlib",
+            qualified_name="pathlib",
+            module_name="pathlib",
+            imported_name=None,
+            alias=None,
+            import_type="import",
+            level=0,
+            line_number=1,
+            is_relative=False,
+        )
+    }
+
+
+def test_collect_import_aliases_from_source_collects_import_as_alias():
+    aliases = collect_import_aliases_from_source(
+        "import pathlib as pl\n",
+        source_path="src/app.py",
+    )
+
+    assert aliases == {
+        "pl": ImportAlias(
+            local_name="pl",
+            qualified_name="pathlib",
+            module_name="pathlib",
+            imported_name=None,
+            alias="pl",
+            import_type="import",
+            level=0,
+            line_number=1,
+            is_relative=False,
+        )
+    }
+
+
+def test_collect_import_aliases_from_source_collects_from_import_name():
+    aliases = collect_import_aliases_from_source(
+        "from repocontext.scanner import scan_single_file\n",
+        source_path="src/app.py",
+    )
+
+    assert aliases == {
+        "scan_single_file": ImportAlias(
+            local_name="scan_single_file",
+            qualified_name="repocontext.scanner.scan_single_file",
+            module_name="repocontext.scanner",
+            imported_name="scan_single_file",
+            alias=None,
+            import_type="from",
+            level=0,
+            line_number=1,
+            is_relative=False,
+        )
+    }
+
+
+def test_collect_import_aliases_from_source_collects_from_import_as_alias():
+    aliases = collect_import_aliases_from_source(
+        "from repocontext.scanner import scan_single_file as scan\n",
+        source_path="src/app.py",
+    )
+
+    assert aliases == {
+        "scan": ImportAlias(
+            local_name="scan",
+            qualified_name="repocontext.scanner.scan_single_file",
+            module_name="repocontext.scanner",
+            imported_name="scan_single_file",
+            alias="scan",
+            import_type="from",
+            level=0,
+            line_number=1,
+            is_relative=False,
+        )
+    }
+
+
+def test_collect_import_aliases_from_source_collects_relative_from_import():
+    aliases = collect_import_aliases_from_source(
+        "from .scanner import scan_single_file\n",
+        source_path="src/app.py",
+    )
+
+    assert aliases == {
+        "scan_single_file": ImportAlias(
+            local_name="scan_single_file",
+            qualified_name=".scanner.scan_single_file",
+            module_name=".scanner",
+            imported_name="scan_single_file",
+            alias=None,
+            import_type="from",
+            level=1,
+            line_number=1,
+            is_relative=True,
+        )
+    }
+
+
+def test_collect_import_aliases_from_source_ignores_wildcard_imports():
+    aliases = collect_import_aliases_from_source(
+        "from repocontext.scanner import *\n",
+        source_path="src/app.py",
+    )
+
+    assert aliases == {}
+
+
+def test_parse_calls_from_source_keeps_import_aliases_available_on_visitor():
+    tree = ast.parse(
+        "import pathlib as pl\n"
+        "\n"
+        "def main():\n"
+        "    return pl.Path('x')\n",
+        filename="src/app.py",
+    )
+
+    graph = build_call_graph_from_ast(
+        tree,
+        source_path="src/app.py",
+        module_name="app",
+    )
+
+    assert graph.sorted_edges() == [
+        CallEdge(
+            caller_file="src/app.py",
+            caller_name="main",
+            caller_qualified_name="app.main",
+            callee_name="Path",
+            callee_qualified_name=None,
+            line_number=4,
+            call_type="method",
+            confidence="unresolved",
         )
     ]
 

@@ -151,6 +151,34 @@ class CallGraph:
 
         return "\n".join(lines)
 
+@dataclass(frozen=True, slots=True)
+class ImportAlias:
+    """A local import binding discovered in a Python source file."""
+
+    local_name: str
+    qualified_name: str
+    module_name: str | None
+    imported_name: str | None = None
+    alias: str | None = None
+    import_type: str = "import"
+    level: int = 0
+    line_number: int = 0
+    is_relative: bool = False
+
+    def __post_init__(self) -> None:
+        if self.import_type not in {"import", "from"}:
+            raise ValueError("import_type must be 'import' or 'from'")
+        if self.level < 0:
+            raise ValueError("level must not be negative")
+        if self.line_number < 0:
+            raise ValueError("line_number must not be negative")
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return a JSON-serializable representation of the alias."""
+
+        return asdict(self)
+
+
 class PythonCallVisitor(ast.NodeVisitor):
     """Collect function and method calls while tracking Python caller context."""
 
@@ -162,6 +190,7 @@ class PythonCallVisitor(ast.NodeVisitor):
         known_class_names: set[str] | None = None,
         known_function_counts: dict[str, int] | None = None,
         known_method_counts: dict[str, dict[str, int]] | None = None,
+        import_aliases: dict[str, ImportAlias] | None = None,
     ) -> None:
         self.source_path = Path(source_path).as_posix()
         self.module_name = module_name
@@ -171,6 +200,7 @@ class PythonCallVisitor(ast.NodeVisitor):
             class_name: dict(method_counts)
             for class_name, method_counts in (known_method_counts or {}).items()
         }
+        self.import_aliases = dict(import_aliases or {})
         self.graph = CallGraph()
         self._class_stack: list[str] = []
         self._function_stack: list[tuple[str, str]] = []
@@ -524,6 +554,88 @@ def _method_counts_from_symbol_index(
     return method_counts_by_class
 
 
+
+def _relative_module_name(module: str | None, level: int) -> str | None:
+    """Return a dotted module name including relative import prefixes."""
+
+    prefix = "." * level
+    if module:
+        return f"{prefix}{module}"
+    return prefix or None
+
+
+def _qualified_import_name(module_name: str | None, imported_name: str | None) -> str:
+    """Return a stable qualified name for an import binding."""
+
+    if module_name and imported_name:
+        return f"{module_name}.{imported_name}"
+    if module_name:
+        return module_name
+    if imported_name:
+        return imported_name
+    return ""
+
+
+class _ImportAliasVisitor(ast.NodeVisitor):
+    """Collect local import bindings from a parsed Python AST."""
+
+    def __init__(self) -> None:
+        self.aliases: dict[str, ImportAlias] = {}
+
+    def visit_Import(self, node: ast.Import) -> None:
+        for alias in node.names:
+            local_name = alias.asname or alias.name.split(".", 1)[0]
+            self.aliases[local_name] = ImportAlias(
+                local_name=local_name,
+                qualified_name=alias.name,
+                module_name=alias.name,
+                imported_name=None,
+                alias=alias.asname,
+                import_type="import",
+                level=0,
+                line_number=getattr(node, "lineno", 0),
+                is_relative=False,
+            )
+
+    def visit_ImportFrom(self, node: ast.ImportFrom) -> None:
+        level = node.level or 0
+        module_name = _relative_module_name(node.module, level)
+
+        for alias in node.names:
+            if alias.name == "*":
+                continue
+
+            local_name = alias.asname or alias.name
+            self.aliases[local_name] = ImportAlias(
+                local_name=local_name,
+                qualified_name=_qualified_import_name(module_name, alias.name),
+                module_name=module_name,
+                imported_name=alias.name,
+                alias=alias.asname,
+                import_type="from",
+                level=level,
+                line_number=getattr(node, "lineno", 0),
+                is_relative=level > 0,
+            )
+
+
+def collect_import_aliases_from_ast(tree: ast.AST) -> dict[str, ImportAlias]:
+    """Collect local import aliases from a parsed Python AST."""
+
+    visitor = _ImportAliasVisitor()
+    visitor.visit(tree)
+    return {
+        name: visitor.aliases[name]
+        for name in sorted(visitor.aliases)
+    }
+
+
+def collect_import_aliases_from_source(source: str, *, source_path: str | Path = "<string>") -> dict[str, ImportAlias]:
+    """Parse Python source text and collect local import aliases."""
+
+    tree = ast.parse(source, filename=str(source_path))
+    return collect_import_aliases_from_ast(tree)
+
 def build_call_graph_from_ast(
     tree: ast.AST,
     *,
@@ -554,6 +666,7 @@ def build_call_graph_from_ast(
         known_class_names=_collect_class_names(tree),
         known_function_counts=known_function_counts,
         known_method_counts=known_method_counts,
+        import_aliases=collect_import_aliases_from_ast(tree),
     )
     visitor.visit(tree)
     return visitor.graph
@@ -598,6 +711,9 @@ def parse_calls_from_file(
 __all__ = [
     "CallEdge",
     "CallGraph",
+    "collect_import_aliases_from_source",
+    "collect_import_aliases_from_ast",
+    "ImportAlias",
     "PythonCallVisitor",
     "build_call_graph_from_ast",
     "parse_calls_from_file",
