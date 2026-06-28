@@ -173,6 +173,94 @@ def test_full_export_context_totals_use_exported_text_files_only(tmp_path: Path)
     assert context.total_estimated_tokens == 18
 
 
+def test_render_full_export_renders_ai_quick_start_details(tmp_path: Path) -> None:
+    repository_info = make_repository_info(tmp_path)
+    pyproject = FileInfo(
+        relative_path=Path("pyproject.toml"),
+        absolute_path=tmp_path / "pyproject.toml",
+        is_text=True,
+        is_binary=False,
+        language="toml",
+        line_count=10,
+        estimated_tokens=20,
+        content=(
+            '[project]\n'
+            'description = "AI-friendly exports of Git repositories."\n'
+            '\n'
+            '[project.scripts]\n'
+            'repocontext = "repocontext.cli:main"\n'
+            '\n'
+            '[project.optional-dependencies]\n'
+            'dev = ["pytest>=7.4"]\n'
+        ),
+    )
+    module = FileInfo(
+        relative_path=Path("src/repocontext/cli.py"),
+        absolute_path=tmp_path / "src/repocontext/cli.py",
+        is_text=True,
+        is_binary=False,
+        language="python",
+        line_count=3,
+        estimated_tokens=6,
+        content="def main():\n    return 0\n",
+    )
+    test_file = FileInfo(
+        relative_path=Path("tests/test_cli.py"),
+        absolute_path=tmp_path / "tests/test_cli.py",
+        is_text=True,
+        is_binary=False,
+        language="python",
+        line_count=2,
+        estimated_tokens=4,
+        content="def test_cli():\n    assert True\n",
+    )
+
+    context = create_full_export_context(repository_info, [pyproject, module, test_file])
+    rendered = render_full_export(context)
+
+    assert "# AI Quick Start" in rendered
+    assert "Project type: Python CLI project" in rendered
+    assert "Primary language: Python" in rendered
+    assert "Package manager: pyproject.toml" in rendered
+    assert "Test framework: pytest" in rendered
+    assert "Entrypoints: repocontext" in rendered
+    assert "Purpose: AI-friendly exports of Git repositories." in rendered
+    assert "AI Quick Start details will be expanded" not in rendered
+
+
+def test_render_full_export_uses_readme_for_project_purpose(tmp_path: Path) -> None:
+    repository_info = make_repository_info(tmp_path)
+    readme = FileInfo(
+        relative_path=Path("README.md"),
+        absolute_path=tmp_path / "README.md",
+        is_text=True,
+        is_binary=False,
+        language="markdown",
+        line_count=3,
+        estimated_tokens=8,
+        content="# Example Project\n\nCreates concise repository context exports.\n",
+    )
+
+    context = create_full_export_context(repository_info, [readme])
+    rendered = render_full_export(context)
+
+    assert "Purpose: Creates concise repository context exports." in rendered
+
+
+def test_render_full_export_ai_quick_start_uses_unknown_fallbacks(tmp_path: Path) -> None:
+    repository_info = make_repository_info(tmp_path)
+    context = create_full_export_context(repository_info, [])
+
+    rendered = render_full_export(context)
+
+    assert "Project type: Unknown Git repository" in rendered
+    assert "Primary language: Unknown" in rendered
+    assert "Package manager: Unknown" in rendered
+    assert "Test framework: Unknown" in rendered
+    assert "Entrypoints: Unknown" in rendered
+    assert "Purpose: Unknown" in rendered
+
+
 def test_full_export_context_counts_file_types_from_scanned_files(tmp_path: Path) -> None:
     repository_info = make_repository_info(tmp_path)
     files = [
