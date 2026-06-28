@@ -11,6 +11,7 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 
 from repocontext.gitignore import ensure_repocontext_gitignore_entries
+from repocontext.schema import analyze_database_schemas
 
 from .full import FullExportContext, build_full_export_context
 
@@ -1724,4 +1725,201 @@ for _repocontext_ai_export_name in ('generate_ai_export', 'render_ai_export', 'b
 
 del _repocontext_ai_export_name
 del _repocontext_ai_export_function
+
+
+AI_DATABASE_SCHEMA_MAX_FILES = 20
+AI_DATABASE_SCHEMA_MAX_TABLES = 30
+AI_DATABASE_SCHEMA_MAX_COLUMNS_PER_TABLE = 20
+AI_DATABASE_SCHEMA_MAX_RELATIONSHIPS = 50
+AI_DATABASE_SCHEMA_MAX_WARNINGS = 20
+
+
+def _render_database_schema_section(context: AIExportContext) -> str:
+    """Render a compact Database Schema section for ai.txt."""
+
+    try:
+        schema_report = analyze_database_schemas(
+            context.repository_root,
+            files=context.full_context.scanned_files,
+        )
+    except Exception as exc:
+        return "\n".join(
+            [
+                "## Database Schema",
+                "",
+                "Could not analyze database schemas.",
+                "",
+                "Warnings:",
+                f"- {type(exc).__name__}: {exc}",
+            ]
+        )
+
+    lines = [
+        "## Database Schema",
+        "",
+        "Summary:",
+        f"- Database files: {len(schema_report.database_files)}",
+        f"- SQL schema files: {len(schema_report.sql_schema_files)}",
+        f"- Tables: {len(schema_report.tables)}",
+        f"- Views: {len(schema_report.views)}",
+        f"- Warnings: {len(schema_report.warnings)}",
+    ]
+
+    database_schema_files = tuple(schema_report.database_files) + tuple(schema_report.sql_schema_files)
+    if database_schema_files:
+        lines.extend(["", "Detected database/schema files:"])
+        visible_files = database_schema_files[:AI_DATABASE_SCHEMA_MAX_FILES]
+        lines.extend(f"- {path}" for path in visible_files)
+
+        remaining_files = len(database_schema_files) - len(visible_files)
+        if remaining_files > 0:
+            lines.append(f"- ... {remaining_files} more")
+    else:
+        lines.extend(["", "No database schema files detected."])
+
+    lines.extend(["", "Tables:"])
+    if schema_report.tables:
+        _append_ai_schema_tables(lines, schema_report.tables)
+    else:
+        lines.append("- none detected")
+
+    relationships = _collect_ai_schema_relationships(schema_report.tables)
+    lines.extend(["", "Relationships:"])
+    if relationships:
+        visible_relationships = relationships[:AI_DATABASE_SCHEMA_MAX_RELATIONSHIPS]
+        lines.extend(f"- {relationship}" for relationship in visible_relationships)
+
+        remaining_relationships = len(relationships) - len(visible_relationships)
+        if remaining_relationships > 0:
+            lines.append(f"- ... {remaining_relationships} more")
+    else:
+        lines.append("- none detected")
+
+    if schema_report.warnings:
+        lines.extend(["", "Warnings:"])
+        visible_warnings = schema_report.warnings[:AI_DATABASE_SCHEMA_MAX_WARNINGS]
+        lines.extend(f"- {warning}" for warning in visible_warnings)
+
+        remaining_warnings = len(schema_report.warnings) - len(visible_warnings)
+        if remaining_warnings > 0:
+            lines.append(f"- ... {remaining_warnings} more")
+
+    return "\n".join(lines).rstrip()
+
+
+def _append_ai_schema_tables(lines: list[str], tables) -> None:
+    """Append compact table summaries to the AI Database Schema section."""
+
+    visible_tables = tuple(tables[:AI_DATABASE_SCHEMA_MAX_TABLES])
+
+    for table in visible_tables:
+        column_summary = _format_ai_schema_columns(table.columns)
+        source_suffix = f" ({table.source_file})" if table.source_file else ""
+        lines.append(f"- {table.name}{source_suffix}: {column_summary}")
+
+    remaining_tables = len(tables) - len(visible_tables)
+    if remaining_tables > 0:
+        lines.append(f"- ... {remaining_tables} more")
+
+
+def _format_ai_schema_columns(columns) -> str:
+    """Return a compact AI-oriented column summary."""
+
+    if not columns:
+        return "no columns detected"
+
+    visible_columns = tuple(columns[:AI_DATABASE_SCHEMA_MAX_COLUMNS_PER_TABLE])
+    formatted_columns = [_format_ai_schema_column(column) for column in visible_columns]
+
+    remaining_columns = len(columns) - len(visible_columns)
+    if remaining_columns > 0:
+        formatted_columns.append(f"... {remaining_columns} more")
+
+    return ", ".join(formatted_columns)
+
+
+def _format_ai_schema_column(column) -> str:
+    """Format one column for the compact AI Database Schema section."""
+
+    parts = [column.name]
+
+    if column.data_type:
+        parts.append(column.data_type)
+
+    if column.is_primary_key:
+        parts.append("PK")
+
+    if column.nullable is False:
+        parts.append("NOT NULL")
+
+    return " ".join(parts)
+
+
+def _collect_ai_schema_relationships(tables) -> tuple[str, ...]:
+    """Collect compact foreign-key relationship lines."""
+
+    relationships: list[str] = []
+
+    for table in tables:
+        for foreign_key in table.foreign_keys:
+            relationships.append(
+                f"{table.name}.{foreign_key.from_column} -> "
+                f"{foreign_key.to_table}.{foreign_key.to_column}"
+            )
+
+    return tuple(sorted(dict.fromkeys(relationships)))
+
+
+def _insert_database_schema_ai_section(rendered: str, context: AIExportContext) -> str:
+    """Insert Database Schema into rendered ai.txt output."""
+
+    if "## Database Schema" in rendered:
+        return rendered
+
+    database_schema_section = _render_database_schema_section(context)
+
+    if "\n\n## Symbol Index" in rendered:
+        return rendered.replace(
+            "\n\n## Symbol Index",
+            f"\n\n{database_schema_section}\n\n## Symbol Index",
+            1,
+        )
+
+    if "\n\n## Import Graph" in rendered:
+        return rendered.replace(
+            "\n\n## Import Graph",
+            f"\n\n{database_schema_section}\n\n## Import Graph",
+            1,
+        )
+
+    if "\n\n## Notes" in rendered:
+        return rendered.replace(
+            "\n\n## Notes",
+            f"\n\n{database_schema_section}\n\n## Notes",
+            1,
+        )
+
+    return f"{rendered.rstrip()}\n\n{database_schema_section}\n"
+
+
+def _repocontext_schema_wrap_ai_render_function(function):
+    """Wrap AI rendering so Database Schema appears in ai.txt."""
+
+    def wrapped_function(*args, **kwargs):
+        rendered = function(*args, **kwargs)
+        context = args[0] if args else kwargs.get("context")
+
+        if isinstance(context, AIExportContext):
+            return _insert_database_schema_ai_section(rendered, context)
+
+        return rendered
+
+    wrapped_function.__name__ = getattr(function, "__name__", "wrapped_function")
+    wrapped_function.__doc__ = getattr(function, "__doc__", None)
+    wrapped_function.__module__ = getattr(function, "__module__", __name__)
+    return wrapped_function
+
+
+_REPOCONTEXT_DATABASE_SCHEMA_AI_EXPORT_WRAPPER = True
+render_ai_export = _repocontext_schema_wrap_ai_render_function(render_ai_export)
 

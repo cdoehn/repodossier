@@ -1,4 +1,5 @@
 import subprocess
+import sqlite3
 from pathlib import Path
 
 from repocontext.exporters.ai import (
@@ -397,6 +398,113 @@ def test_symbol_index_handles_syntax_errors_without_crashing(tmp_path: Path) -> 
     assert "src/example/broken.py" in symbol_index_section
     assert "Traceback" not in symbol_index_section
 
+
+
+def test_ai_export_renders_empty_database_schema_section(tmp_path: Path) -> None:
+    context = make_ai_export_context_from_files(
+        tmp_path,
+        {
+            "src/example/app.py": "VALUE = 1\n",
+        },
+    )
+
+    rendered = render_ai_export(context)
+
+    assert "## Database Schema" in rendered
+    database_schema_section = rendered.split("## Database Schema", 1)[1].split(
+        "## Symbol Index",
+        1,
+    )[0]
+
+    assert "Summary:" in database_schema_section
+    assert "- Database files: 0" in database_schema_section
+    assert "- SQL schema files: 0" in database_schema_section
+    assert "- Tables: 0" in database_schema_section
+    assert "No database schema files detected." in database_schema_section
+    assert "- none detected" in database_schema_section
+    assert rendered.index("## Important Files") < rendered.index("## Database Schema")
+    assert rendered.index("## Database Schema") < rendered.index("## Symbol Index")
+
+
+def test_ai_export_renders_sql_schema_table_summary_without_insert_data(tmp_path: Path) -> None:
+    context = make_ai_export_context_from_files(
+        tmp_path,
+        {
+            "schema.sql": (
+                "CREATE TABLE users (\n"
+                "  id INTEGER PRIMARY KEY,\n"
+                "  name TEXT NOT NULL,\n"
+                "  role_id INTEGER,\n"
+                "  FOREIGN KEY(role_id) REFERENCES roles(id)\n"
+                ");\n"
+                "INSERT INTO users (name) VALUES ('VerySecretUserName');\n"
+            ),
+        },
+    )
+
+    rendered = render_ai_export(context)
+    database_schema_section = rendered.split("## Database Schema", 1)[1].split(
+        "## Symbol Index",
+        1,
+    )[0]
+
+    assert "- SQL schema files: 1" in database_schema_section
+    assert "- schema.sql" in database_schema_section
+    assert "- users (schema.sql): id INTEGER PK, name TEXT NOT NULL, role_id INTEGER" in database_schema_section
+    assert "- users.role_id -> roles.id" in database_schema_section
+    assert "VerySecretUserName" not in rendered
+
+
+def test_ai_export_renders_sqlite_schema_table_summary_without_table_data(tmp_path: Path) -> None:
+    database_path = tmp_path / "app.sqlite"
+
+    connection = sqlite3.connect(database_path)
+    try:
+        connection.execute("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT NOT NULL)")
+        connection.execute("INSERT INTO users (name) VALUES ('VerySecretUserName')")
+        connection.commit()
+    finally:
+        connection.close()
+
+    repository_info = make_repository_info(tmp_path)
+    database_file = FileInfo(
+        relative_path=Path("app.sqlite"),
+        absolute_path=database_path,
+        is_text=False,
+        is_binary=True,
+        language=None,
+        line_count=0,
+        estimated_tokens=0,
+        content=None,
+    )
+    context = create_ai_export_context(
+        create_full_export_context(repository_info, [database_file])
+    )
+
+    rendered = render_ai_export(context)
+    database_schema_section = rendered.split("## Database Schema", 1)[1].split(
+        "## Symbol Index",
+        1,
+    )[0]
+
+    assert "- Database files: 1" in database_schema_section
+    assert "- app.sqlite" in database_schema_section
+    assert "- users (app.sqlite): id INTEGER PK, name TEXT NOT NULL" in database_schema_section
+    assert "VerySecretUserName" not in rendered
+
+
+def test_ai_export_database_schema_output_is_deterministic(tmp_path: Path) -> None:
+    context = make_ai_export_context_from_files(
+        tmp_path,
+        {
+            "schema.sql": "CREATE TABLE roles (id INTEGER PRIMARY KEY, name TEXT NOT NULL);",
+        },
+    )
+
+    first_render = render_ai_export(context)
+    second_render = render_ai_export(context)
+
+    assert first_render == second_render
 
 def test_import_graph_renders_internal_and_external_imports(tmp_path: Path) -> None:
     context = make_ai_export_context_from_files(
