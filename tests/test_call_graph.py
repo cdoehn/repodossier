@@ -473,3 +473,89 @@ def test_parse_calls_from_source_keeps_function_and_method_calls_distinct():
         ),
     ]
 
+def test_parse_calls_from_source_resolves_self_method_call_to_current_class():
+    source = (
+        "class Scanner:\n"
+        "    def scan(self):\n"
+        "        self.scan_file()\n"
+        "\n"
+        "    def scan_file(self):\n"
+        "        pass\n"
+    )
+
+    graph = parse_calls_from_source(
+        source,
+        source_path="src/scanner.py",
+        module_name="app.scanner",
+    )
+
+    assert graph.sorted_edges() == [
+        CallEdge(
+            caller_file="src/scanner.py",
+            caller_name="Scanner.scan",
+            caller_qualified_name="app.scanner.Scanner.scan",
+            callee_name="scan_file",
+            callee_qualified_name="app.scanner.Scanner.scan_file",
+            line_number=3,
+            call_type="method",
+            confidence="local_method",
+        )
+    ]
+
+
+def test_parse_calls_from_source_resolves_private_self_method_call_to_current_class():
+    source = (
+        "class Scanner:\n"
+        "    def scan(self):\n"
+        "        self._estimate_tokens()\n"
+        "\n"
+        "    def _estimate_tokens(self):\n"
+        "        pass\n"
+    )
+
+    graph = parse_calls_from_source(
+        source,
+        source_path="src/scanner.py",
+        module_name="app.scanner",
+    )
+
+    assert graph.sorted_edges() == [
+        CallEdge(
+            caller_file="src/scanner.py",
+            caller_name="Scanner.scan",
+            caller_qualified_name="app.scanner.Scanner.scan",
+            callee_name="_estimate_tokens",
+            callee_qualified_name="app.scanner.Scanner._estimate_tokens",
+            line_number=3,
+            call_type="method",
+            confidence="local_method",
+        )
+    ]
+
+
+def test_parse_calls_from_source_does_not_resolve_non_self_method_call_as_local_method():
+    source = (
+        "class Scanner:\n"
+        "    def scan(self, other):\n"
+        "        other.scan_file()\n"
+    )
+
+    graph = parse_calls_from_source(
+        source,
+        source_path="src/scanner.py",
+        module_name="app.scanner",
+    )
+
+    assert graph.sorted_edges() == [
+        CallEdge(
+            caller_file="src/scanner.py",
+            caller_name="Scanner.scan",
+            caller_qualified_name="app.scanner.Scanner.scan",
+            callee_name="scan_file",
+            callee_qualified_name=None,
+            line_number=3,
+            call_type="method",
+            confidence="unresolved",
+        )
+    ]
+

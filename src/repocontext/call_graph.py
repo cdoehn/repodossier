@@ -152,7 +152,7 @@ class CallGraph:
         return "\n".join(lines)
 
 class PythonCallVisitor(ast.NodeVisitor):
-    """Collect direct function calls while tracking Python caller context."""
+    """Collect function and method calls while tracking Python caller context."""
 
     def __init__(
         self,
@@ -184,7 +184,7 @@ class PythonCallVisitor(ast.NodeVisitor):
         self._visit_function_node(node)
 
     def visit_Call(self, node: ast.Call) -> None:
-        """Record direct function and unresolved method calls."""
+        """Record direct function calls and method calls."""
 
         caller_name, caller_qualified_name = self._current_caller()
 
@@ -202,20 +202,44 @@ class PythonCallVisitor(ast.NodeVisitor):
                 )
             )
         elif isinstance(node.func, ast.Attribute):
+            callee_qualified_name, confidence = self._resolve_attribute_call(node)
             self.graph.add_edge(
                 CallEdge(
                     caller_file=self.source_path,
                     caller_name=caller_name,
                     caller_qualified_name=caller_qualified_name,
                     callee_name=node.func.attr,
-                    callee_qualified_name=None,
+                    callee_qualified_name=callee_qualified_name,
                     line_number=getattr(node, "lineno", None),
                     call_type="method",
-                    confidence="unresolved",
+                    confidence=confidence,
                 )
             )
 
         self.generic_visit(node)
+
+    def _resolve_attribute_call(self, node: ast.Call) -> tuple[str | None, str]:
+        """Resolve self.method() calls to the current class when possible."""
+
+        if not isinstance(node.func, ast.Attribute):
+            return None, "unresolved"
+
+        if self._is_self_method_call(node):
+            class_name = ".".join(self._class_stack)
+            return self._qualify(f"{class_name}.{node.func.attr}"), "local_method"
+
+        return None, "unresolved"
+
+    def _is_self_method_call(self, node: ast.Call) -> bool:
+        """Return True when the call is self.method() inside a class."""
+
+        if not self._class_stack:
+            return False
+
+        if not isinstance(node.func, ast.Attribute):
+            return False
+
+        return isinstance(node.func.value, ast.Name) and node.func.value.id == "self"
 
     def _visit_function_node(
         self,
@@ -262,7 +286,6 @@ class PythonCallVisitor(ast.NodeVisitor):
         if self.module_name:
             return f"{self.module_name}.{name}"
         return name
-
 
 def build_call_graph_from_ast(
     tree: ast.AST,
