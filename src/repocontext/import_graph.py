@@ -103,6 +103,33 @@ class ImportGraph:
         object.__setattr__(self, "errors", tuple(self.errors))
 
 
+@dataclass(frozen=True, slots=True)
+class ImportGraphMetrics:
+    """Simple summary metrics for an import graph."""
+
+    module_count: int
+    local_dependency_count: int
+    external_import_count: int
+    unresolved_import_count: int
+    error_count: int
+    root_modules: tuple[str, ...] = ()
+    leaf_modules: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        for field_name in (
+            "module_count",
+            "local_dependency_count",
+            "external_import_count",
+            "unresolved_import_count",
+            "error_count",
+        ):
+            if getattr(self, field_name) < 0:
+                raise ValueError(f"{field_name} must not be negative")
+
+        object.__setattr__(self, "root_modules", tuple(sorted(set(self.root_modules))))
+        object.__setattr__(self, "leaf_modules", tuple(sorted(set(self.leaf_modules))))
+
+
 class _ImportVisitor(ast.NodeVisitor):
     """Collect import references from a parsed Python AST."""
 
@@ -547,6 +574,34 @@ def import_graph_used_by(graph: ImportGraph) -> dict[str, tuple[str, ...]]:
         modules=graph.modules.keys(),
     )
 
+
+def calculate_import_graph_metrics(graph: ImportGraph) -> ImportGraphMetrics:
+    """Calculate simple summary metrics for an import graph."""
+
+    depends_on = import_graph_depends_on(graph)
+    used_by = import_graph_used_by(graph)
+
+    root_modules = tuple(
+        module_name
+        for module_name, importing_modules in used_by.items()
+        if not importing_modules
+    )
+    leaf_modules = tuple(
+        module_name
+        for module_name, imported_modules in depends_on.items()
+        if not imported_modules
+    )
+
+    return ImportGraphMetrics(
+        module_count=len(graph.modules),
+        local_dependency_count=len(graph.edges),
+        external_import_count=len(graph.external_imports),
+        unresolved_import_count=len(graph.unresolved_imports),
+        error_count=len(graph.errors),
+        root_modules=root_modules,
+        leaf_modules=leaf_modules,
+    )
+
 def build_import_graph(
     source_paths: list[str | Path] | tuple[str | Path, ...],
     *,
@@ -677,12 +732,14 @@ __all__ = [
     "ImportAnalysisError",
     "ImportEdge",
     "ImportGraph",
+    "ImportGraphMetrics",
     "ImportReference",
     "ImportType",
     "build_depends_on_adjacency",
     "build_import_graph",
     "build_python_module_map",
     "build_used_by_adjacency",
+    "calculate_import_graph_metrics",
     "deduplicate_import_edges",
     "import_edge_from_reference",
     "import_graph_depends_on",
