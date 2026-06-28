@@ -259,3 +259,132 @@ def test_parse_calls_from_source_leaves_attribute_calls_for_later_milestone():
 
     assert graph.sorted_edges() == []
 
+def test_parse_calls_from_source_detects_nested_function_calls():
+    source = (
+        "def main(raw):\n"
+        "    return transform(load_data(raw))\n"
+    )
+
+    graph = parse_calls_from_source(
+        source,
+        source_path="src/app.py",
+        module_name="app",
+    )
+
+    assert graph.sorted_edges() == [
+        CallEdge(
+            caller_file="src/app.py",
+            caller_name="main",
+            caller_qualified_name="app.main",
+            callee_name="load_data",
+            callee_qualified_name=None,
+            line_number=2,
+            call_type="function",
+            confidence="unresolved",
+        ),
+        CallEdge(
+            caller_file="src/app.py",
+            caller_name="main",
+            caller_qualified_name="app.main",
+            callee_name="transform",
+            callee_qualified_name=None,
+            line_number=2,
+            call_type="function",
+            confidence="unresolved",
+        ),
+    ]
+
+
+def test_parse_calls_from_source_detects_multiple_nested_function_calls_in_expression():
+    source = (
+        "def main(raw):\n"
+        "    value = validate(parse(raw))\n"
+        "    return finalize(value)\n"
+    )
+
+    graph = parse_calls_from_source(
+        source,
+        source_path="src/app.py",
+        module_name="app",
+    )
+
+    assert graph.sorted_edges() == [
+        CallEdge(
+            caller_file="src/app.py",
+            caller_name="main",
+            caller_qualified_name="app.main",
+            callee_name="parse",
+            callee_qualified_name=None,
+            line_number=2,
+            call_type="function",
+            confidence="unresolved",
+        ),
+        CallEdge(
+            caller_file="src/app.py",
+            caller_name="main",
+            caller_qualified_name="app.main",
+            callee_name="validate",
+            callee_qualified_name=None,
+            line_number=2,
+            call_type="function",
+            confidence="unresolved",
+        ),
+        CallEdge(
+            caller_file="src/app.py",
+            caller_name="main",
+            caller_qualified_name="app.main",
+            callee_name="finalize",
+            callee_qualified_name=None,
+            line_number=3,
+            call_type="function",
+            confidence="unresolved",
+        ),
+    ]
+
+
+def test_parse_calls_from_source_detects_multiple_module_level_calls():
+    source = (
+        "setup_logging()\n"
+        "main()\n"
+        "cli()\n"
+    )
+
+    graph = parse_calls_from_source(
+        source,
+        source_path="src/app.py",
+        module_name="app",
+    )
+
+    assert graph.sorted_edges() == [
+        CallEdge(
+            caller_file="src/app.py",
+            caller_name="<module>",
+            caller_qualified_name="app.<module>",
+            callee_name="setup_logging",
+            callee_qualified_name=None,
+            line_number=1,
+            call_type="function",
+            confidence="unresolved",
+        ),
+        CallEdge(
+            caller_file="src/app.py",
+            caller_name="<module>",
+            caller_qualified_name="app.<module>",
+            callee_name="main",
+            callee_qualified_name=None,
+            line_number=2,
+            call_type="function",
+            confidence="unresolved",
+        ),
+        CallEdge(
+            caller_file="src/app.py",
+            caller_name="<module>",
+            caller_qualified_name="app.<module>",
+            callee_name="cli",
+            callee_qualified_name=None,
+            line_number=3,
+            call_type="function",
+            confidence="unresolved",
+        ),
+    ]
+
