@@ -449,6 +449,35 @@ def import_edge_from_reference(reference: ImportReference) -> ImportEdge | None:
     )
 
 
+
+def _import_edge_dependency_key(edge: ImportEdge) -> tuple[str, str]:
+    """Return the graph-level identity of a local module dependency edge."""
+
+    return edge.source_module, edge.target_module
+
+
+def deduplicate_import_edges(
+    edges: list[ImportEdge] | tuple[ImportEdge, ...],
+) -> tuple[ImportEdge, ...]:
+    """Remove duplicate module dependency edges while keeping first-seen metadata.
+
+    The dependency graph is module-to-module. If one source module imports the
+    same target module multiple ways, the first edge is kept and later duplicate
+    source-target edges are omitted.
+    """
+
+    seen: set[tuple[str, str]] = set()
+    deduplicated_edges: list[ImportEdge] = []
+
+    for edge in edges:
+        key = _import_edge_dependency_key(edge)
+        if key in seen:
+            continue
+        seen.add(key)
+        deduplicated_edges.append(edge)
+
+    return tuple(deduplicated_edges)
+
 def build_import_graph(
     source_paths: list[str | Path] | tuple[str | Path, ...],
     *,
@@ -492,7 +521,7 @@ def build_import_graph(
 
     return ImportGraph(
         modules=module_map,
-        edges=tuple(edges),
+        edges=deduplicate_import_edges(edges),
         external_imports=tuple(external_imports),
         unresolved_imports=tuple(unresolved_imports),
         errors=tuple(errors),
@@ -583,6 +612,7 @@ __all__ = [
     "ImportType",
     "build_import_graph",
     "build_python_module_map",
+    "deduplicate_import_edges",
     "import_edge_from_reference",
     "module_name_from_python_path",
     "parse_imports_from_file",
