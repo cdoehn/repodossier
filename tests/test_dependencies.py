@@ -271,3 +271,140 @@ def test_analyze_dependencies_returns_empty_report_without_dependency_files(
         "optional": 0,
         "unknown": 0,
     }
+
+
+
+def test_analyze_dependencies_reads_simple_requirements_txt(tmp_path) -> None:
+    (tmp_path / "requirements.txt").write_text(
+        """
+requests>=2.31
+click==8.1.7
+""".strip(),
+        encoding="utf-8",
+    )
+
+    report = analyze_dependencies(tmp_path)
+
+    runtime_dependencies = report.dependencies_by_type("runtime")
+    assert [
+        (dependency.normalized_name, dependency.version_constraint, dependency.source_file)
+        for dependency in runtime_dependencies
+    ] == [
+        ("click", "==8.1.7", "requirements.txt"),
+        ("requests", ">=2.31", "requirements.txt"),
+    ]
+    assert report.dependency_files == ("requirements.txt",)
+
+
+def test_analyze_dependencies_reads_requirements_dev_txt_as_development(
+    tmp_path,
+) -> None:
+    (tmp_path / "requirements-dev.txt").write_text(
+        """
+pytest>=8
+ruff
+""".strip(),
+        encoding="utf-8",
+    )
+
+    report = analyze_dependencies(tmp_path)
+
+    development_dependencies = report.dependencies_by_type("development")
+    assert [
+        (dependency.normalized_name, dependency.version_constraint, dependency.source_file)
+        for dependency in development_dependencies
+    ] == [
+        ("pytest", ">=8", "requirements-dev.txt"),
+        ("ruff", "", "requirements-dev.txt"),
+    ]
+
+
+def test_analyze_dependencies_ignores_requirements_comments_and_blank_lines(
+    tmp_path,
+) -> None:
+    (tmp_path / "requirements.txt").write_text(
+        """
+# comment
+requests>=2
+
+click # inline comment
+""".strip(),
+        encoding="utf-8",
+    )
+
+    report = analyze_dependencies(tmp_path)
+
+    assert [
+        dependency.normalized_name
+        for dependency in report.dependencies_by_type("runtime")
+    ] == [
+        "click",
+        "requests",
+    ]
+
+
+def test_analyze_dependencies_tracks_unsupported_requirements_lines(tmp_path) -> None:
+    (tmp_path / "requirements.txt").write_text(
+        """
+-r base.txt
+--index-url https://example.com/simple
+-e .
+git+https://example.com/example.git
+""".strip(),
+        encoding="utf-8",
+    )
+
+    report = analyze_dependencies(tmp_path)
+
+    assert report.dependencies == ()
+    assert len(report.unsupported_lines) == 4
+    assert any("-r base.txt" in line for line in report.unsupported_lines)
+    assert any("--index-url" in line for line in report.unsupported_lines)
+    assert report.warnings
+
+
+def test_analyze_dependencies_discovers_requirements_subdirectory_files(
+    tmp_path,
+) -> None:
+    requirements_dir = tmp_path / "requirements"
+    requirements_dir.mkdir()
+    (requirements_dir / "base.txt").write_text("basepkg>=1\n", encoding="utf-8")
+    (requirements_dir / "dev.txt").write_text("pytest>=8\n", encoding="utf-8")
+    (requirements_dir / "docs.txt").write_text("mkdocs\n", encoding="utf-8")
+
+    report = analyze_dependencies(tmp_path)
+
+    assert report.dependency_files == (
+        "requirements/base.txt",
+        "requirements/dev.txt",
+        "requirements/docs.txt",
+    )
+    assert [
+        dependency.normalized_name
+        for dependency in report.dependencies_by_type("development")
+    ] == [
+        "mkdocs",
+        "pytest",
+    ]
+    assert [
+        dependency.normalized_name
+        for dependency in report.dependencies_by_type("unknown")
+    ] == [
+        "basepkg",
+    ]
+
+
+def test_analyze_dependencies_uses_passed_file_list_for_requirements_discovery(
+    tmp_path,
+) -> None:
+    (tmp_path / "requirements.txt").write_text("requests>=2\n", encoding="utf-8")
+    (tmp_path / "requirements-dev.txt").write_text("pytest>=8\n", encoding="utf-8")
+
+    report = analyze_dependencies(tmp_path, files=["requirements-dev.txt"])
+
+    assert report.dependency_files == ("requirements-dev.txt",)
+    assert report.dependencies_by_type("runtime") == ()
+    assert [
+        dependency.normalized_name
+        for dependency in report.dependencies_by_type("development")
+    ] == ["pytest"]

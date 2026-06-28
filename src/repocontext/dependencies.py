@@ -1,7 +1,7 @@
 """Dependency detection data model and analyzer.
 
 This module contains the stable in-memory representation for dependency
-analysis and the pyproject.toml parser used by Milestone 10.
+analysis and the pyproject.toml / requirements.txt parsers used by Milestone 10.
 """
 
 from __future__ import annotations
@@ -31,6 +31,32 @@ _DEVELOPMENT_POETRY_GROUPS: frozenset[str] = frozenset(
 
 _REQUIREMENT_NAME_RE = re.compile(
     r"^\s*([A-Za-z0-9][A-Za-z0-9._-]*(?:\[[A-Za-z0-9._,-]+\])?)\s*(.*)$"
+)
+
+
+_REQUIREMENTS_KNOWN_FILE_NAMES: frozenset[str] = frozenset(
+    {
+        "requirements.txt",
+        "requirements-dev.txt",
+        "dev-requirements.txt",
+        "requirements_test.txt",
+        "requirements-test.txt",
+        "requirements-docs.txt",
+        "docs-requirements.txt",
+        "requirements-lint.txt",
+        "lint-requirements.txt",
+    }
+)
+
+_REQUIREMENTS_DEVELOPMENT_MARKERS: frozenset[str] = frozenset(
+    {"dev", "test", "tests", "lint", "docs", "doc"}
+)
+
+_REQUIREMENTS_VCS_PREFIXES: tuple[str, ...] = (
+    "git+",
+    "hg+",
+    "svn+",
+    "bzr+",
 )
 
 
@@ -183,8 +209,7 @@ def analyze_dependencies(
 ) -> DependencyReport:
     """Analyze repository dependencies.
 
-    Milestone 10.2 supports pyproject.toml analysis. requirements.txt analysis
-    is added in the next patch.
+    Milestone 10.3 supports pyproject.toml and requirements.txt analysis.
     """
 
     root = Path(repo_root)
@@ -193,6 +218,7 @@ def analyze_dependencies(
     dependency_files: list[str] = []
     warnings: list[str] = []
     unsupported_sections: list[str] = []
+    unsupported_lines: list[str] = []
 
     for pyproject_path in _iter_pyproject_candidates(root, files):
         source_file = _relative_file_path(root, pyproject_path)
@@ -203,10 +229,20 @@ def analyze_dependencies(
         warnings.extend(parsed.warnings)
         unsupported_sections.extend(parsed.unsupported_sections)
 
+    for requirements_path in _iter_requirements_candidates(root, files):
+        source_file = _relative_file_path(root, requirements_path)
+        dependency_files.append(source_file)
+
+        parsed = _parse_requirements_file(requirements_path, source_file)
+        dependencies.extend(parsed.dependencies)
+        warnings.extend(parsed.warnings)
+        unsupported_lines.extend(parsed.unsupported_lines)
+
     return DependencyReport(
         dependencies=tuple(dependencies),
         dependency_files=tuple(dependency_files),
         warnings=tuple(warnings),
+        unsupported_lines=tuple(unsupported_lines),
         unsupported_sections=tuple(unsupported_sections),
     )
 
@@ -236,6 +272,140 @@ def _iter_pyproject_candidates(
             candidates.append(root_pyproject)
 
     return tuple(dict.fromkeys(path.resolve() for path in candidates))
+
+
+def _iter_requirements_candidates(
+    repo_root: Path,
+    files: Iterable[str | Path] | None,
+) -> tuple[Path, ...]:
+    candidates: list[Path] = []
+
+    if files is None:
+        for child in sorted(repo_root.iterdir(), key=lambda item: item.as_posix()):
+            if child.is_file() and _is_requirements_file(child.relative_to(repo_root)):
+                candidates.append(child)
+
+        requirements_dir = repo_root / "requirements"
+        if requirements_dir.is_dir():
+            candidates.extend(
+                path
+                for path in sorted(requirements_dir.glob("*.txt"), key=lambda item: item.as_posix())
+                if path.is_file()
+            )
+    else:
+        for file_item in files:
+            candidate = _coerce_file_path(file_item)
+            if not _is_requirements_file(candidate):
+                continue
+
+            absolute_candidate = candidate if candidate.is_absolute() else repo_root / candidate
+            if absolute_candidate.exists() and absolute_candidate.is_file():
+                candidates.append(absolute_candidate)
+
+    return tuple(dict.fromkeys(path.resolve() for path in candidates))
+
+
+def _is_requirements_file(path: str | Path) -> bool:
+    path_obj = Path(path)
+    name_lower = path_obj.name.lower()
+
+    if name_lower in _REQUIREMENTS_KNOWN_FILE_NAMES:
+        return True
+
+    if path_obj.suffix.lower() != ".txt":
+        return False
+
+    if name_lower.startswith(("requirements-", "requirements_")):
+        return True
+
+    if name_lower.endswith(("-requirements.txt", "_requirements.txt")):
+        return True
+
+    return any(part.lower() == "requirements" for part in path_obj.parts)
+
+
+def _requirements_dependency_type(path: str | Path) -> str:
+    path_obj = Path(path)
+    name_lower = path_obj.name.lower()
+
+    if name_lower == "requirements.txt":
+        return "runtime"
+
+    haystack = path_obj.as_posix().lower()
+    for marker in _REQUIREMENTS_DEVELOPMENT_MARKERS:
+        if re.search(rf"(^|[-_./]){re.escape(marker)}($|[-_./])", haystack):
+            return "development"
+
+    return "unknown"
+
+
+def _parse_requirements_file(file_path: Path, source_file: str) -> DependencyReport:
+    try:
+        raw_text = file_path.read_text(encoding="utf-8")
+    except OSError as exc:
+        return DependencyReport(
+            warnings=(f"{source_file}: could not read requirements file: {exc}",)
+        )
+    except UnicodeDecodeError as exc:
+        return DependencyReport(
+            warnings=(f"{source_file}: could not decode requirements file as UTF-8: {exc}",)
+        )
+
+    dependency_type = _requirements_dependency_type(source_file)
+    dependencies: list[Dependency] = []
+    warnings: list[str] = []
+    unsupported_lines: list[str] = []
+
+    for line_number, raw_line in enumerate(raw_text.splitlines(), start=1):
+        cleaned_line = _clean_requirement_line(raw_line)
+        if not cleaned_line:
+            continue
+
+        if _is_unsupported_requirement_line(cleaned_line):
+            unsupported_entry = f"{source_file}:{line_number}: {cleaned_line}"
+            unsupported_lines.append(unsupported_entry)
+            warnings.append(
+                f"{source_file}:{line_number}: unsupported requirement line ignored: "
+                f"{cleaned_line}"
+            )
+            continue
+
+        dependency = _dependency_from_requirement_string(
+            cleaned_line,
+            dependency_type=dependency_type,
+            source_file=source_file,
+            source_section=source_file,
+            group="",
+            warnings=warnings,
+        )
+        if dependency is not None:
+            dependencies.append(dependency)
+
+    return DependencyReport(
+        dependencies=tuple(dependencies),
+        warnings=tuple(warnings),
+        unsupported_lines=tuple(unsupported_lines),
+    )
+
+
+def _clean_requirement_line(raw_line: str) -> str:
+    line = raw_line.strip()
+    if not line or line.startswith("#"):
+        return ""
+
+    return re.split(r"\s+#", line, maxsplit=1)[0].strip()
+
+
+def _is_unsupported_requirement_line(line: str) -> bool:
+    lowered = line.strip().lower()
+
+    if not lowered:
+        return False
+
+    if lowered.startswith("-"):
+        return True
+
+    return lowered.startswith(_REQUIREMENTS_VCS_PREFIXES)
 
 
 def _coerce_file_path(file_item: str | Path) -> Path:
