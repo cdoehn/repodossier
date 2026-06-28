@@ -3,7 +3,7 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
-from repocontext.git import ChangedFile, get_changed_files
+from repocontext.git import ChangedFile, get_changed_files, get_diff
 
 
 def run_git(repo: Path, *args: str) -> str:
@@ -125,3 +125,46 @@ def test_get_changed_files_returns_stable_sorted_output(tmp_path: Path) -> None:
     (repo / "a.txt").write_text("a\n", encoding="utf-8")
 
     assert [item.path for item in get_changed_files(repo)] == ["a.txt", "z.txt"]
+
+
+def test_get_diff_returns_unified_diff_for_unstaged_modified_file(tmp_path: Path) -> None:
+    repo = init_repo(tmp_path)
+    commit_file(repo, "src/app.py", "print('old')\n")
+
+    (repo / "src/app.py").write_text("print('new')\n", encoding="utf-8")
+
+    diff = get_diff(repo, "src/app.py")
+
+    assert "diff --git" in diff
+    assert "-print('old')" in diff
+    assert "+print('new')" in diff
+
+
+def test_get_diff_returns_unified_diff_for_staged_modified_file(tmp_path: Path) -> None:
+    repo = init_repo(tmp_path)
+    commit_file(repo, "src/app.py", "print('old')\n")
+
+    (repo / "src/app.py").write_text("print('new')\n", encoding="utf-8")
+    run_git(repo, "add", "src/app.py")
+
+    diff = get_diff(repo, "src/app.py")
+
+    assert "diff --git" in diff
+    assert "-print('old')" in diff
+    assert "+print('new')" in diff
+
+
+def test_get_diff_returns_empty_string_for_untracked_file(tmp_path: Path) -> None:
+    repo = init_repo(tmp_path)
+    commit_file(repo, "README.md")
+
+    (repo / "notes.txt").write_text("new file\n", encoding="utf-8")
+
+    assert get_diff(repo, "notes.txt") == ""
+
+
+def test_get_diff_returns_empty_string_outside_git_repo(tmp_path: Path) -> None:
+    (tmp_path / "app.py").write_text("print('changed')\n", encoding="utf-8")
+
+    assert get_diff(tmp_path, "app.py") == ""
+

@@ -331,3 +331,35 @@ def get_changed_files(repo_path: str | Path = ".") -> list[ChangedFile]:
 
     return [by_path[path] for path in sorted(by_path)]
 
+def get_diff(repo_path: str | Path = ".", path: str | None = None) -> str:
+    """Return unstaged and staged unified git diff output.
+
+    When a path is provided, the diff is limited to that file. Untracked files
+    normally have no git diff and therefore return an empty string.
+
+    If repo_path is not a git repository, return an empty diff instead of
+    crashing. This keeps the changed exporter usable in isolated formatter
+    tests and other non-git contexts.
+    """
+    def build_args(*, cached: bool) -> list[str]:
+        args = ["diff"]
+        if cached:
+            args.append("--cached")
+        if path is not None:
+            args.extend(["--", path])
+        return args
+
+    pieces: list[str] = []
+    for args in (build_args(cached=False), build_args(cached=True)):
+        try:
+            output = _run_git_output(repo_path, args)
+        except subprocess.CalledProcessError:
+            continue
+
+        if output.strip():
+            pieces.append(output.rstrip())
+
+    if not pieces:
+        return ""
+
+    return "\n".join(pieces).rstrip() + "\n"

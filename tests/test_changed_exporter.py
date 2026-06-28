@@ -157,3 +157,84 @@ def test_write_changed_export_writes_changed_txt(tmp_path: Path) -> None:
     assert result == output_path
     assert output_path.exists()
     assert "# Changed Export" in output_path.read_text(encoding="utf-8")
+
+
+def test_render_changed_export_includes_git_diff_section(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    (tmp_path / "app.py").write_text("print('changed')\n", encoding="utf-8")
+    scans = [make_scan("app.py", "modified", file_info=DummyFileInfo())]
+
+    def fake_get_diff(repo_path: Path, path: str | None = None) -> str:
+        assert repo_path == tmp_path
+        assert path == "app.py"
+        return "diff --git a/app.py b/app.py\n-print('old')\n+print('changed')\n"
+
+    monkeypatch.setattr("repocontext.changed_exporter.get_diff", fake_get_diff)
+
+    output = render_changed_export(tmp_path, scans=scans)
+
+    assert "# Git Diff" in output
+    assert "## app.py" in output
+    assert "```diff" in output
+    assert "+print('changed')" in output
+
+
+def test_render_changed_export_can_disable_git_diff_section(tmp_path: Path) -> None:
+    (tmp_path / "app.py").write_text("print('changed')\n", encoding="utf-8")
+    scans = [make_scan("app.py", "modified", file_info=DummyFileInfo())]
+
+    output = render_changed_export(tmp_path, scans=scans, include_diff=False)
+
+    assert "# Git Diff" not in output
+    assert "# Changed File Contents" in output
+
+
+def test_render_changed_export_skips_binary_files_in_git_diff_section(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    (tmp_path / "image.bin").write_bytes(b"\x00\x01binary")
+    scans = [
+        make_scan(
+            "image.bin",
+            "modified",
+            file_info=DummyFileInfo(is_binary=True),
+        )
+    ]
+
+    def fake_get_diff(repo_path: Path, path: str | None = None) -> str:
+        raise AssertionError("Binary files should not request git diff")
+
+    monkeypatch.setattr("repocontext.changed_exporter.get_diff", fake_get_diff)
+
+    output = render_changed_export(tmp_path, scans=scans)
+
+    assert "# Git Diff" in output
+    assert "No git diff available." in output
+    assert "## image.bin" not in output
+
+
+def test_render_changed_export_marks_missing_diff_for_untracked_file(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    (tmp_path / "notes.txt").write_text("new file\n", encoding="utf-8")
+    scans = [
+        make_scan(
+            "notes.txt",
+            "untracked",
+            file_info=DummyFileInfo(language="text"),
+            is_untracked=True,
+        )
+    ]
+
+    monkeypatch.setattr("repocontext.changed_exporter.get_diff", lambda repo, path=None: "")
+
+    output = render_changed_export(tmp_path, scans=scans)
+
+    assert "# Git Diff" in output
+    assert "## notes.txt" in output
+    assert "No git diff available for this file." in output
+

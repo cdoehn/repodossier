@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from repocontext.changed import ChangedFileScan, collect_changed_file_scans
+from repocontext.git import get_diff
 
 
 def _metadata_value(file_info: Any | None, names: Sequence[str], default: Any = None) -> Any:
@@ -95,6 +96,41 @@ def _append_file_overview(lines: list[str], scans: Sequence[ChangedFileScan]) ->
     lines.append("")
 
 
+def _append_git_diff(
+    lines: list[str],
+    repo_path: Path,
+    scans: Sequence[ChangedFileScan],
+) -> None:
+    lines.extend(["# Git Diff", ""])
+
+    diffable_scans = [
+        scan
+        for scan in scans
+        if not scan.is_deleted and not scan.is_binary
+    ]
+
+    if not diffable_scans:
+        lines.extend(["No git diff available.", ""])
+        return
+
+    for scan in diffable_scans:
+        diff_text = get_diff(repo_path, scan.path)
+
+        lines.extend(
+            [
+                f"## {scan.path}",
+                "",
+                f"- Status: {scan.status}",
+                "",
+            ]
+        )
+
+        if diff_text.strip():
+            lines.extend(["```diff", diff_text.rstrip(), "```", ""])
+        else:
+            lines.extend(["No git diff available for this file.", ""])
+
+
 def _append_changed_file_contents(
     lines: list[str],
     repo_path: Path,
@@ -173,6 +209,7 @@ def render_changed_export(
     *,
     scans: Sequence[ChangedFileScan] | None = None,
     compare_mode: str = "Working tree",
+    include_diff: bool = True,
 ) -> str:
     """Render the changed export as text."""
 
@@ -189,6 +226,10 @@ def render_changed_export(
 
     _append_summary(lines, changed_scans)
     _append_file_overview(lines, changed_scans)
+
+    if include_diff:
+        _append_git_diff(lines, repo, changed_scans)
+
     _append_changed_file_contents(lines, repo, changed_scans)
     _append_deleted_files(lines, changed_scans)
     _append_binary_or_skipped_files(lines, changed_scans)
@@ -202,12 +243,18 @@ def write_changed_export(
     *,
     scans: Sequence[ChangedFileScan] | None = None,
     compare_mode: str = "Working tree",
+    include_diff: bool = True,
 ) -> Path:
     """Write changed.txt and return the output path."""
 
     output = Path(output_path)
     output.write_text(
-        render_changed_export(repo_path, scans=scans, compare_mode=compare_mode),
+        render_changed_export(
+            repo_path,
+            scans=scans,
+            compare_mode=compare_mode,
+            include_diff=include_diff,
+        ),
         encoding="utf-8",
     )
     return output
