@@ -488,3 +488,71 @@ def test_insert_dependency_full_section_is_idempotent() -> None:
 
     assert insert_dependency_full_section(full_text, report) == full_text
 
+
+def test_render_dependency_ai_section_is_compact_and_sorted() -> None:
+    from repocontext.dependencies import render_dependency_ai_section
+
+    report = DependencyReport(
+        dependencies=(
+            Dependency(
+                name="ruff",
+                dependency_type="development",
+                source_file="requirements-dev.txt",
+                raw_value="ruff",
+            ),
+            Dependency(
+                name="click",
+                dependency_type="runtime",
+                source_file="pyproject.toml",
+                raw_value="click>=8",
+            ),
+            Dependency(
+                name="mkdocs",
+                dependency_type="optional",
+                source_file="pyproject.toml",
+                raw_value="mkdocs",
+                group="docs",
+            ),
+        ),
+        dependency_files=("requirements-dev.txt", "pyproject.toml"),
+    )
+
+    rendered = render_dependency_ai_section(report)
+
+    assert rendered.startswith("## Dependencies")
+    assert "Runtime:\n\n- click>=8 (pyproject.toml)" in rendered
+    assert "Development:\n\n- ruff (requirements-dev.txt)" in rendered
+    assert "Optional:\n\n- docs: mkdocs (pyproject.toml)" in rendered
+    assert "Detected files:\n\n- pyproject.toml\n- requirements-dev.txt" in rendered
+
+
+def test_insert_dependency_ai_section_before_graph_sections() -> None:
+    from repocontext.dependencies import insert_dependency_ai_section
+
+    report = DependencyReport(
+        dependencies=(
+            Dependency(
+                name="click",
+                dependency_type="runtime",
+                source_file="pyproject.toml",
+                raw_value="click>=8",
+            ),
+        ),
+        dependency_files=("pyproject.toml",),
+    )
+
+    ai_text = "# RepoContext AI Export\n\n## Symbol Index\n\ncontent\n"
+    rendered = insert_dependency_ai_section(ai_text, report)
+
+    assert rendered.index("## Dependencies") < rendered.index("## Symbol Index")
+    assert "click>=8" in rendered
+
+
+def test_insert_dependency_ai_section_is_idempotent() -> None:
+    from repocontext.dependencies import insert_dependency_ai_section
+
+    report = DependencyReport()
+    ai_text = "# RepoContext AI Export\n\n## Dependencies\n\nalready here\n"
+
+    assert insert_dependency_ai_section(ai_text, report) == ai_text
+

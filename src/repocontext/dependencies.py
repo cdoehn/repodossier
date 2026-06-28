@@ -857,3 +857,97 @@ def _format_dependency_for_full_export(dependency: Dependency) -> str:
 
     return display_value
 
+
+def render_dependency_ai_section(report: DependencyReport) -> str:
+    """Render a compact dependency section for ai.txt exports."""
+
+    lines: list[str] = [
+        "## Dependencies",
+        "",
+    ]
+
+    dependency_sections = (
+        ("runtime", "Runtime"),
+        ("development", "Development"),
+        ("optional", "Optional"),
+        ("unknown", "Unknown"),
+    )
+
+    for dependency_type, heading in dependency_sections:
+        dependencies = report.dependencies_by_type(dependency_type)
+        if not dependencies:
+            continue
+
+        lines.extend([f"{heading}:", ""])
+        lines.extend(
+            f"- {_format_dependency_for_ai_export(dependency)}"
+            for dependency in dependencies
+        )
+        lines.append("")
+
+    lines.extend(["Detected files:", ""])
+    if report.dependency_files:
+        lines.extend(f"- {dependency_file}" for dependency_file in report.dependency_files)
+    else:
+        lines.append("- None detected")
+
+    warnings = tuple(report.warnings) + tuple(report.unsupported_lines)
+    if warnings:
+        lines.extend(["", "Warnings:", ""])
+        lines.extend(f"- {warning}" for warning in warnings)
+
+    return "\n".join(lines).rstrip() + "\n"
+
+
+def insert_dependency_ai_section(ai_text: str, report: DependencyReport) -> str:
+    """Insert the dependency section into an existing ai.txt export."""
+
+    if "## Dependencies" in ai_text or "# Dependencies" in ai_text:
+        return ai_text
+
+    section = render_dependency_ai_section(report).strip()
+    normalized_text = ai_text.rstrip()
+
+    preferred_markers = (
+        "## Symbol Index",
+        "## Import Graph",
+        "## Call Graph",
+        "# Symbol Index",
+        "# Import Graph",
+        "# Call Graph",
+    )
+
+    for marker in preferred_markers:
+        marker_index = normalized_text.find(marker)
+        if marker_index == -1:
+            continue
+
+        before = normalized_text[:marker_index].rstrip()
+        after = normalized_text[marker_index:].lstrip()
+        return f"{before}\n\n{section}\n\n{after}\n"
+
+    return f"{normalized_text}\n\n{section}\n"
+
+
+def append_dependencies_ai_section(
+    ai_text: str,
+    repo_root: str | Path,
+    files: Iterable[str | Path] | None = None,
+) -> str:
+    """Analyze dependencies and append/insert the ai.txt dependency section."""
+
+    report = analyze_dependencies(repo_root, files=files)
+    return insert_dependency_ai_section(ai_text, report)
+
+
+def _format_dependency_for_ai_export(dependency: Dependency) -> str:
+    display_value = dependency.raw_value or dependency.name
+
+    if dependency.group:
+        display_value = f"{dependency.group}: {display_value}"
+
+    if dependency.source_file:
+        display_value = f"{display_value} ({dependency.source_file})"
+
+    return display_value
+

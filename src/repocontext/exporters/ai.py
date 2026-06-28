@@ -5,6 +5,7 @@ sections for language models without embedding complete source dumps.
 """
 
 from __future__ import annotations
+from repocontext.dependencies import append_dependencies_ai_section
 
 from dataclasses import dataclass, replace
 from pathlib import Path
@@ -1563,3 +1564,164 @@ __all__ = [
     "render_ai_export",
     "write_ai_export",
 ]
+
+
+_REPOCONTEXT_DEPENDENCY_AI_EXPORT_WRAPPER = True
+
+
+def _repocontext_dependency_ai_path_from_value(value):
+    from pathlib import Path as _Path
+
+    if isinstance(value, (str, _Path)):
+        try:
+            return _Path(value)
+        except TypeError:
+            return None
+
+    for attribute_name in (
+        "repo_root",
+        "repository_root",
+        "project_root",
+        "root",
+        "base_path",
+        "workdir",
+        "cwd",
+        "absolute_path",
+        "relative_path",
+        "path",
+    ):
+        attribute_value = getattr(value, attribute_name, None)
+        if isinstance(attribute_value, (str, _Path)):
+            try:
+                return _Path(attribute_value)
+            except TypeError:
+                return None
+
+    return None
+
+
+def _repocontext_dependency_ai_files_from_value(value):
+    if value is None or isinstance(value, (str, bytes, dict)):
+        return None
+
+    try:
+        items = list(value)
+    except TypeError:
+        return None
+
+    if not items:
+        return None
+
+    path_like_count = 0
+    for item in items:
+        if _repocontext_dependency_ai_path_from_value(item) is not None:
+            path_like_count += 1
+
+    if path_like_count == 0:
+        return None
+
+    return items
+
+
+def _repocontext_dependency_ai_files_from_call(args, kwargs):
+    for key in (
+        "files",
+        "scanned_files",
+        "file_infos",
+        "file_reports",
+        "source_files",
+        "project_files",
+    ):
+        if key in kwargs:
+            files = _repocontext_dependency_ai_files_from_value(kwargs[key])
+            if files is not None:
+                return files
+
+    for value in args:
+        files = _repocontext_dependency_ai_files_from_value(value)
+        if files is not None:
+            return files
+
+    return None
+
+
+def _repocontext_dependency_ai_root_from_call(args, kwargs):
+    for key in (
+        "repo_root",
+        "repository_root",
+        "project_root",
+        "root",
+        "base_path",
+        "workdir",
+        "cwd",
+    ):
+        if key in kwargs:
+            candidate = _repocontext_dependency_ai_path_from_value(kwargs[key])
+            if candidate is not None and candidate.exists() and candidate.is_dir():
+                return candidate
+
+    for value in args:
+        candidate = _repocontext_dependency_ai_path_from_value(value)
+        if candidate is not None and candidate.exists() and candidate.is_dir():
+            return candidate
+
+    files = _repocontext_dependency_ai_files_from_call(args, kwargs)
+    if files:
+        from pathlib import Path as _Path
+        import os as _os
+
+        absolute_paths = []
+        for file_item in files:
+            path_value = _repocontext_dependency_ai_path_from_value(file_item)
+            if path_value is not None and path_value.is_absolute():
+                absolute_paths.append(path_value)
+
+        if absolute_paths:
+            common = _Path(_os.path.commonpath([path.as_posix() for path in absolute_paths]))
+            if common.is_file():
+                common = common.parent
+            if common.exists():
+                return common
+
+    return None
+
+
+def _repocontext_dependency_ai_root_and_files(args, kwargs):
+    return (
+        _repocontext_dependency_ai_root_from_call(args, kwargs),
+        _repocontext_dependency_ai_files_from_call(args, kwargs),
+    )
+
+
+def _repocontext_wrap_ai_export_function(original_function):
+    if getattr(original_function, "_repocontext_dependencies_wrapped", False):
+        return original_function
+
+    def wrapped_function(*args, **kwargs):
+        result = original_function(*args, **kwargs)
+
+        if not isinstance(result, str):
+            return result
+
+        repo_root, files = _repocontext_dependency_ai_root_and_files(args, kwargs)
+        if repo_root is None:
+            return result
+
+        return append_dependencies_ai_section(result, repo_root, files=files)
+
+    wrapped_function.__name__ = getattr(original_function, "__name__", "wrapped_function")
+    wrapped_function.__doc__ = getattr(original_function, "__doc__", None)
+    wrapped_function._repocontext_dependencies_wrapped = True
+    return wrapped_function
+
+
+for _repocontext_ai_export_name in ('generate_ai_export', 'render_ai_export', 'build_ai_export_context'):
+    _repocontext_ai_export_function = globals().get(_repocontext_ai_export_name)
+    if callable(_repocontext_ai_export_function):
+        globals()[_repocontext_ai_export_name] = _repocontext_wrap_ai_export_function(
+            _repocontext_ai_export_function
+        )
+
+del _repocontext_ai_export_name
+del _repocontext_ai_export_function
+
