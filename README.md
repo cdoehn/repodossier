@@ -593,3 +593,46 @@ Current limits:
 - no vulnerability scanning
 - no license analysis
 - unsupported requirement lines such as `-r other.txt`, `-c constraints.txt`, `--index-url`, editable installs, and VCS URLs are reported but not resolved
+
+## Database Schema Export
+
+RepoContext detects and summarizes database schema information in both `full.txt` and `ai.txt`.
+
+The schema export supports:
+
+- SQLite database files such as `.db`, `.sqlite`, `.sqlite3`, `.db3`, and `.s3db`
+- SQL schema files and migration files such as `.sql`
+- `CREATE TABLE` statements in SQL files
+- tables, views, columns, primary keys, indexes, and foreign-key relationships where available
+- warnings for unsupported, corrupt, unreadable, or ambiguous schema files
+
+The `full.txt` export includes a detailed `# Database Schema` section with:
+
+- schema file counts
+- detected database and SQL schema files
+- table and view summaries
+- columns, indexes, and foreign keys
+- limited `CREATE TABLE` statement summaries
+- schema warnings
+
+The `ai.txt` export includes a compact `## Database Schema` section optimized for LLM context:
+
+- database/schema file overview
+- compact table summaries
+- important columns and primary keys
+- foreign-key relationships
+- warnings when schema analysis was incomplete
+
+### Safety Boundaries
+
+Database schema export is metadata-only.
+
+RepoContext does **not** export table contents. It does not read application rows, user records, secrets, tokens, e-mail addresses, or inserted values from SQLite databases.
+
+SQLite files are opened read-only and queried only through SQLite schema metadata and PRAGMA metadata.
+
+SQL files are parsed as text. RepoContext does not execute migrations, does not connect to external databases, and does not evaluate SQL expressions.
+
+The SQL parser is intentionally best-effort. It is designed to extract useful structure from common `CREATE TABLE` statements, not to fully implement every SQL dialect.
+
+Generated RepoContext exports such as `full.txt`, `ai.txt`, `docs.txt`, and `changed.txt` are excluded from schema discovery.
