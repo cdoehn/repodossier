@@ -157,6 +157,88 @@ def test_cli_info_command_inside_repository(tmp_path: Path, monkeypatch: pytest.
     assert "Commit subject:" in output
     assert "Tracked files:" in output
 
+def test_cli_full_command_survives_syntax_error_python_file_and_keeps_call_graph(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    repo_path = setup_repository(tmp_path / "repo_cli_call_graph_syntax_error")
+    write_call_graph_cli_fixture(repo_path)
+
+    broken_path = repo_path / "src" / "app" / "broken.py"
+    broken_path.write_text(
+        "def broken(:\n"
+        "    pass\n",
+        encoding="utf-8",
+    )
+    run_git_command(repo_path, "add", "src/app/broken.py")
+    run_git_command(
+        repo_path,
+        "commit",
+        "-m",
+        "Add syntax error fixture",
+        env=COMMIT_ENV,
+    )
+
+    monkeypatch.chdir(repo_path)
+
+    exit_code = main(["full"])
+
+    assert exit_code == 0
+    assert_full_export_contains_cli_call_graph(repo_path)
+
+    content = (repo_path / "full.txt").read_text(encoding="utf-8")
+    assert "## Import Graph" in content
+    assert "Analysis errors:" in content
+    assert "SyntaxError" in content
+    assert "## Call Graph" in content
+    assert "Traceback" not in content
+
+    captured = capsys.readouterr()
+    assert f"Wrote {repo_path / 'full.txt'}" in captured.out
+
+
+def test_cli_export_command_survives_syntax_error_python_file_and_keeps_call_graph(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    repo_path = setup_repository(tmp_path / "repo_cli_export_call_graph_syntax_error")
+    write_call_graph_cli_fixture(repo_path)
+
+    broken_path = repo_path / "src" / "app" / "broken.py"
+    broken_path.write_text(
+        "def broken(:\n"
+        "    pass\n",
+        encoding="utf-8",
+    )
+    run_git_command(repo_path, "add", "src/app/broken.py")
+    run_git_command(
+        repo_path,
+        "commit",
+        "-m",
+        "Add syntax error fixture",
+        env=COMMIT_ENV,
+    )
+
+    monkeypatch.chdir(repo_path)
+
+    exit_code = main(["export"])
+
+    assert exit_code == 0
+    assert_full_export_contains_cli_call_graph(repo_path)
+
+    content = (repo_path / "full.txt").read_text(encoding="utf-8")
+    assert "## Import Graph" in content
+    assert "Analysis errors:" in content
+    assert "SyntaxError" in content
+    assert "## Call Graph" in content
+    assert "Traceback" not in content
+
+    captured = capsys.readouterr()
+    assert f"Wrote {repo_path / 'full.txt'}" in captured.out
+
+
 def test_cli_full_command_generates_call_graph_in_normal_export_flow(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

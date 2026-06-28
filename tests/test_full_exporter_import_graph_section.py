@@ -666,6 +666,113 @@ def test_format_call_graph_section_keeps_deterministic_group_order() -> None:
 
     assert section.index("app.a.main (src/app/a.py)") < section.index("app.z.run (src/app/z.py)")
 
+def test_build_call_graph_for_export_skips_syntax_error_python_files(
+    tmp_path: Path,
+) -> None:
+    files = [
+        _write_import_graph_fixture_file(tmp_path, "src/app/__init__.py", ""),
+        _write_import_graph_fixture_file(
+            tmp_path,
+            "src/app/helpers.py",
+            "def helper():\n"
+            "    return 'ok'\n",
+        ),
+        _write_import_graph_fixture_file(
+            tmp_path,
+            "src/app/main.py",
+            "from app.helpers import helper\n"
+            "\n"
+            "def main():\n"
+            "    return helper()\n",
+        ),
+        _write_import_graph_fixture_file(
+            tmp_path,
+            "src/app/broken.py",
+            "def broken(:\n"
+            "    pass\n",
+        ),
+    ]
+
+    import_graph = _build_import_graph_for_export(tmp_path, files)
+    call_graph = _build_call_graph_for_export(
+        tmp_path,
+        files,
+        import_graph=import_graph,
+    )
+
+    assert call_graph.sorted_edges() == [
+        CallEdge(
+            caller_file="src/app/main.py",
+            caller_name="main",
+            caller_qualified_name="app.main.main",
+            callee_name="helper",
+            callee_qualified_name="app.helpers.helper",
+            line_number=4,
+            call_type="function",
+            confidence="imported_local",
+        )
+    ]
+
+    import_section = _format_import_graph_section(import_graph)
+    assert "Analysis errors:" in import_section
+    assert "SyntaxError" in import_section
+
+
+def test_render_full_export_keeps_call_graph_when_one_python_file_has_syntax_error(
+    tmp_path: Path,
+) -> None:
+    files = [
+        _write_import_graph_fixture_file(tmp_path, "src/app/__init__.py", ""),
+        _write_import_graph_fixture_file(
+            tmp_path,
+            "src/app/helpers.py",
+            "def helper():\n"
+            "    return 'ok'\n",
+        ),
+        _write_import_graph_fixture_file(
+            tmp_path,
+            "src/app/main.py",
+            "from app.helpers import helper\n"
+            "\n"
+            "def main():\n"
+            "    return helper()\n",
+        ),
+        _write_import_graph_fixture_file(
+            tmp_path,
+            "src/app/broken.py",
+            "def broken(:\n"
+            "    pass\n",
+        ),
+    ]
+
+    repository_info = RepositoryInfo(
+        name="example",
+        root_path=tmp_path,
+        is_current_directory_root=True,
+        branch="main",
+        commit_hash="a" * 40,
+        short_commit_hash="aaaaaaa",
+        remote_url=None,
+        is_dirty=False,
+        tracked_files=[TrackedFile(path=file_info.relative_path) for file_info in files],
+        commit_metadata=None,
+    )
+    context = create_full_export_context(repository_info, files)
+
+    rendered = render_full_export(context)
+
+    assert "## Import Graph" in rendered
+    assert "Analysis errors:" in rendered
+    assert "SyntaxError" in rendered
+    assert "## Call Graph" in rendered
+    assert "Internal calls by caller:" in rendered
+    assert "app.main.main (src/app/main.py)" in rendered
+    assert (
+        "  - line 4: calls app.helpers.helper "
+        "[function, imported_local]"
+    ) in rendered
+    assert "Traceback" not in rendered
+
 
 def test_render_full_export_call_graph_section_is_deterministic_for_file_order(
     tmp_path: Path,
