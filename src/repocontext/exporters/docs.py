@@ -212,6 +212,11 @@ def create_docs_export_context(
     warnings: list[str] = []
 
     for file_info in full_context.sorted_files:
+        if _is_generated_export_path(file_info.relative_path.as_posix()):
+            skipped_files.append(file_info)
+            warnings.append(_skipped_generated_export_warning(file_info))
+            continue
+
         category = categorize_documentation_file(file_info.relative_path)
         if category is None:
             if _is_possible_documentation_path(file_info.relative_path):
@@ -599,6 +604,12 @@ def _is_possible_documentation_path(path: str | Path) -> bool:
         return True
 
     return False
+
+
+def _skipped_generated_export_warning(file_info: FileInfo) -> str:
+    """Return a deterministic warning for skipped generated export files."""
+
+    return f"Skipped generated RepoContext export file: {file_info.relative_path.as_posix()}"
 
 
 def _skipped_documentation_warning(file_info: FileInfo) -> str:

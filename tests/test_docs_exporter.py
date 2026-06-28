@@ -402,7 +402,9 @@ def test_create_docs_export_context_filters_to_exportable_documentation_files(tm
         "README.md",
         "REPOCONTEXT_SPEC_v1.3.txt",
     ]
-    assert context.skipped_files == (binary_doc,)
+    assert context.skipped_files == (binary_doc, generated)
+    assert "Skipped binary documentation file: docs/manual.pdf" in context.warnings
+    assert "Skipped generated RepoContext export file: full.txt" in context.warnings
     assert context.total_line_count == 5
     assert context.estimated_token_count == 20
 
@@ -540,6 +542,112 @@ def test_public_exporter_init_exposes_docs_export_helpers():
     assert PUBLIC_DOCS_EXPORT_FILENAME == "docs.txt"
     assert public_generate_docs_export is generate_docs_export
     assert public_write_docs_export is write_docs_export
+
+
+def test_create_docs_export_context_warns_for_tracked_generated_exports(tmp_path: Path):
+    readme = make_file(tmp_path, "README.md", content="# Readme\n")
+    previous_docs_export = make_file(
+        tmp_path,
+        "docs.txt",
+        content="# Old Documentation Context\nSHOULD_NOT_APPEAR\n",
+        line_count=2,
+        estimated_tokens=20,
+    )
+    previous_ai_export = make_file(
+        tmp_path,
+        "ai.txt",
+        content="# AI CONTEXT\nSHOULD_NOT_APPEAR\n",
+        line_count=2,
+        estimated_tokens=20,
+    )
+
+    context = make_docs_context(
+        tmp_path,
+        [previous_docs_export, readme, previous_ai_export],
+    )
+    rendered = render_docs_export(context)
+
+    assert [document.relative_path.as_posix() for document in context.documentation_files] == [
+        "README.md",
+    ]
+    assert [file_info.relative_path.as_posix() for file_info in context.skipped_files] == [
+        "ai.txt",
+        "docs.txt",
+    ]
+    assert "Skipped generated RepoContext export file: ai.txt" in context.warnings
+    assert "Skipped generated RepoContext export file: docs.txt" in context.warnings
+    assert "SHOULD_NOT_APPEAR" not in rendered
+    assert "### File: docs.txt" not in rendered
+    assert "### File: ai.txt" not in rendered
+
+
+def test_generate_docs_export_is_stable_when_docs_txt_is_already_tracked(
+    tmp_path: Path,
+):
+    run_git_command(tmp_path, "init")
+    run_git_command(tmp_path, "config", "user.email", "tester@example.com")
+    run_git_command(tmp_path, "config", "user.name", "Tester")
+
+    (tmp_path / "README.md").write_text("# Example\n", encoding="utf-8")
+    (tmp_path / "docs.txt").write_text(
+        "# Old Documentation Context\nSELF_REFERENCE_SHOULD_NOT_APPEAR\n",
+        encoding="utf-8",
+    )
+
+    run_git_command(tmp_path, "add", "README.md", "docs.txt")
+    run_git_command(tmp_path, "commit", "-m", "Initial commit")
+
+    first_output_path = generate_docs_export(tmp_path)
+    first_content = first_output_path.read_text(encoding="utf-8")
+    second_output_path = generate_docs_export(tmp_path)
+    second_content = second_output_path.read_text(encoding="utf-8")
+
+    assert first_output_path == tmp_path / "docs.txt"
+    assert second_output_path == tmp_path / "docs.txt"
+    assert first_content == second_content
+    assert "SELF_REFERENCE_SHOULD_NOT_APPEAR" not in second_content
+    assert "### File: docs.txt" not in second_content
+    assert "Skipped generated RepoContext export file: docs.txt" in second_content
+
+
+def test_build_docs_export_context_ignores_untracked_documentation_files(
+    tmp_path: Path,
+):
+    run_git_command(tmp_path, "init")
+    run_git_command(tmp_path, "config", "user.email", "tester@example.com")
+    run_git_command(tmp_path, "config", "user.name", "Tester")
+
+    (tmp_path / "README.md").write_text("# Tracked\n", encoding="utf-8")
+    (tmp_path / "TASKS.md").write_text("# Untracked\n", encoding="utf-8")
+
+    run_git_command(tmp_path, "add", "README.md")
+    run_git_command(tmp_path, "commit", "-m", "Initial commit")
+
+    context = build_docs_export_context(tmp_path)
+
+    assert [document.relative_path.as_posix() for document in context.documentation_files] == [
+        "README.md",
+    ]
+    assert "TASKS.md" not in render_docs_export(context)
+
+
+def test_create_docs_export_context_reports_binary_docs_as_warning(tmp_path: Path):
+    binary_manual = make_file(
+        tmp_path,
+        "docs/manual.pdf",
+        is_text=False,
+        is_binary=True,
+        content=None,
+        line_count=None,
+        estimated_tokens=None,
+    )
+
+    context = make_docs_context(tmp_path, [binary_manual])
+
+    assert context.documentation_files == ()
+    assert context.skipped_files == (binary_manual,)
+    assert "Skipped binary documentation file: docs/manual.pdf" in context.warnings
+    assert "No documentation files found." in context.warnings
 
 
 def test_build_docs_export_context_reuses_full_export_pipeline_and_git_tracked_files(tmp_path: Path):
