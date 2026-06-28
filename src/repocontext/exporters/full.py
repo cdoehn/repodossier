@@ -760,12 +760,99 @@ def _collect_warnings(context: FullExportContext) -> tuple[str, ...]:
 
 
 
+
+def _sorted_import_graph_edges(import_graph):
+    """Return local dependency edges in deterministic display order."""
+
+    return tuple(
+        sorted(
+            import_graph.edges,
+            key=lambda edge: (
+                edge.source_module,
+                edge.target_module,
+                edge.line_number,
+                edge.import_type,
+                edge.imported_name or "",
+                edge.source_path.as_posix(),
+                edge.target_path.as_posix(),
+            ),
+        )
+    )
+
+
+def _sorted_external_import_names(import_graph):
+    """Return external import module names in deterministic display order."""
+
+    return tuple(
+        sorted(
+            {
+                reference.imported_module
+                for reference in import_graph.external_imports
+                if reference.imported_module
+            }
+        )
+    )
+
+
+def _sorted_unresolved_imports(import_graph):
+    """Return unresolved imports in deterministic display order."""
+
+    return tuple(
+        sorted(
+            import_graph.unresolved_imports,
+            key=lambda reference: (
+                reference.source_module,
+                reference.imported_module or "",
+                reference.imported_name or "",
+                reference.line_number,
+                reference.level,
+            ),
+        )
+    )
+
+
+def _sorted_import_graph_errors(import_graph):
+    """Return import analysis errors in deterministic display order."""
+
+    return tuple(
+        sorted(
+            import_graph.errors,
+            key=lambda error: (
+                error.source_path.as_posix(),
+                error.error_type,
+                error.line_number or 0,
+                error.message,
+            ),
+        )
+    )
+
+
+def _append_limited_items(lines, items, *, max_items, formatter):
+    """Append sorted display items with a deterministic truncation line."""
+
+    if not items:
+        lines.append("- none")
+        return
+
+    for item in items[:max_items]:
+        lines.append(formatter(item))
+
+    remaining_count = len(items) - max_items
+    if remaining_count > 0:
+        lines.append(f"- ... {remaining_count} more")
+
+
 def _format_import_graph_section(import_graph, *, max_edges=200, max_imports=100):
     """Render a compact Import Graph section for full.txt."""
 
     from repocontext.import_graph import calculate_import_graph_metrics
 
     metrics = calculate_import_graph_metrics(import_graph)
+    sorted_edges = _sorted_import_graph_edges(import_graph)
+    external_names = _sorted_external_import_names(import_graph)
+    unresolved_imports = _sorted_unresolved_imports(import_graph)
+    analysis_errors = _sorted_import_graph_errors(import_graph)
+
     lines = [
         "## Import Graph",
         "",
@@ -780,65 +867,73 @@ def _format_import_graph_section(import_graph, *, max_edges=200, max_imports=100
 
     if metrics.root_modules:
         lines.append("Root modules:")
-        for module_name in metrics.root_modules[:max_imports]:
-            lines.append(f"- {module_name}")
+        _append_limited_items(
+            lines,
+            metrics.root_modules,
+            max_items=max_imports,
+            formatter=lambda module_name: f"- {module_name}",
+        )
         lines.append("")
 
     if metrics.leaf_modules:
         lines.append("Leaf modules:")
-        for module_name in metrics.leaf_modules[:max_imports]:
-            lines.append(f"- {module_name}")
+        _append_limited_items(
+            lines,
+            metrics.leaf_modules,
+            max_items=max_imports,
+            formatter=lambda module_name: f"- {module_name}",
+        )
         lines.append("")
 
     lines.append("Local dependencies:")
-    if import_graph.edges:
-        for edge in import_graph.edges[:max_edges]:
-            lines.append(f"- {edge.source_module} -> {edge.target_module}")
-        if len(import_graph.edges) > max_edges:
-            lines.append(f"- ... {len(import_graph.edges) - max_edges} more")
-    else:
-        lines.append("- none")
+    _append_limited_items(
+        lines,
+        sorted_edges,
+        max_items=max_edges,
+        formatter=lambda edge: f"- {edge.source_module} -> {edge.target_module}",
+    )
     lines.append("")
 
     lines.append("External imports:")
-    external_names = sorted(
-        {
-            reference.imported_module
-            for reference in import_graph.external_imports
-            if reference.imported_module
-        }
+    _append_limited_items(
+        lines,
+        external_names,
+        max_items=max_imports,
+        formatter=lambda imported_module: f"- {imported_module}",
     )
-    if external_names:
-        for imported_module in external_names[:max_imports]:
-            lines.append(f"- {imported_module}")
-        if len(external_names) > max_imports:
-            lines.append(f"- ... {len(external_names) - max_imports} more")
-    else:
-        lines.append("- none")
     lines.append("")
 
     lines.append("Unresolved imports:")
-    if import_graph.unresolved_imports:
-        for reference in import_graph.unresolved_imports[:max_imports]:
-            imported = reference.imported_module or "."
-            if reference.imported_name:
-                imported = f"{imported}.{reference.imported_name}"
-            lines.append(f"- {reference.source_module}: {imported}")
-        if len(import_graph.unresolved_imports) > max_imports:
-            lines.append(f"- ... {len(import_graph.unresolved_imports) - max_imports} more")
-    else:
-        lines.append("- none")
+    _append_limited_items(
+        lines,
+        unresolved_imports,
+        max_items=max_imports,
+        formatter=_format_unresolved_import_line,
+    )
     lines.append("")
 
-    if import_graph.errors:
+    if analysis_errors:
         lines.append("Analysis errors:")
-        for error in import_graph.errors[:max_imports]:
-            lines.append(f"- {error.source_path}: {error.error_type}: {error.message}")
-        if len(import_graph.errors) > max_imports:
-            lines.append(f"- ... {len(import_graph.errors) - max_imports} more")
+        _append_limited_items(
+            lines,
+            analysis_errors,
+            max_items=max_imports,
+            formatter=lambda error: (
+                f"- {error.source_path}: {error.error_type}: {error.message}"
+            ),
+        )
         lines.append("")
 
     return "\n".join(lines).rstrip()
+
+
+def _format_unresolved_import_line(reference):
+    """Format one unresolved import reference."""
+
+    imported = reference.imported_module or "."
+    if reference.imported_name:
+        imported = f"{imported}.{reference.imported_name}"
+    return f"- {reference.source_module}: {imported}"
 
 
 # Import graph integration for the full export pipeline.
