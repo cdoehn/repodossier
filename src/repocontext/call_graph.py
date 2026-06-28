@@ -160,12 +160,17 @@ class PythonCallVisitor(ast.NodeVisitor):
         source_path: str | Path,
         module_name: str | None = None,
         known_class_names: set[str] | None = None,
-        known_function_names: set[str] | None = None,
+        known_function_counts: dict[str, int] | None = None,
+        known_method_counts: dict[str, dict[str, int]] | None = None,
     ) -> None:
         self.source_path = Path(source_path).as_posix()
         self.module_name = module_name
         self.known_class_names = set(known_class_names or ())
-        self.known_function_names = set(known_function_names or ())
+        self.known_function_counts = dict(known_function_counts or {})
+        self.known_method_counts = {
+            class_name: dict(method_counts)
+            for class_name, method_counts in (known_method_counts or {}).items()
+        }
         self.graph = CallGraph()
         self._class_stack: list[str] = []
         self._function_stack: list[tuple[str, str]] = []
@@ -227,8 +232,13 @@ class PythonCallVisitor(ast.NodeVisitor):
     def _resolve_function_call(self, callee_name: str) -> tuple[str | None, str]:
         """Resolve direct calls to top-level functions in the same file."""
 
-        if callee_name in self.known_function_names:
+        candidate_count = self.known_function_counts.get(callee_name, 0)
+
+        if candidate_count == 1:
             return self._qualify(callee_name), "local"
+
+        if candidate_count > 1:
+            return None, "ambiguous"
 
         return None, "unresolved"
 
@@ -240,14 +250,32 @@ class PythonCallVisitor(ast.NodeVisitor):
 
         if self._is_self_method_call(node):
             class_name = ".".join(self._class_stack)
-            return self._qualify(f"{class_name}.{node.func.attr}"), "local_method"
+            return self._resolve_known_method(class_name, node.func.attr)
 
         cls_target = self._class_method_target(node)
         if cls_target is not None:
-            return self._qualify(f"{cls_target}.{node.func.attr}"), "local_method"
+            return self._resolve_known_method(cls_target, node.func.attr)
 
         if self._is_chained_method_call(node):
             return None, "unresolved_method"
+
+        return None, "unresolved"
+
+    def _resolve_known_method(
+        self,
+        class_name: str,
+        method_name: str,
+    ) -> tuple[str | None, str]:
+        """Resolve a method only when it is known and unambiguous."""
+
+        method_counts = self.known_method_counts.get(class_name, {})
+        candidate_count = method_counts.get(method_name, 0)
+
+        if candidate_count == 1:
+            return self._qualify(f"{class_name}.{method_name}"), "local_method"
+
+        if candidate_count > 1:
+            return None, "ambiguous"
 
         return None, "unresolved"
 
@@ -339,6 +367,12 @@ class PythonCallVisitor(ast.NodeVisitor):
         return name
 
 
+def _increment_count(counter: dict[str, int], name: str) -> None:
+    """Increment a string-keyed count dictionary in place."""
+
+    counter[name] = counter.get(name, 0) + 1
+
+
 def _collect_class_names(tree: ast.AST) -> set[str]:
     """Return class names defined in a parsed Python AST."""
 
@@ -349,34 +383,99 @@ def _collect_class_names(tree: ast.AST) -> set[str]:
     }
 
 
-def _collect_top_level_function_names(tree: ast.AST) -> set[str]:
-    """Return top-level function names defined in a parsed Python AST."""
+def _collect_top_level_function_counts(tree: ast.AST) -> dict[str, int]:
+    """Return top-level function name counts from a parsed Python AST."""
+
+    counts: dict[str, int] = {}
 
     if not isinstance(tree, ast.Module):
-        return set()
+        return counts
 
-    return {
-        node.name
-        for node in tree.body
-        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
-    }
+    for node in tree.body:
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            _increment_count(counts, node.name)
+
+    return counts
 
 
-def _function_names_from_symbol_index(
+def _collect_class_method_counts(tree: ast.AST) -> dict[str, dict[str, int]]:
+    """Return direct method name counts by class from a parsed Python AST."""
+
+    counts: dict[str, dict[str, int]] = {}
+
+    def visit_class(node: ast.ClassDef, parents: tuple[str, ...] = ()) -> None:
+        class_name = ".".join((*parents, node.name))
+        method_counts = counts.setdefault(class_name, {})
+
+        for child in node.body:
+            if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                _increment_count(method_counts, child.name)
+
+        for child in node.body:
+            if isinstance(child, ast.ClassDef):
+                visit_class(child, (*parents, node.name))
+
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Module):
+            for child in node.body:
+                if isinstance(child, ast.ClassDef):
+                    visit_class(child)
+
+    return counts
+
+
+def _merge_counts(target: dict[str, int], source: dict[str, int]) -> dict[str, int]:
+    """Return merged count dictionaries."""
+
+    merged = dict(target)
+    for name, count in source.items():
+        merged[name] = merged.get(name, 0) + count
+    return merged
+
+
+def _merge_method_counts(
+    target: dict[str, dict[str, int]],
+    source: dict[str, dict[str, int]],
+) -> dict[str, dict[str, int]]:
+    """Return merged class-method count dictionaries."""
+
+    merged = {class_name: dict(method_counts) for class_name, method_counts in target.items()}
+
+    for class_name, method_counts in source.items():
+        class_target = merged.setdefault(class_name, {})
+        for method_name, count in method_counts.items():
+            class_target[method_name] = class_target.get(method_name, 0) + count
+
+    return merged
+
+
+def _paths_match_for_symbol_index(index_path: object, source_path: str | Path) -> bool:
+    """Return True when a symbol-index path refers to the analyzed file."""
+
+    file_path = Path(str(index_path)).as_posix()
+    target_path = Path(source_path).as_posix()
+
+    return (
+        file_path == target_path
+        or target_path.endswith(file_path)
+        or file_path.endswith(target_path)
+    )
+
+
+def _function_counts_from_symbol_index(
     symbol_index: object,
     *,
     source_path: str | Path,
-) -> set[str]:
-    """Return top-level function names for a file from an existing symbol index."""
+) -> dict[str, int]:
+    """Return top-level function name counts for a file from an existing symbol index."""
 
-    target_path = Path(source_path).as_posix()
-    function_names: set[str] = set()
+    function_counts: dict[str, int] = {}
 
     for file_index in symbol_index or ():
-        raw_file_path = getattr(file_index, "file_path", "")
-        file_path = Path(str(raw_file_path)).as_posix()
-
-        if file_path != target_path and not target_path.endswith(file_path) and not file_path.endswith(target_path):
+        if not _paths_match_for_symbol_index(
+            getattr(file_index, "file_path", ""),
+            source_path,
+        ):
             continue
 
         for symbol in getattr(file_index, "symbols", ()):
@@ -387,9 +486,42 @@ def _function_names_from_symbol_index(
 
             name = getattr(symbol, "name", None)
             if isinstance(name, str) and name:
-                function_names.add(name)
+                _increment_count(function_counts, name)
 
-    return function_names
+    return function_counts
+
+
+def _method_counts_from_symbol_index(
+    symbol_index: object,
+    *,
+    source_path: str | Path,
+) -> dict[str, dict[str, int]]:
+    """Return method name counts by class for a file from an existing symbol index."""
+
+    method_counts_by_class: dict[str, dict[str, int]] = {}
+
+    for file_index in symbol_index or ():
+        if not _paths_match_for_symbol_index(
+            getattr(file_index, "file_path", ""),
+            source_path,
+        ):
+            continue
+
+        for symbol in getattr(file_index, "symbols", ()):
+            if getattr(symbol, "kind", None) != "method":
+                continue
+
+            parent = getattr(symbol, "parent", None)
+            name = getattr(symbol, "name", None)
+            if not isinstance(parent, str) or not parent:
+                continue
+            if not isinstance(name, str) or not name:
+                continue
+
+            class_counts = method_counts_by_class.setdefault(parent, {})
+            _increment_count(class_counts, name)
+
+    return method_counts_by_class
 
 
 def build_call_graph_from_ast(
@@ -401,19 +533,27 @@ def build_call_graph_from_ast(
 ) -> CallGraph:
     """Build a call graph from a parsed Python AST."""
 
-    known_function_names = _collect_top_level_function_names(tree)
-    known_function_names.update(
-        _function_names_from_symbol_index(
+    known_function_counts = _merge_counts(
+        _collect_top_level_function_counts(tree),
+        _function_counts_from_symbol_index(
             symbol_index,
             source_path=source_path,
-        )
+        ),
+    )
+    known_method_counts = _merge_method_counts(
+        _collect_class_method_counts(tree),
+        _method_counts_from_symbol_index(
+            symbol_index,
+            source_path=source_path,
+        ),
     )
 
     visitor = PythonCallVisitor(
         source_path=source_path,
         module_name=module_name,
         known_class_names=_collect_class_names(tree),
-        known_function_names=known_function_names,
+        known_function_counts=known_function_counts,
+        known_method_counts=known_method_counts,
     )
     visitor.visit(tree)
     return visitor.graph
@@ -423,6 +563,7 @@ def parse_calls_from_source(
     *,
     source_path: str | Path,
     module_name: str | None = None,
+    symbol_index: object = None,
 ) -> CallGraph:
     """Parse Python source text and return direct function call edges."""
 
@@ -431,6 +572,7 @@ def parse_calls_from_source(
         tree,
         source_path=source_path,
         module_name=module_name,
+        symbol_index=symbol_index,
     )
 
 
@@ -438,6 +580,7 @@ def parse_calls_from_file(
     source_path: str | Path,
     *,
     module_name: str | None = None,
+    symbol_index: object = None,
     encoding: str = "utf-8",
 ) -> CallGraph:
     """Read a Python file and return direct function call edges."""
@@ -448,6 +591,7 @@ def parse_calls_from_file(
         source,
         source_path=path,
         module_name=module_name,
+        symbol_index=symbol_index,
     )
 
 

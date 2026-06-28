@@ -920,3 +920,137 @@ def test_build_call_graph_from_ast_can_use_existing_symbol_index_for_local_funct
         )
     ]
 
+def test_parse_calls_from_source_marks_duplicate_local_function_name_ambiguous():
+    source = (
+        "def helper():\n"
+        "    return 1\n"
+        "\n"
+        "def helper():\n"
+        "    return 2\n"
+        "\n"
+        "def main():\n"
+        "    return helper()\n"
+    )
+
+    graph = parse_calls_from_source(
+        source,
+        source_path="src/app.py",
+        module_name="app",
+    )
+
+    assert graph.sorted_edges() == [
+        CallEdge(
+            caller_file="src/app.py",
+            caller_name="main",
+            caller_qualified_name="app.main",
+            callee_name="helper",
+            callee_qualified_name=None,
+            line_number=8,
+            call_type="function",
+            confidence="ambiguous",
+        )
+    ]
+
+
+def test_parse_calls_from_source_marks_duplicate_self_method_name_ambiguous():
+    source = (
+        "class Exporter:\n"
+        "    def export(self):\n"
+        "        self.render()\n"
+        "\n"
+        "    def render(self):\n"
+        "        return 'a'\n"
+        "\n"
+        "    def render(self):\n"
+        "        return 'b'\n"
+    )
+
+    graph = parse_calls_from_source(
+        source,
+        source_path="src/exporter.py",
+        module_name="app.exporter",
+    )
+
+    assert graph.sorted_edges() == [
+        CallEdge(
+            caller_file="src/exporter.py",
+            caller_name="Exporter.export",
+            caller_qualified_name="app.exporter.Exporter.export",
+            callee_name="render",
+            callee_qualified_name=None,
+            line_number=3,
+            call_type="method",
+            confidence="ambiguous",
+        )
+    ]
+
+
+def test_parse_calls_from_source_keeps_missing_self_method_unresolved():
+    source = (
+        "class Exporter:\n"
+        "    def export(self):\n"
+        "        self.render()\n"
+    )
+
+    graph = parse_calls_from_source(
+        source,
+        source_path="src/exporter.py",
+        module_name="app.exporter",
+    )
+
+    assert graph.sorted_edges() == [
+        CallEdge(
+            caller_file="src/exporter.py",
+            caller_name="Exporter.export",
+            caller_qualified_name="app.exporter.Exporter.export",
+            callee_name="render",
+            callee_qualified_name=None,
+            line_number=3,
+            call_type="method",
+            confidence="unresolved",
+        )
+    ]
+
+
+def test_build_call_graph_from_ast_uses_symbol_index_for_same_class_method_resolution():
+    source = (
+        "class Exporter:\n"
+        "    def export(self):\n"
+        "        self.render()\n"
+    )
+    tree = ast.parse(source, filename="src/exporter.py")
+    symbol_index = [
+        FileSymbolIndex(
+            file_path="src/exporter.py",
+            symbols=[
+                SymbolInfo(
+                    name="render",
+                    kind="method",
+                    file_path="src/exporter.py",
+                    line_start=20,
+                    parent="Exporter",
+                )
+            ],
+        )
+    ]
+
+    graph = build_call_graph_from_ast(
+        tree,
+        source_path="src/exporter.py",
+        module_name="app.exporter",
+        symbol_index=symbol_index,
+    )
+
+    assert graph.sorted_edges() == [
+        CallEdge(
+            caller_file="src/exporter.py",
+            caller_name="Exporter.export",
+            caller_qualified_name="app.exporter.Exporter.export",
+            callee_name="render",
+            callee_qualified_name="app.exporter.Exporter.render",
+            line_number=3,
+            call_type="method",
+            confidence="local_method",
+        )
+    ]
+
