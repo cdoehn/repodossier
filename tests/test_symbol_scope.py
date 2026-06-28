@@ -33,8 +33,8 @@ def test_symbol_extraction_does_not_create_standalone_export_filename():
     assert offenders == []
 
 
-def test_symbol_extraction_is_only_wired_into_call_graph_export_pipeline():
-    """Milestone 7 intentionally wires build_symbol_index into full export call graph generation."""
+def test_symbol_extraction_is_only_wired_into_expected_export_pipelines():
+    """Milestone 8 wires build_symbol_index into ai.txt while full export still uses it for call graph generation."""
 
     still_forbidden_tokens = (
         "extract_symbols_from_file(",
@@ -64,7 +64,10 @@ def test_symbol_extraction_is_only_wired_into_call_graph_export_pipeline():
         if "build_symbol_index(" in text:
             build_symbol_index_users.append(path.relative_to(PROJECT_ROOT).as_posix())
 
-    assert build_symbol_index_users == ["src/repocontext/exporters/full.py"]
+    assert build_symbol_index_users == [
+        "src/repocontext/exporters/ai.py",
+        "src/repocontext/exporters/full.py",
+    ]
 
 
 def test_project_scripts_do_not_add_symbol_specific_cli_entrypoints():

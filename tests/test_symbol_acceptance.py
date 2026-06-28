@@ -234,7 +234,7 @@ def test_milestone_5_acceptance_no_symbol_cli_entrypoint_is_added():
 
 
 def test_milestone_5_acceptance_symbol_module_is_only_wired_where_expected():
-    """Milestone 7 may use the symbol index for Call Graph export integration."""
+    """Milestone 8 may use the symbol index for AI export and full-export call graph integration."""
 
     still_forbidden_tokens = (
         "format_symbol_index(",
@@ -264,4 +264,7 @@ def test_milestone_5_acceptance_symbol_module_is_only_wired_where_expected():
         if "build_symbol_index(" in text:
             build_symbol_index_users.append(path.relative_to(PROJECT_ROOT).as_posix())
 
-    assert build_symbol_index_users == ["src/repocontext/exporters/full.py"]
+    assert build_symbol_index_users == [
+        "src/repocontext/exporters/ai.py",
+        "src/repocontext/exporters/full.py",
+    ]

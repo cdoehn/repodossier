@@ -94,7 +94,7 @@ def render_ai_export(context: AIExportContext) -> str:
         _render_project_section(context),
         _render_architecture_summary_section(context),
         _render_important_files_section(context),
-        _render_symbol_index_section(),
+        _render_symbol_index_section(context),
         _render_import_graph_section(),
         _render_call_graph_section(),
         _render_notes_section(),
@@ -712,17 +712,222 @@ def _module_name_from_ai_export_path(path: str) -> str | None:
 
     return ".".join(parts)
 
-def _render_symbol_index_section() -> str:
-    """Render the placeholder Symbol Index section."""
+def _render_symbol_index_section(context: AIExportContext) -> str:
+    """Render Python symbols from the existing Symbol Index implementation."""
 
-    return "\n".join(
-        [
-            AI_EXPORT_SECTION_HEADINGS["symbol_index"],
-            "",
-            "Symbol index rendering is not implemented yet.",
-        ]
+    source_paths = _symbol_index_source_paths(context)
+
+    lines = [
+        AI_EXPORT_SECTION_HEADINGS["symbol_index"],
+        "",
+    ]
+
+    if not source_paths:
+        lines.append("No Python source files available for symbol analysis.")
+        return "\n".join(lines)
+
+    try:
+        from repocontext.symbols import build_symbol_index
+
+        symbol_indexes = build_symbol_index(
+            source_paths,
+            base_path=context.repository_root,
+        )
+    except Exception as exc:
+        lines.append(f"Could not build symbol index: {type(exc).__name__}: {exc}")
+        return "\n".join(lines)
+
+    symbol_blocks = _format_ai_symbol_index_blocks(symbol_indexes)
+    if symbol_blocks:
+        lines.extend(symbol_blocks)
+    else:
+        lines.append("No Python symbols found.")
+
+    error_lines = _format_ai_symbol_index_errors(symbol_indexes)
+    if error_lines:
+        lines.extend(["", "Analysis errors:"])
+        lines.extend(error_lines)
+
+    return "\n".join(lines)
+
+
+def _symbol_index_source_paths(context: AIExportContext) -> tuple[Path, ...]:
+    """Return Python source paths from scanned export data."""
+
+    source_paths: list[Path] = []
+
+    for file_info in context.full_context.exported_text_files:
+        relative_path = getattr(file_info, "relative_path", None)
+        if relative_path is None:
+            continue
+
+        relative_path_obj = Path(relative_path)
+        if relative_path_obj.suffix.lower() != ".py":
+            continue
+
+        if getattr(file_info, "is_binary", False) is True:
+            continue
+
+        if getattr(file_info, "error", None) is not None:
+            continue
+
+        absolute_path = getattr(file_info, "absolute_path", None)
+        source_path = (
+            Path(absolute_path)
+            if absolute_path is not None
+            else context.repository_root / relative_path_obj
+        )
+        source_paths.append(source_path)
+
+    return tuple(
+        sorted(
+            source_paths,
+            key=lambda path: _repository_relative_display_path(path, context.repository_root),
+        )
     )
 
+
+def _format_ai_symbol_index_blocks(symbol_indexes: object) -> list[str]:
+    """Format symbol index entries grouped by file."""
+
+    lines: list[str] = []
+    files_with_symbols = 0
+
+    for file_index in _sorted_symbol_file_indexes(symbol_indexes):
+        symbols = _sorted_symbols_for_ai_export(getattr(file_index, "symbols", ()))
+        if not symbols:
+            continue
+
+        if files_with_symbols > 0:
+            lines.append("")
+
+        lines.append(f"### {_symbol_file_display_path(file_index)}")
+
+        visible_symbols = symbols[:50]
+        for symbol in visible_symbols:
+            lines.append(_format_ai_symbol_line(symbol))
+
+        remaining_count = len(symbols) - len(visible_symbols)
+        if remaining_count > 0:
+            lines.append(f"- ... {remaining_count} more symbols")
+
+        files_with_symbols += 1
+
+        if files_with_symbols >= 40:
+            remaining_files = _count_remaining_symbol_files(
+                symbol_indexes,
+                skip_files=files_with_symbols,
+            )
+            if remaining_files > 0:
+                lines.extend(["", f"- ... {remaining_files} more files with symbols"])
+            break
+
+    return lines
+
+
+def _sorted_symbol_file_indexes(symbol_indexes: object) -> tuple[object, ...]:
+    """Return symbol file indexes in deterministic order."""
+
+    return tuple(
+        sorted(
+            symbol_indexes or (),
+            key=lambda file_index: _symbol_file_display_path(file_index),
+        )
+    )
+
+
+def _symbol_file_display_path(file_index: object) -> str:
+    """Return a stable display path for one symbol file index."""
+
+    return Path(str(getattr(file_index, "file_path", ""))).as_posix()
+
+
+def _sorted_symbols_for_ai_export(symbols: object) -> tuple[object, ...]:
+    """Return symbols in deterministic source order."""
+
+    kind_order = {
+        "class": 0,
+        "method": 1,
+        "function": 2,
+    }
+
+    return tuple(
+        sorted(
+            symbols or (),
+            key=lambda symbol: (
+                getattr(symbol, "line_start", 0) or 0,
+                kind_order.get(getattr(symbol, "kind", ""), 99),
+                getattr(symbol, "parent", "") or "",
+                getattr(symbol, "name", "") or "",
+            ),
+        )
+    )
+
+
+def _format_ai_symbol_line(symbol: object) -> str:
+    """Format one symbol line for ai.txt."""
+
+    kind = getattr(symbol, "kind", "symbol") or "symbol"
+    name = getattr(symbol, "name", "unknown") or "unknown"
+    parent = getattr(symbol, "parent", None)
+    line_start = getattr(symbol, "line_start", None)
+
+    if kind == "method" and parent:
+        display_name = f"{parent}.{name}"
+    else:
+        display_name = name
+
+    if line_start is None:
+        return f"- {kind} {display_name}"
+
+    return f"- {kind} {display_name}:{line_start}"
+
+
+def _format_ai_symbol_index_errors(symbol_indexes: object) -> list[str]:
+    """Format non-fatal symbol analysis errors."""
+
+    lines: list[str] = []
+
+    for file_index in _sorted_symbol_file_indexes(symbol_indexes):
+        errors = getattr(file_index, "errors", ()) or ()
+        if not errors:
+            continue
+
+        display_path = _symbol_file_display_path(file_index)
+        for error in errors[:3]:
+            lines.append(f"- {display_path}: {error}")
+
+        remaining_count = len(errors) - min(len(errors), 3)
+        if remaining_count > 0:
+            lines.append(f"- {display_path}: ... {remaining_count} more errors")
+
+    return lines
+
+
+def _count_remaining_symbol_files(
+    symbol_indexes: object,
+    *,
+    skip_files: int,
+) -> int:
+    """Count symbol-containing files after the visible file limit."""
+
+    files_with_symbols = [
+        file_index
+        for file_index in _sorted_symbol_file_indexes(symbol_indexes)
+        if getattr(file_index, "symbols", ())
+    ]
+    return max(0, len(files_with_symbols) - skip_files)
+
+
+def _repository_relative_display_path(path: Path, repository_root: Path) -> str:
+    """Return a stable repository-relative display path when possible."""
+
+    try:
+        return path.resolve(strict=False).relative_to(
+            repository_root.resolve(strict=False)
+        ).as_posix()
+    except ValueError:
+        return path.as_posix()
 
 def _render_import_graph_section() -> str:
     """Render the placeholder Import Graph section."""

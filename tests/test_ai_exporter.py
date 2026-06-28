@@ -86,6 +86,10 @@ def make_ai_export_context_from_files(
 
     scanned_files = []
     for path, content in sorted(files.items()):
+        absolute_path = tmp_path / path
+        absolute_path.parent.mkdir(parents=True, exist_ok=True)
+        absolute_path.write_text(content, encoding="utf-8")
+
         suffix = Path(path).suffix.lower()
         language = {
             ".md": "markdown",
@@ -97,7 +101,7 @@ def make_ai_export_context_from_files(
         scanned_files.append(
             FileInfo(
                 relative_path=Path(path),
-                absolute_path=tmp_path / path,
+                absolute_path=absolute_path,
                 is_text=True,
                 is_binary=False,
                 language=language,
@@ -285,6 +289,60 @@ def test_important_files_ranking_is_deterministic(tmp_path: Path) -> None:
     assert first_render == second_render
     important_files_section = first_render.split("## Important Files", 1)[1].split("## Symbol Index", 1)[0]
     assert important_files_section.index("- pyproject.toml") < important_files_section.index("- README.md")
+
+
+def test_symbol_index_renders_classes_functions_and_methods(tmp_path: Path) -> None:
+    context = make_ai_export_context_from_files(
+        tmp_path,
+        {
+            "src/example/app.py": (
+                "class Worker:\n"
+                "    def run(self):\n"
+                "        return 1\n"
+                "\n"
+                "def main():\n"
+                "    return Worker().run()\n"
+            ),
+        },
+    )
+
+    rendered = render_ai_export(context)
+    symbol_index_section = rendered.split("## Symbol Index", 1)[1].split("## Import Graph", 1)[0]
+
+    assert "### src/example/app.py" in symbol_index_section
+    assert "- class Worker:1" in symbol_index_section
+    assert "- method Worker.run:2" in symbol_index_section
+    assert "- function main:5" in symbol_index_section
+
+
+def test_symbol_index_reports_no_python_symbols_for_symbol_free_python_file(tmp_path: Path) -> None:
+    context = make_ai_export_context_from_files(
+        tmp_path,
+        {
+            "src/example/constants.py": "VALUE = 1\n",
+        },
+    )
+
+    rendered = render_ai_export(context)
+    symbol_index_section = rendered.split("## Symbol Index", 1)[1].split("## Import Graph", 1)[0]
+
+    assert "No Python symbols found." in symbol_index_section
+
+
+def test_symbol_index_handles_syntax_errors_without_crashing(tmp_path: Path) -> None:
+    context = make_ai_export_context_from_files(
+        tmp_path,
+        {
+            "src/example/broken.py": "def broken(:\n    pass\n",
+        },
+    )
+
+    rendered = render_ai_export(context)
+    symbol_index_section = rendered.split("## Symbol Index", 1)[1].split("## Import Graph", 1)[0]
+
+    assert "Analysis errors:" in symbol_index_section
+    assert "src/example/broken.py" in symbol_index_section
+    assert "Traceback" not in symbol_index_section
 
 def test_render_ai_export_contains_required_sections(tmp_path: Path) -> None:
     context = make_ai_export_context(tmp_path)
