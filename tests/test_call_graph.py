@@ -1371,3 +1371,241 @@ def test_build_call_graph_from_ast_accepts_import_graph_for_alias_resolution(tmp
         )
     ]
 
+def test_parse_calls_from_source_resolves_imported_local_function_call(tmp_path):
+    source_root = tmp_path / "src" / "repocontext"
+    source_root.mkdir(parents=True)
+    scanner_path = source_root / "scanner.py"
+    app_path = source_root / "app.py"
+
+    scanner_path.write_text(
+        "def scan_single_file():\n"
+        "    return None\n",
+        encoding="utf-8",
+    )
+    app_source = (
+        "from repocontext.scanner import scan_single_file\n"
+        "\n"
+        "def main():\n"
+        "    return scan_single_file()\n"
+    )
+    app_path.write_text(app_source, encoding="utf-8")
+
+    import_graph = build_import_graph(
+        [scanner_path, app_path],
+        repo_root=tmp_path,
+    )
+    symbol_index = [
+        FileSymbolIndex(
+            file_path=scanner_path.as_posix(),
+            symbols=[
+                SymbolInfo(
+                    name="scan_single_file",
+                    kind="function",
+                    file_path=scanner_path.as_posix(),
+                    line_start=1,
+                )
+            ],
+        )
+    ]
+
+    graph = parse_calls_from_source(
+        app_source,
+        source_path=app_path,
+        module_name="repocontext.app",
+        symbol_index=symbol_index,
+        import_graph=import_graph,
+    )
+
+    assert graph.sorted_edges() == [
+        CallEdge(
+            caller_file=app_path.as_posix(),
+            caller_name="main",
+            caller_qualified_name="repocontext.app.main",
+            callee_name="scan_single_file",
+            callee_qualified_name="repocontext.scanner.scan_single_file",
+            line_number=4,
+            call_type="function",
+            confidence="imported_local",
+        )
+    ]
+
+
+def test_parse_calls_from_source_resolves_imported_local_function_alias_call(tmp_path):
+    source_root = tmp_path / "src" / "repocontext"
+    source_root.mkdir(parents=True)
+    scanner_path = source_root / "scanner.py"
+    app_path = source_root / "app.py"
+
+    scanner_path.write_text(
+        "def scan_single_file():\n"
+        "    return None\n",
+        encoding="utf-8",
+    )
+    app_source = (
+        "from repocontext.scanner import scan_single_file as scan\n"
+        "\n"
+        "def main():\n"
+        "    return scan()\n"
+    )
+    app_path.write_text(app_source, encoding="utf-8")
+
+    import_graph = build_import_graph(
+        [scanner_path, app_path],
+        repo_root=tmp_path,
+    )
+    symbol_index = [
+        FileSymbolIndex(
+            file_path=scanner_path.as_posix(),
+            symbols=[
+                SymbolInfo(
+                    name="scan_single_file",
+                    kind="function",
+                    file_path=scanner_path.as_posix(),
+                    line_start=1,
+                )
+            ],
+        )
+    ]
+
+    graph = parse_calls_from_source(
+        app_source,
+        source_path=app_path,
+        module_name="repocontext.app",
+        symbol_index=symbol_index,
+        import_graph=import_graph,
+    )
+
+    assert graph.sorted_edges() == [
+        CallEdge(
+            caller_file=app_path.as_posix(),
+            caller_name="main",
+            caller_qualified_name="repocontext.app.main",
+            callee_name="scan",
+            callee_qualified_name="repocontext.scanner.scan_single_file",
+            line_number=4,
+            call_type="function",
+            confidence="imported_local",
+        )
+    ]
+
+
+def test_parse_calls_from_source_keeps_imported_call_unresolved_when_symbol_is_missing(tmp_path):
+    source_root = tmp_path / "src" / "repocontext"
+    source_root.mkdir(parents=True)
+    scanner_path = source_root / "scanner.py"
+    app_path = source_root / "app.py"
+
+    scanner_path.write_text(
+        "def other_function():\n"
+        "    return None\n",
+        encoding="utf-8",
+    )
+    app_source = (
+        "from repocontext.scanner import scan_single_file\n"
+        "\n"
+        "def main():\n"
+        "    return scan_single_file()\n"
+    )
+    app_path.write_text(app_source, encoding="utf-8")
+
+    import_graph = build_import_graph(
+        [scanner_path, app_path],
+        repo_root=tmp_path,
+    )
+    symbol_index = [
+        FileSymbolIndex(
+            file_path=scanner_path.as_posix(),
+            symbols=[
+                SymbolInfo(
+                    name="other_function",
+                    kind="function",
+                    file_path=scanner_path.as_posix(),
+                    line_start=1,
+                )
+            ],
+        )
+    ]
+
+    graph = parse_calls_from_source(
+        app_source,
+        source_path=app_path,
+        module_name="repocontext.app",
+        symbol_index=symbol_index,
+        import_graph=import_graph,
+    )
+
+    assert graph.sorted_edges() == [
+        CallEdge(
+            caller_file=app_path.as_posix(),
+            caller_name="main",
+            caller_qualified_name="repocontext.app.main",
+            callee_name="scan_single_file",
+            callee_qualified_name=None,
+            line_number=4,
+            call_type="function",
+            confidence="unresolved",
+        )
+    ]
+
+
+def test_parse_calls_from_source_marks_local_and_imported_same_name_ambiguous(tmp_path):
+    source_root = tmp_path / "src" / "repocontext"
+    source_root.mkdir(parents=True)
+    scanner_path = source_root / "scanner.py"
+    app_path = source_root / "app.py"
+
+    scanner_path.write_text(
+        "def helper():\n"
+        "    return None\n",
+        encoding="utf-8",
+    )
+    app_source = (
+        "from repocontext.scanner import helper\n"
+        "\n"
+        "def helper():\n"
+        "    return 1\n"
+        "\n"
+        "def main():\n"
+        "    return helper()\n"
+    )
+    app_path.write_text(app_source, encoding="utf-8")
+
+    import_graph = build_import_graph(
+        [scanner_path, app_path],
+        repo_root=tmp_path,
+    )
+    symbol_index = [
+        FileSymbolIndex(
+            file_path=scanner_path.as_posix(),
+            symbols=[
+                SymbolInfo(
+                    name="helper",
+                    kind="function",
+                    file_path=scanner_path.as_posix(),
+                    line_start=1,
+                )
+            ],
+        )
+    ]
+
+    graph = parse_calls_from_source(
+        app_source,
+        source_path=app_path,
+        module_name="repocontext.app",
+        symbol_index=symbol_index,
+        import_graph=import_graph,
+    )
+
+    assert graph.sorted_edges() == [
+        CallEdge(
+            caller_file=app_path.as_posix(),
+            caller_name="main",
+            caller_qualified_name="repocontext.app.main",
+            callee_name="helper",
+            callee_qualified_name=None,
+            line_number=7,
+            call_type="function",
+            confidence="ambiguous",
+        )
+    ]
+

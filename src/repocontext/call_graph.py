@@ -200,6 +200,7 @@ class PythonCallVisitor(ast.NodeVisitor):
         known_function_counts: dict[str, int] | None = None,
         known_method_counts: dict[str, dict[str, int]] | None = None,
         import_aliases: dict[str, ImportAlias] | None = None,
+        imported_function_aliases: dict[str, ImportAlias] | None = None,
     ) -> None:
         self.source_path = Path(source_path).as_posix()
         self.module_name = module_name
@@ -210,6 +211,7 @@ class PythonCallVisitor(ast.NodeVisitor):
             for class_name, method_counts in (known_method_counts or {}).items()
         }
         self.import_aliases = dict(import_aliases or {})
+        self.imported_function_aliases = dict(imported_function_aliases or {})
         self.graph = CallGraph()
         self._class_stack: list[str] = []
         self._function_stack: list[tuple[str, str]] = []
@@ -269,15 +271,22 @@ class PythonCallVisitor(ast.NodeVisitor):
         self.generic_visit(node)
 
     def _resolve_function_call(self, callee_name: str) -> tuple[str | None, str]:
-        """Resolve direct calls to top-level functions in the same file."""
+        """Resolve direct calls to local or imported local functions."""
 
         candidate_count = self.known_function_counts.get(callee_name, 0)
+        imported_alias = self.imported_function_aliases.get(callee_name)
+
+        if candidate_count == 1 and imported_alias is not None:
+            return None, "ambiguous"
 
         if candidate_count == 1:
             return self._qualify(callee_name), "local"
 
         if candidate_count > 1:
             return None, "ambiguous"
+
+        if imported_alias is not None:
+            return imported_alias.qualified_name, "imported_local"
 
         return None, "unresolved"
 
@@ -799,6 +808,69 @@ def resolve_import_aliases_with_import_graph(
 
     return resolved_aliases
 
+
+def _symbol_index_file_matches_resolved_path(
+    file_index: object,
+    resolved_path: str | Path | None,
+) -> bool:
+    """Return True when a symbol-index file matches an import alias target path."""
+
+    if resolved_path is None:
+        return False
+
+    return _paths_match_for_symbol_index(
+        getattr(file_index, "file_path", ""),
+        resolved_path,
+    )
+
+
+def _symbol_is_top_level_function(symbol: object, function_name: str) -> bool:
+    """Return True when a symbol describes the requested top-level function."""
+
+    return (
+        getattr(symbol, "kind", None) == "function"
+        and getattr(symbol, "parent", None) is None
+        and getattr(symbol, "name", None) == function_name
+    )
+
+
+def _imported_function_aliases_from_symbol_index(
+    import_aliases: dict[str, ImportAlias],
+    symbol_index: object,
+) -> dict[str, ImportAlias]:
+    """Return imported aliases that point to known repo-local functions."""
+
+    if symbol_index is None:
+        return {}
+
+    imported_function_aliases: dict[str, ImportAlias] = {}
+
+    for local_name, import_alias in sorted(import_aliases.items()):
+        if import_alias.is_local is not True:
+            continue
+        if import_alias.import_type != "from":
+            continue
+        if not import_alias.imported_name:
+            continue
+
+        matches = []
+
+        for file_index in symbol_index or ():
+            if not _symbol_index_file_matches_resolved_path(
+                file_index,
+                import_alias.resolved_path,
+            ):
+                continue
+
+            for symbol in getattr(file_index, "symbols", ()):
+                if _symbol_is_top_level_function(symbol, import_alias.imported_name):
+                    matches.append(symbol)
+
+        if len(matches) == 1:
+            imported_function_aliases[local_name] = import_alias
+
+    return imported_function_aliases
+
 def build_call_graph_from_ast(
     tree: ast.AST,
     *,
@@ -833,6 +905,11 @@ def build_call_graph_from_ast(
             source_path=source_path,
         )
 
+    imported_function_aliases = _imported_function_aliases_from_symbol_index(
+        import_aliases,
+        symbol_index,
+    )
+
     visitor = PythonCallVisitor(
         source_path=source_path,
         module_name=module_name,
@@ -840,6 +917,7 @@ def build_call_graph_from_ast(
         known_function_counts=known_function_counts,
         known_method_counts=known_method_counts,
         import_aliases=import_aliases,
+        imported_function_aliases=imported_function_aliases,
     )
     visitor.visit(tree)
     return visitor.graph
