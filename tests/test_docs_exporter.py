@@ -1,6 +1,11 @@
 import subprocess
 from pathlib import Path
 
+from repocontext.exporters import (
+    DOCS_EXPORT_FILENAME as PUBLIC_DOCS_EXPORT_FILENAME,
+    generate_docs_export as public_generate_docs_export,
+    write_docs_export as public_write_docs_export,
+)
 from repocontext.exporters.docs import (
     ARCHITECTURE_DOCUMENTATION_CATEGORY,
     CHANGELOG_AND_CONTRIBUTION_CATEGORY,
@@ -23,6 +28,8 @@ from repocontext.exporters.docs import (
     DOCS_EXPORT_SECTION_ORDER,
     iter_docs_export_headings,
     render_docs_export,
+    write_docs_export,
+    generate_docs_export,
 )
 from repocontext.exporters.full import create_full_export_context
 from repocontext.git import RepositoryInfo, TrackedFile
@@ -454,6 +461,85 @@ def test_create_docs_export_context_keeps_unreadable_docs_as_skipped_files(tmp_p
     assert context.documentation_files == ()
     assert context.skipped_files == (broken,)
     assert "Skipped unreadable documentation file: docs/broken.md: Could not read file" in context.warnings
+
+
+def test_write_docs_export_defaults_to_repository_root_docs_txt(tmp_path: Path):
+    context = make_docs_context(
+        tmp_path,
+        [make_file(tmp_path, "README.md", content="# Readme\n")],
+    )
+
+    output_path = write_docs_export(context)
+
+    assert output_path == tmp_path / "docs.txt"
+    assert output_path.read_text(encoding="utf-8").startswith("# Documentation Context")
+    assert not (tmp_path / ".docs.txt.tmp").exists()
+
+
+def test_write_docs_export_overwrites_existing_docs_txt(tmp_path: Path):
+    (tmp_path / "docs.txt").write_text("old docs export\n", encoding="utf-8")
+    context = make_docs_context(
+        tmp_path,
+        [make_file(tmp_path, "README.md", content="# New docs\n")],
+    )
+
+    output_path = write_docs_export(context)
+
+    content = output_path.read_text(encoding="utf-8")
+    assert "old docs export" not in content
+    assert "# New docs" in content
+
+
+def test_write_docs_export_supports_custom_output_path(tmp_path: Path):
+    context = make_docs_context(
+        tmp_path,
+        [make_file(tmp_path, "README.md", content="# Readme\n")],
+    )
+    output_path = tmp_path / "custom" / "documentation.txt"
+
+    written_path = write_docs_export(context, output_path)
+
+    assert written_path == output_path
+    assert output_path.read_text(encoding="utf-8").startswith("# Documentation Context")
+
+
+def test_write_docs_export_writes_utf8_output(tmp_path: Path):
+    context = make_docs_context(
+        tmp_path,
+        [make_file(tmp_path, "README.md", content="# Grüße\n")],
+    )
+
+    output_path = write_docs_export(context)
+
+    assert "Grüße" in output_path.read_text(encoding="utf-8")
+
+
+def test_generate_docs_export_writes_docs_txt_for_tracked_documentation_repo(tmp_path: Path):
+    run_git_command(tmp_path, "init")
+    run_git_command(tmp_path, "config", "user.email", "tester@example.com")
+    run_git_command(tmp_path, "config", "user.name", "Tester")
+
+    (tmp_path / "README.md").write_text("# Example\n", encoding="utf-8")
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "app.py").write_text("print('hello')\n", encoding="utf-8")
+
+    run_git_command(tmp_path, "add", "README.md", "src/app.py")
+    run_git_command(tmp_path, "commit", "-m", "Initial commit")
+
+    output_path = generate_docs_export(tmp_path)
+
+    assert output_path == tmp_path / "docs.txt"
+    content = output_path.read_text(encoding="utf-8")
+    assert "# Documentation Context" in content
+    assert "### File: README.md" in content
+    assert "### File: src/app.py" not in content
+    assert (tmp_path / ".gitignore").read_text(encoding="utf-8").count("docs.txt") == 1
+
+
+def test_public_exporter_init_exposes_docs_export_helpers():
+    assert PUBLIC_DOCS_EXPORT_FILENAME == "docs.txt"
+    assert public_generate_docs_export is generate_docs_export
+    assert public_write_docs_export is write_docs_export
 
 
 def test_build_docs_export_context_reuses_full_export_pipeline_and_git_tracked_files(tmp_path: Path):

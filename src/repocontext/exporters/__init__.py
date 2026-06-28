@@ -13,6 +13,20 @@ from .ai import (
     render_ai_export,
     write_ai_export,
 )
+from .docs import (
+    DOCS_EXPORT_DOCUMENT_HEADING,
+    DOCS_EXPORT_FILENAME,
+    DOCS_EXPORT_SECTION_HEADINGS,
+    DOCS_EXPORT_SECTION_ORDER,
+    DocumentationExportContext,
+    DocumentationFile,
+    build_docs_export_context,
+    create_docs_export_context,
+    generate_docs_export,
+    iter_docs_export_headings,
+    render_docs_export,
+    write_docs_export,
+)
 from .full import (
     FULL_EXPORT_SECTION_HEADINGS,
     FULL_EXPORT_SECTION_ORDER,
@@ -26,6 +40,18 @@ from .full import (
 )
 
 __all__ = [
+    "DOCS_EXPORT_DOCUMENT_HEADING",
+    "DOCS_EXPORT_FILENAME",
+    "DOCS_EXPORT_SECTION_HEADINGS",
+    "DOCS_EXPORT_SECTION_ORDER",
+    "DocumentationExportContext",
+    "DocumentationFile",
+    "build_docs_export_context",
+    "create_docs_export_context",
+    "generate_docs_export",
+    "iter_docs_export_headings",
+    "render_docs_export",
+    "write_docs_export",
     "AI_EXPORT_DOCUMENT_HEADING",
     "AI_EXPORT_FILENAME",
     "AI_EXPORT_SECTION_HEADINGS",

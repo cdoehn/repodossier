@@ -11,6 +11,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Sequence
 
+from repocontext.gitignore import ensure_repocontext_gitignore_entries
 from repocontext.models import FileInfo
 
 from .full import FullExportContext, build_full_export_context
@@ -255,6 +256,36 @@ def render_docs_export(context: DocumentationExportContext) -> str:
     return "\n\n".join(section.rstrip() for section in sections).rstrip() + "\n"
 
 
+def write_docs_export(
+    context: DocumentationExportContext,
+    output_path: Path | str | None = None,
+) -> Path:
+    """Write the rendered documentation export atomically and return its path."""
+
+    resolved_output_path = _resolve_docs_export_output_path(context, output_path)
+    temporary_output_path = _temporary_docs_export_output_path(resolved_output_path)
+    rendered_export = render_docs_export(context)
+
+    try:
+        resolved_output_path.parent.mkdir(parents=True, exist_ok=True)
+        temporary_output_path.write_text(rendered_export, encoding="utf-8")
+        temporary_output_path.replace(resolved_output_path)
+    except OSError:
+        _remove_temporary_output_file(temporary_output_path)
+        raise
+
+    return resolved_output_path
+
+
+def generate_docs_export(repository_root: Path | str) -> Path:
+    """Build, render, and write docs.txt for a repository."""
+
+    resolved_repository_root = Path(repository_root).resolve()
+    ensure_repocontext_gitignore_entries(resolved_repository_root)
+    context = build_docs_export_context(resolved_repository_root)
+    return write_docs_export(context)
+
+
 def is_documentation_file(path: str | Path, *, is_binary: bool = False) -> bool:
     """Return True when a repository-relative path is documentation-like."""
 
@@ -312,6 +343,33 @@ def categorize_documentation_file(path: str | Path) -> str | None:
         return LICENSE_CATEGORY
 
     return OTHER_DOCS_CATEGORY
+
+
+def _resolve_docs_export_output_path(
+    context: DocumentationExportContext,
+    output_path: Path | str | None,
+) -> Path:
+    """Resolve the final docs export output path."""
+
+    if output_path is not None:
+        return Path(output_path).resolve()
+
+    return context.repository_root / DOCS_EXPORT_FILENAME
+
+
+def _temporary_docs_export_output_path(output_path: Path) -> Path:
+    """Return the temporary path used for atomic docs export writes."""
+
+    return output_path.with_name(f".{output_path.name}.tmp")
+
+
+def _remove_temporary_output_file(path: Path) -> None:
+    """Remove a temporary output file if it exists."""
+
+    try:
+        path.unlink()
+    except FileNotFoundError:
+        return
 
 
 def _render_documentation_quick_start_section(
@@ -645,6 +703,8 @@ __all__ = [
     "build_docs_export_context",
     "categorize_documentation_file",
     "create_docs_export_context",
+    "write_docs_export",
+    "generate_docs_export",
     "is_documentation_file",
     "iter_docs_export_headings",
     "render_docs_export",
