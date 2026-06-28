@@ -1,6 +1,7 @@
 from repocontext.symbols import (
     build_symbol_index,
     FileSymbolIndex,
+    format_symbol_index,
     SymbolInfo,
     extract_symbols_from_file,
 )
@@ -659,6 +660,169 @@ def test_extract_symbols_keeps_duplicate_method_names_across_classes(tmp_path):
         ("Second", "class", None),
         ("load", "method", "Second"),
     ]
+
+
+def test_format_symbol_index_formats_function_symbol():
+    index = FileSymbolIndex(
+        file_path="src/app.py",
+        symbols=[
+            SymbolInfo(
+                name="main",
+                kind="function",
+                file_path="src/app.py",
+                line_start=42,
+            ),
+        ],
+    )
+
+    assert format_symbol_index([index]) == (
+        "src/app.py\n"
+        "  function main:42"
+    )
+
+
+def test_format_symbol_index_formats_class_symbol():
+    index = FileSymbolIndex(
+        file_path="src/config.py",
+        symbols=[
+            SymbolInfo(
+                name="AppConfig",
+                kind="class",
+                file_path="src/config.py",
+                line_start=12,
+            ),
+        ],
+    )
+
+    assert format_symbol_index([index]) == (
+        "src/config.py\n"
+        "  class AppConfig:12"
+    )
+
+
+def test_format_symbol_index_formats_method_with_parent_prefix():
+    index = FileSymbolIndex(
+        file_path="src/config.py",
+        symbols=[
+            SymbolInfo(
+                name="AppConfig",
+                kind="class",
+                file_path="src/config.py",
+                line_start=12,
+            ),
+            SymbolInfo(
+                name="load",
+                kind="method",
+                file_path="src/config.py",
+                line_start=18,
+                parent="AppConfig",
+            ),
+        ],
+    )
+
+    assert format_symbol_index([index]) == (
+        "src/config.py\n"
+        "  class AppConfig:12\n"
+        "  method AppConfig.load:18"
+    )
+
+
+def test_format_symbol_index_groups_multiple_files_by_path():
+    b_index = FileSymbolIndex(
+        file_path="src/beta.py",
+        symbols=[
+            SymbolInfo(
+                name="Beta",
+                kind="class",
+                file_path="src/beta.py",
+                line_start=2,
+            ),
+        ],
+    )
+    a_index = FileSymbolIndex(
+        file_path="src/alpha.py",
+        symbols=[
+            SymbolInfo(
+                name="alpha",
+                kind="function",
+                file_path="src/alpha.py",
+                line_start=1,
+            ),
+        ],
+    )
+
+    assert format_symbol_index([b_index, a_index]) == (
+        "src/alpha.py\n"
+        "  function alpha:1\n"
+        "src/beta.py\n"
+        "  class Beta:2"
+    )
+
+
+def test_format_symbol_index_sorts_symbols_before_formatting():
+    index = FileSymbolIndex(
+        file_path="src/ordered.py",
+        symbols=[
+            SymbolInfo(
+                name="later",
+                kind="function",
+                file_path="src/ordered.py",
+                line_start=10,
+            ),
+            SymbolInfo(
+                name="Earlier",
+                kind="class",
+                file_path="src/ordered.py",
+                line_start=2,
+            ),
+            SymbolInfo(
+                name="load",
+                kind="method",
+                file_path="src/ordered.py",
+                line_start=3,
+                parent="Earlier",
+            ),
+        ],
+    )
+
+    assert format_symbol_index([index]) == (
+        "src/ordered.py\n"
+        "  class Earlier:2\n"
+        "  method Earlier.load:3\n"
+        "  function later:10"
+    )
+
+
+def test_format_symbol_index_omits_files_without_symbols():
+    empty_index = FileSymbolIndex(file_path="src/empty.py")
+    useful_index = FileSymbolIndex(
+        file_path="src/useful.py",
+        symbols=[
+            SymbolInfo(
+                name="useful",
+                kind="function",
+                file_path="src/useful.py",
+                line_start=5,
+            ),
+        ],
+    )
+
+    assert format_symbol_index([empty_index, useful_index]) == (
+        "src/useful.py\n"
+        "  function useful:5"
+    )
+
+
+def test_format_symbol_index_returns_empty_string_when_no_symbols_exist():
+    assert format_symbol_index(
+        [
+            FileSymbolIndex(file_path="src/empty.py"),
+            FileSymbolIndex(
+                file_path="src/broken.py",
+                errors=["SyntaxError at line 1: invalid syntax"],
+            ),
+        ]
+    ) == ""
 
 
 def test_extract_symbols_from_syntax_error_file(tmp_path):

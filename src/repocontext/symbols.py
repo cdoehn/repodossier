@@ -232,6 +232,38 @@ def build_symbol_index(
     return sorted(indexes, key=lambda index: index.file_path)
 
 
+def _format_symbol_line(symbol: SymbolInfo) -> str:
+    """Return one human-readable symbol index line."""
+
+    if symbol.kind == "method" and symbol.parent:
+        display_name = f"{symbol.parent}.{symbol.name}"
+    else:
+        display_name = symbol.name
+
+    return f"  {symbol.kind} {display_name}:{symbol.line_start}"
+
+
+def format_symbol_index(symbol_index: Iterable[FileSymbolIndex]) -> str:
+    """Format a symbol index for later human-readable exports.
+
+    Files are grouped by path. Files without symbols are intentionally
+    omitted to keep future exports compact.
+    """
+
+    lines: list[str] = []
+
+    for file_index in sorted(symbol_index, key=lambda index: index.file_path):
+        symbols = _sort_symbols(file_index.symbols)
+
+        if not symbols:
+            continue
+
+        lines.append(file_index.file_path)
+        lines.extend(_format_symbol_line(symbol) for symbol in symbols)
+
+    return "\n".join(lines)
+
+
 def extract_symbols_from_file(path: str | Path) -> FileSymbolIndex:
     """Parse one Python file and return its symbol extraction result.
 
