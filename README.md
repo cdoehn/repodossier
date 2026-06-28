@@ -549,3 +549,45 @@ See the files in `planning/` for detailed milestone notes.
 ## License
 
 MIT License. See `LICENSE`.
+
+## Features
+
+- Dependency detection from pyproject.toml and requirements.txt
+
+## Dependency Detection
+
+RepoContext detects Python project dependencies with static analysis and includes them in generated exports.
+
+Supported dependency sources:
+
+- `pyproject.toml`
+  - PEP 621 `project.dependencies`
+  - PEP 621 `project.optional-dependencies`
+  - Poetry `tool.poetry.dependencies`
+  - Poetry development groups such as `dev`, `test`, `docs`, and `lint`
+- `requirements.txt`
+- development requirement files such as `requirements-dev.txt`, `requirements-test.txt`, and `requirements-docs.txt`
+- requirement files below `requirements/*.txt`
+
+Detected dependencies are classified as:
+
+- runtime
+- development
+- optional
+- unknown
+
+Dependency information is exported to:
+
+- `full.txt` as a detailed dependency section
+- `ai.txt` as a compact AI-oriented dependency summary
+
+Current limits:
+
+- no package installation
+- no network access
+- no PyPI lookup
+- no full dependency resolver
+- no lockfile analysis
+- no vulnerability scanning
+- no license analysis
+- unsupported requirement lines such as `-r other.txt`, `-c constraints.txt`, `--index-url`, editable installs, and VCS URLs are reported but not resolved
