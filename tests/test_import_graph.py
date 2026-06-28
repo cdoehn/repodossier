@@ -5,6 +5,7 @@ import pytest
 from repocontext.import_graph import (
     ImportAnalysisError,
     ImportEdge,
+    ImportGraph,
     ImportReference,
     build_python_module_map,
     module_name_from_python_path,
@@ -18,6 +19,85 @@ from repocontext.import_graph import (
     resolve_relative_imports,
     resolved_import_target,
 )
+
+
+
+
+def test_import_graph_stores_modules_edges_imports_and_errors() -> None:
+    edge = ImportEdge(
+        source_module="repocontext.cli",
+        target_module="repocontext.exporter",
+        source_path="src/repocontext/cli.py",
+        target_path="src/repocontext/exporter.py",
+        import_type="import",
+        line_number=3,
+    )
+    external_import = ImportReference(
+        source_path="src/repocontext/cli.py",
+        source_module="repocontext.cli",
+        imported_module="argparse",
+        import_type="import",
+        line_number=1,
+        is_local=False,
+    )
+    unresolved_import = ImportReference(
+        source_path="src/repocontext/exporter.py",
+        source_module="repocontext.exporter",
+        imported_module="missing",
+        imported_name="thing",
+        import_type="from",
+        line_number=7,
+        is_local=False,
+    )
+    error = ImportAnalysisError(
+        source_path="src/repocontext/broken.py",
+        message="invalid syntax",
+        error_type="SyntaxError",
+        line_number=1,
+    )
+
+    graph = ImportGraph(
+        modules={
+            "repocontext.cli": "src/repocontext/cli.py",
+            "repocontext.exporter": Path("src/repocontext/exporter.py"),
+        },
+        edges=[edge],
+        external_imports=[external_import],
+        unresolved_imports=[unresolved_import],
+        errors=[error],
+    )
+
+    assert graph.modules == {
+        "repocontext.cli": Path("src/repocontext/cli.py"),
+        "repocontext.exporter": Path("src/repocontext/exporter.py"),
+    }
+    assert graph.edges == (edge,)
+    assert graph.external_imports == (external_import,)
+    assert graph.unresolved_imports == (unresolved_import,)
+    assert graph.errors == (error,)
+
+
+def test_import_graph_defaults_to_empty_collections() -> None:
+    graph = ImportGraph(
+        modules={
+            "repocontext": "src/repocontext/__init__.py",
+        }
+    )
+
+    assert graph.modules == {
+        "repocontext": Path("src/repocontext/__init__.py"),
+    }
+    assert graph.edges == ()
+    assert graph.external_imports == ()
+    assert graph.unresolved_imports == ()
+    assert graph.errors == ()
+
+
+def test_import_graph_is_frozen() -> None:
+    graph = ImportGraph(modules={})
+
+    with pytest.raises(Exception):
+        graph.edges = ()
 
 
 def test_import_reference_stores_basic_import_metadata() -> None:

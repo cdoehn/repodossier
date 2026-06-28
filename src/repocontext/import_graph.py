@@ -81,6 +81,28 @@ class ImportAnalysisError:
             object.__setattr__(self, "source_path", Path(self.source_path))
 
 
+@dataclass(frozen=True, slots=True)
+class ImportGraph:
+    """Complete import graph analysis result for a repository."""
+
+    modules: Mapping[str, str | Path]
+    edges: tuple[ImportEdge, ...] = ()
+    external_imports: tuple[ImportReference, ...] = ()
+    unresolved_imports: tuple[ImportReference, ...] = ()
+    errors: tuple[ImportAnalysisError, ...] = ()
+
+    def __post_init__(self) -> None:
+        normalized_modules = {
+            module_name: Path(module_path)
+            for module_name, module_path in self.modules.items()
+        }
+        object.__setattr__(self, "modules", normalized_modules)
+        object.__setattr__(self, "edges", tuple(self.edges))
+        object.__setattr__(self, "external_imports", tuple(self.external_imports))
+        object.__setattr__(self, "unresolved_imports", tuple(self.unresolved_imports))
+        object.__setattr__(self, "errors", tuple(self.errors))
+
+
 class _ImportVisitor(ast.NodeVisitor):
     """Collect import references from a parsed Python AST."""
 
@@ -487,6 +509,7 @@ def parse_imports_from_file(
 __all__ = [
     "ImportAnalysisError",
     "ImportEdge",
+    "ImportGraph",
     "ImportReference",
     "ImportType",
     "build_python_module_map",
