@@ -346,6 +346,53 @@ def test_cli_export_command_creates_ai_export_together_with_full_export(
     assert (repo_path / "ai.txt").read_text(encoding="utf-8").startswith("# AI CONTEXT\n")
 
 
+
+def test_cli_export_ai_command_updates_gitignore_for_ai_txt(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo_path = setup_repository(tmp_path / "repo_export_ai_gitignore")
+    gitignore_path = repo_path / ".gitignore"
+    gitignore_path.write_text(
+        "# RepoContext exports\n"
+        "full.txt\n"
+        "docs.txt\n"
+        "changed.txt\n",
+        encoding="utf-8",
+    )
+    run_git_command(repo_path, "add", ".gitignore")
+    run_git_command(repo_path, "commit", "-m", "Add incomplete gitignore", env=COMMIT_ENV)
+    monkeypatch.chdir(repo_path)
+
+    exit_code = main(["export-ai"])
+
+    assert exit_code == 0
+    assert (repo_path / "ai.txt").exists()
+
+    gitignore_content = gitignore_path.read_text(encoding="utf-8")
+    assert gitignore_content.count("ai.txt") == 1
+    assert "full.txt" in gitignore_content
+    assert "docs.txt" in gitignore_content
+    assert "changed.txt" in gitignore_content
+
+
+def test_cli_default_export_keeps_ai_txt_untracked_after_generation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo_path = setup_repository(tmp_path / "repo_default_ai_untracked")
+    monkeypatch.chdir(repo_path)
+
+    exit_code = main([])
+
+    assert exit_code == 0
+    assert (repo_path / "ai.txt").exists()
+
+    status_output = run_git_command(repo_path, "status", "--short").stdout
+    assert "ai.txt" not in status_output
+    assert "full.txt" not in status_output
+
+
 def test_cli_export_ai_command_creates_only_ai_export(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
