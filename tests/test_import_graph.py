@@ -7,7 +7,9 @@ from repocontext.import_graph import (
     ImportEdge,
     ImportGraph,
     ImportReference,
+    build_import_graph,
     build_python_module_map,
+    import_edge_from_reference,
     module_name_from_python_path,
     parse_imports_from_file,
     parse_imports_from_source,
@@ -1034,6 +1036,202 @@ from . import plugins as local_plugins
         ("app.plugins", tmp_path / "src/app/plugins/__init__.py"),
         ("app.plugins", tmp_path / "src/app/plugins/__init__.py"),
     ]
+
+
+
+
+def test_import_edge_from_reference_creates_local_dependency_edge() -> None:
+    reference = ImportReference(
+        source_path="src/repocontext/cli.py",
+        source_module="repocontext.cli",
+        imported_module="repocontext.exporter",
+        import_type="import",
+        line_number=3,
+        is_local=True,
+        resolved_module="repocontext.exporter",
+        resolved_path="src/repocontext/exporter.py",
+    )
+
+    edge = import_edge_from_reference(reference)
+
+    assert edge == ImportEdge(
+        source_module="repocontext.cli",
+        target_module="repocontext.exporter",
+        source_path=Path("src/repocontext/cli.py"),
+        target_path=Path("src/repocontext/exporter.py"),
+        import_type="import",
+        imported_name=None,
+        line_number=3,
+    )
+
+
+def test_import_edge_from_reference_returns_none_for_external_import() -> None:
+    reference = ImportReference(
+        source_path="src/repocontext/cli.py",
+        source_module="repocontext.cli",
+        imported_module="argparse",
+        import_type="import",
+        line_number=1,
+        is_local=False,
+    )
+
+    assert import_edge_from_reference(reference) is None
+
+
+def test_build_import_graph_builds_local_edges_and_separates_external_and_unresolved(tmp_path: Path) -> None:
+    project_files = {
+        "src/repocontext/__init__.py": "",
+        "src/repocontext/cli.py": """
+import argparse
+import repocontext.exporter
+from repocontext import scanner
+""",
+        "src/repocontext/exporter.py": """
+from .scanner import scan_files
+from .missing import nope
+""",
+        "src/repocontext/scanner.py": "",
+    }
+
+    source_paths: list[Path] = []
+    for relative_path, content in project_files.items():
+        path = tmp_path / relative_path
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content, encoding="utf-8")
+        source_paths.append(path)
+
+    graph = build_import_graph(source_paths, repo_root=tmp_path)
+
+    assert graph.modules == {
+        "repocontext": tmp_path / "src/repocontext/__init__.py",
+        "repocontext.cli": tmp_path / "src/repocontext/cli.py",
+        "repocontext.exporter": tmp_path / "src/repocontext/exporter.py",
+        "repocontext.scanner": tmp_path / "src/repocontext/scanner.py",
+    }
+
+    assert [
+        (
+            edge.source_module,
+            edge.target_module,
+            edge.source_path.relative_to(tmp_path).as_posix(),
+            edge.target_path.relative_to(tmp_path).as_posix(),
+            edge.import_type,
+            edge.imported_name,
+            edge.line_number,
+        )
+        for edge in graph.edges
+    ] == [
+        (
+            "repocontext.cli",
+            "repocontext.exporter",
+            "src/repocontext/cli.py",
+            "src/repocontext/exporter.py",
+            "import",
+            None,
+            3,
+        ),
+        (
+            "repocontext.cli",
+            "repocontext.scanner",
+            "src/repocontext/cli.py",
+            "src/repocontext/scanner.py",
+            "from",
+            "scanner",
+            4,
+        ),
+        (
+            "repocontext.exporter",
+            "repocontext.scanner",
+            "src/repocontext/exporter.py",
+            "src/repocontext/scanner.py",
+            "from",
+            "scan_files",
+            2,
+        ),
+    ]
+
+    assert [
+        (
+            reference.source_module,
+            reference.imported_module,
+            reference.imported_name,
+            reference.is_local,
+        )
+        for reference in graph.external_imports
+    ] == [
+        ("repocontext.cli", "argparse", None, False),
+    ]
+
+    assert [
+        (
+            reference.source_module,
+            reference.imported_module,
+            reference.imported_name,
+            reference.is_local,
+        )
+        for reference in graph.unresolved_imports
+    ] == [
+        ("repocontext.exporter", "missing", "nope", False),
+    ]
+
+    assert graph.errors == ()
+
+
+def test_build_import_graph_collects_parse_errors_without_crashing(tmp_path: Path) -> None:
+    valid_path = tmp_path / "src/pkg/valid.py"
+    broken_path = tmp_path / "src/pkg/broken.py"
+
+    valid_path.parent.mkdir(parents=True, exist_ok=True)
+    valid_path.write_text("import os\n", encoding="utf-8")
+    broken_path.write_text("from import broken\n", encoding="utf-8")
+
+    graph = build_import_graph([valid_path, broken_path], repo_root=tmp_path)
+
+    assert graph.modules == {
+        "pkg.broken": broken_path,
+        "pkg.valid": valid_path,
+    }
+    assert graph.edges == ()
+    assert [
+        (reference.source_module, reference.imported_module, reference.is_local)
+        for reference in graph.external_imports
+    ] == [
+        ("pkg.valid", "os", False),
+    ]
+    assert graph.unresolved_imports == ()
+    assert len(graph.errors) == 1
+    assert graph.errors[0].source_path == broken_path
+    assert graph.errors[0].error_type == "SyntaxError"
+
+
+def test_build_import_graph_ignores_non_python_and_invalid_module_paths(tmp_path: Path) -> None:
+    valid_path = tmp_path / "src/pkg/main.py"
+    non_python_path = tmp_path / "README.md"
+    invalid_module_path = tmp_path / "src/pkg-name/module.py"
+
+    valid_path.parent.mkdir(parents=True, exist_ok=True)
+    valid_path.write_text("import os\n", encoding="utf-8")
+    non_python_path.write_text("# docs\n", encoding="utf-8")
+    invalid_module_path.parent.mkdir(parents=True, exist_ok=True)
+    invalid_module_path.write_text("import os\n", encoding="utf-8")
+
+    graph = build_import_graph(
+        [valid_path, non_python_path, invalid_module_path],
+        repo_root=tmp_path,
+    )
+
+    assert graph.modules == {
+        "pkg.main": valid_path,
+    }
+    assert graph.edges == ()
+    assert [
+        (reference.source_module, reference.imported_module)
+        for reference in graph.external_imports
+    ] == [
+        ("pkg.main", "os"),
+    ]
+    assert graph.unresolved_imports == ()
+    assert graph.errors == ()
 
 
 def test_parse_imports_from_source_detects_plain_imports() -> None:

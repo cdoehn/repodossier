@@ -429,6 +429,75 @@ def resolved_import_target(reference: ImportReference) -> tuple[str, Path] | Non
 
     return reference.resolved_module, reference.resolved_path
 
+
+def import_edge_from_reference(reference: ImportReference) -> ImportEdge | None:
+    """Create a local dependency edge from a resolved import reference."""
+
+    target = resolved_import_target(reference)
+    if target is None:
+        return None
+
+    target_module, target_path = target
+    return ImportEdge(
+        source_module=reference.source_module,
+        target_module=target_module,
+        source_path=reference.source_path,
+        target_path=target_path,
+        import_type=reference.import_type,
+        imported_name=reference.imported_name,
+        line_number=reference.line_number,
+    )
+
+
+def build_import_graph(
+    source_paths: list[str | Path] | tuple[str | Path, ...],
+    *,
+    repo_root: str | Path = ".",
+) -> ImportGraph:
+    """Build an import graph for the given Python source files.
+
+    The builder parses imports, resolves them against local modules, converts
+    local imports into graph edges, and keeps external imports, unresolved
+    imports, and analysis errors separate.
+    """
+
+    module_map = build_python_module_map(source_paths, repo_root=repo_root)
+    edges: list[ImportEdge] = []
+    external_imports: list[ImportReference] = []
+    unresolved_imports: list[ImportReference] = []
+    errors: list[ImportAnalysisError] = []
+
+    for source_path in sorted((Path(path) for path in source_paths), key=lambda path: path.as_posix()):
+        source_module = module_name_from_python_path(source_path, repo_root=repo_root)
+        if source_module is None:
+            continue
+
+        references, parse_errors = parse_imports_from_file(
+            source_path,
+            source_module=source_module,
+        )
+        errors.extend(parse_errors)
+
+        resolved_references = resolve_imports(references, module_map)
+        for reference in resolved_references:
+            edge = import_edge_from_reference(reference)
+            if edge is not None:
+                edges.append(edge)
+                continue
+
+            if reference.is_relative or reference.level > 0:
+                unresolved_imports.append(reference)
+            else:
+                external_imports.append(reference)
+
+    return ImportGraph(
+        modules=module_map,
+        edges=tuple(edges),
+        external_imports=tuple(external_imports),
+        unresolved_imports=tuple(unresolved_imports),
+        errors=tuple(errors),
+    )
+
 def parse_imports_from_source(
     source: str,
     *,
@@ -512,15 +581,17 @@ __all__ = [
     "ImportGraph",
     "ImportReference",
     "ImportType",
+    "build_import_graph",
     "build_python_module_map",
+    "import_edge_from_reference",
     "module_name_from_python_path",
-    "resolve_absolute_import_reference",
-    "resolve_absolute_imports",
-    "resolve_relative_import_reference",
-    "resolve_relative_imports",
-    "resolve_import_reference",
-    "resolve_imports",
-    "resolved_import_target",
     "parse_imports_from_file",
     "parse_imports_from_source",
+    "resolve_absolute_import_reference",
+    "resolve_absolute_imports",
+    "resolve_import_reference",
+    "resolve_imports",
+    "resolve_relative_import_reference",
+    "resolve_relative_imports",
+    "resolved_import_target",
 ]
