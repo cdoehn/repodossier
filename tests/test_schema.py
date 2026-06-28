@@ -44,18 +44,25 @@ def test_schema_column_normalizes_values_and_exposes_primary_key() -> None:
         nullable=False,
         default_value=None,
         primary_key_position=1,
+        position=0,
         raw_definition=" id INTEGER PRIMARY KEY ",
     )
 
     assert column.name == "id"
     assert column.data_type == "INTEGER"
     assert column.raw_definition == "id INTEGER PRIMARY KEY"
+    assert column.position == 0
     assert column.is_primary_key is True
 
 
 def test_schema_column_rejects_empty_name() -> None:
     with pytest.raises(ValueError):
         SchemaColumn(name="   ")
+
+
+def test_schema_column_rejects_negative_position() -> None:
+    with pytest.raises(ValueError):
+        SchemaColumn(name="id", position=-1)
 
 
 def test_schema_foreign_key_normalizes_values() -> None:
@@ -97,8 +104,8 @@ def test_schema_table_sorts_nested_schema_items() -> None:
         name="users",
         source_file=Path("data/app.sqlite").as_posix(),
         columns=(
-            SchemaColumn(name="name"),
-            SchemaColumn(name="id", primary_key_position=1),
+            SchemaColumn(name="name", position=1),
+            SchemaColumn(name="id", primary_key_position=1, position=0),
         ),
         foreign_keys=(
             SchemaForeignKey(table="users", from_column="team_id", to_table="teams", to_column="id"),
@@ -180,6 +187,31 @@ def test_sqlite_magic_header_rejects_non_sqlite_file(tmp_path: Path) -> None:
 
 
 
+
+def test_extract_sqlite_schema_file_preserves_sqlite_column_order(tmp_path: Path) -> None:
+    database_path = tmp_path / "ordered.sqlite"
+
+    connection = sqlite3.connect(database_path)
+    try:
+        connection.execute(
+            """
+            CREATE TABLE users (
+                id INTEGER PRIMARY KEY,
+                role_id INTEGER NOT NULL,
+                email TEXT NOT NULL
+            )
+            """
+        )
+        connection.commit()
+    finally:
+        connection.close()
+
+    report = extract_sqlite_schema_file(database_path, repo_root=tmp_path)
+
+    users_table = report.tables[0]
+    assert [column.name for column in users_table.columns] == ["id", "role_id", "email"]
+    assert [column.position for column in users_table.columns] == [0, 1, 2]
+
 def test_extract_sqlite_schema_file_reads_simple_table(tmp_path: Path) -> None:
     database_path = tmp_path / "app.sqlite"
     create_sqlite_database(database_path)
@@ -229,7 +261,7 @@ def test_extract_sqlite_schema_file_reads_multiple_tables_foreign_key_and_index(
     assert [table.name for table in report.tables] == ["roles", "users"]
 
     users_table = next(table for table in report.tables if table.name == "users")
-    assert [column.name for column in users_table.columns] == ["id", "email", "role_id"]
+    assert [column.name for column in users_table.columns] == ["id", "role_id", "email"]
 
     email_column = next(column for column in users_table.columns if column.name == "email")
     assert email_column.data_type == "TEXT"
@@ -325,6 +357,24 @@ def test_extract_sqlite_schema_file_does_not_export_table_data(tmp_path: Path) -
     assert "users" in report_text
     assert "name" in report_text
     assert "VerySecretUserName" not in report_text
+
+
+def test_discover_database_schema_files_does_not_scan_filesystem_without_explicit_files(tmp_path: Path) -> None:
+    database_path = tmp_path / "untracked.sqlite"
+    create_sqlite_database(database_path)
+
+    report = discover_database_schema_files(tmp_path)
+
+    assert report.is_empty() is True
+
+
+def test_discover_database_schema_files_can_opt_into_filesystem_scan(tmp_path: Path) -> None:
+    database_path = tmp_path / "diagnostic.sqlite"
+    create_sqlite_database(database_path)
+
+    report = discover_database_schema_files(tmp_path, allow_filesystem_scan=True)
+
+    assert report.database_files == ("diagnostic.sqlite",)
 
 def test_discover_database_schema_files_detects_sqlite_and_sql_files(tmp_path: Path) -> None:
     database_path = tmp_path / "data" / "app.sqlite"

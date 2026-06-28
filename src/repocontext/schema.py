@@ -45,6 +45,7 @@ class SchemaColumn:
     nullable: bool | None = None
     default_value: str | None = None
     primary_key_position: int = 0
+    position: int | None = None
     raw_definition: str = ""
 
     def __post_init__(self) -> None:
@@ -59,6 +60,9 @@ class SchemaColumn:
         if self.primary_key_position < 0:
             raise ValueError("primary_key_position must not be negative.")
 
+        if self.position is not None and self.position < 0:
+            raise ValueError("position must not be negative.")
+
     @property
     def is_primary_key(self) -> bool:
         """Return True when this column participates in the primary key."""
@@ -66,10 +70,15 @@ class SchemaColumn:
         return self.primary_key_position > 0
 
     def sort_key(self) -> tuple[int, str]:
-        """Return a stable sort key for deterministic output."""
+        """Return a stable sort key for deterministic output.
+
+        Prefer source/schema position when known so rendered schemas keep the
+        database's natural column order. Columns without a known position still
+        fall back to deterministic name sorting.
+        """
 
         return (
-            self.primary_key_position if self.primary_key_position > 0 else 999_999,
+            self.position if self.position is not None else 999_999,
             self.name,
         )
 
@@ -260,13 +269,19 @@ def has_sqlite_magic_header(path: str | Path) -> bool:
 def discover_database_schema_files(
     repo_root: str | Path,
     files: Iterable[object] | None = None,
+    *,
+    allow_filesystem_scan: bool = False,
 ) -> DatabaseSchemaReport:
     """Discover SQLite and SQL schema files.
 
     When ``files`` is provided, only those file references are considered. This
     is the preferred export-pipeline mode because callers can pass Git-tracked
-    scanner results. When ``files`` is omitted, the repository directory is
-    scanned as a best-effort fallback for direct unit use.
+    scanner results.
+
+    When ``files`` is omitted, discovery does not scan the filesystem by
+    default. This protects RepoContext's Git-tracked-only contract. Tests or
+    diagnostic callers may opt into a raw filesystem scan with
+    ``allow_filesystem_scan=True``.
     """
 
     root = Path(repo_root)
@@ -275,7 +290,11 @@ def discover_database_schema_files(
     unsupported_files: list[str] = []
     warnings: list[str] = []
 
-    for candidate_path in _iter_discovery_paths(root, files):
+    for candidate_path in _iter_discovery_paths(
+        root,
+        files,
+        allow_filesystem_scan=allow_filesystem_scan,
+    ):
         relative_path = _relative_path(root, candidate_path)
 
         if is_generated_export_file(relative_path):
@@ -300,12 +319,20 @@ def discover_database_schema_files(
     )
 
 
-def _iter_discovery_paths(repo_root: Path, files: Iterable[object] | None) -> tuple[Path, ...]:
+def _iter_discovery_paths(
+    repo_root: Path,
+    files: Iterable[object] | None,
+    *,
+    allow_filesystem_scan: bool = False,
+) -> tuple[Path, ...]:
     """Return absolute candidate paths in stable order."""
 
     paths: list[Path] = []
 
     if files is None:
+        if not allow_filesystem_scan:
+            return ()
+
         for path in sorted(repo_root.rglob("*"), key=lambda item: item.as_posix()):
             if path.is_file():
                 paths.append(path)
@@ -535,6 +562,7 @@ def _read_sqlite_columns(
                 nullable=nullable,
                 default_value=default_value,
                 primary_key_position=primary_key_position,
+                position=int(row[0] or 0),
             )
         )
 
