@@ -51,6 +51,11 @@ PYTHON_ENTRYPOINT_FILENAMES: dict[str, int] = {
     "asgi.py": 65,
 }
 
+IMPORT_INCOMING_WEIGHT = 35
+IMPORT_INCOMING_MAX_SCORE = 120
+IMPORT_OUTGOING_WEIGHT = 8
+IMPORT_OUTGOING_MAX_SCORE = 32
+
 
 @dataclass(frozen=True, slots=True)
 class ImportantFileSignals:
@@ -90,6 +95,29 @@ class ImportantFileScore:
         object.__setattr__(self, "reasons", tuple(self.reasons))
 
 
+@dataclass(frozen=True, slots=True)
+class _ImportCentrality:
+    """Internal import centrality score details for one file."""
+
+    score: int = 0
+    incoming_count: int = 0
+    outgoing_count: int = 0
+
+    @property
+    def reasons(self) -> tuple[str, ...]:
+        reasons: list[str] = []
+
+        if self.incoming_count:
+            noun = "file" if self.incoming_count == 1 else "files"
+            reasons.append(f"Imported by {self.incoming_count} local {noun}")
+
+        if self.outgoing_count:
+            noun = "file" if self.outgoing_count == 1 else "files"
+            reasons.append(f"Imports {self.outgoing_count} local {noun}")
+
+        return tuple(reasons)
+
+
 def rank_important_files(
     files: Iterable[object],
     *,
@@ -102,16 +130,20 @@ def rank_important_files(
     """Rank important files with deterministic, explainable scores.
 
     The additional keyword arguments are accepted now so later Milestone 12
-    patches can add symbol, import-graph, call-graph, and project metadata
-    scoring without changing the public ranking API.
+    patches can add symbol, call-graph, and project metadata scoring without
+    changing the public ranking API.
     """
 
-    del symbols, import_graph, call_graph, project_metadata
+    del symbols, call_graph, project_metadata
 
     file_items = list(files)
     candidate_paths = _collect_candidate_paths(file_items)
     pyproject_entrypoint_paths = _detect_pyproject_entrypoint_paths(
         file_items,
+        candidate_paths,
+    )
+    import_centrality_by_path = _calculate_import_centrality_by_path(
+        import_graph,
         candidate_paths,
     )
 
@@ -129,6 +161,7 @@ def rank_important_files(
             file_info,
             path,
             pyproject_entrypoint_paths=pyproject_entrypoint_paths,
+            import_centrality_by_path=import_centrality_by_path,
         )
         if score is None or score.score <= 0:
             continue
@@ -242,6 +275,83 @@ def _resolve_script_target_to_paths(
     return tuple(dict.fromkeys(matched))
 
 
+def _calculate_import_centrality_by_path(
+    import_graph: object | None,
+    candidate_paths: frozenset[str],
+) -> dict[str, _ImportCentrality]:
+    """Calculate simple import centrality from ImportGraph-like edges.
+
+    Only file paths present in the current ranking candidate set are counted.
+    This keeps the ranking robust when the graph contains stale, external, or
+    otherwise unknown nodes.
+    """
+
+    if import_graph is None:
+        return {}
+
+    edges = getattr(import_graph, "edges", None)
+    if not edges:
+        return {}
+
+    incoming_sources_by_target: dict[str, set[str]] = {}
+    outgoing_targets_by_source: dict[str, set[str]] = {}
+
+    for edge in edges:
+        source_path = _normalized_graph_path(getattr(edge, "source_path", None))
+        target_path = _normalized_graph_path(getattr(edge, "target_path", None))
+
+        if source_path is None or target_path is None:
+            continue
+
+        if source_path not in candidate_paths or target_path not in candidate_paths:
+            continue
+
+        if source_path == target_path:
+            continue
+
+        incoming_sources_by_target.setdefault(target_path, set()).add(source_path)
+        outgoing_targets_by_source.setdefault(source_path, set()).add(target_path)
+
+    centrality: dict[str, _ImportCentrality] = {}
+    all_paths = set(incoming_sources_by_target) | set(outgoing_targets_by_source)
+
+    for path in all_paths:
+        incoming_count = len(incoming_sources_by_target.get(path, set()))
+        outgoing_count = len(outgoing_targets_by_source.get(path, set()))
+        score = _bounded_score(
+            incoming_count,
+            weight=IMPORT_INCOMING_WEIGHT,
+            maximum=IMPORT_INCOMING_MAX_SCORE,
+        ) + _bounded_score(
+            outgoing_count,
+            weight=IMPORT_OUTGOING_WEIGHT,
+            maximum=IMPORT_OUTGOING_MAX_SCORE,
+        )
+        centrality[path] = _ImportCentrality(
+            score=score,
+            incoming_count=incoming_count,
+            outgoing_count=outgoing_count,
+        )
+
+    return centrality
+
+
+def _bounded_score(count: int, *, weight: int, maximum: int) -> int:
+    """Return a capped linear score for count-based centrality signals."""
+
+    if count <= 0:
+        return 0
+    return min(maximum, count * weight)
+
+
+def _normalized_graph_path(path: object) -> str | None:
+    """Return a normalized path from an import graph edge path."""
+
+    if path is None:
+        return None
+    return Path(path).as_posix()
+
+
 def _relative_path_from_file(file_info: object) -> Path | None:
     """Return a repository-relative path from a FileInfo-like object or path."""
 
@@ -287,24 +397,30 @@ def _score_path(
     path: Path,
     *,
     pyproject_entrypoint_paths: frozenset[str],
+    import_centrality_by_path: dict[str, _ImportCentrality],
 ) -> ImportantFileScore | None:
     """Score one file path and return an explainable ranking result."""
+
+    path_key = path.as_posix()
 
     entrypoint_score, entrypoint_reasons = _score_entrypoint_path(
         path,
         pyproject_entrypoint_paths=pyproject_entrypoint_paths,
     )
+    import_centrality = import_centrality_by_path.get(path_key, _ImportCentrality())
     documentation_score, documentation_reasons = _score_documentation_path(path)
     structural_score, structural_reasons = _score_structural_path(file_info, path)
 
     signals = ImportantFileSignals(
         entrypoint_score=entrypoint_score,
+        import_centrality_score=import_centrality.score,
         documentation_score=documentation_score,
         structural_score=structural_score,
     )
 
     reasons = (
         *entrypoint_reasons,
+        *import_centrality.reasons,
         *documentation_reasons,
         *structural_reasons,
     )
@@ -313,7 +429,7 @@ def _score_path(
         return None
 
     return ImportantFileScore(
-        path=path.as_posix(),
+        path=path_key,
         score=signals.total,
         reasons=tuple(reasons),
         signals=signals,

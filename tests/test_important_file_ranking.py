@@ -1,6 +1,7 @@
 from pathlib import Path
 from types import SimpleNamespace
 
+from repocontext.import_graph import ImportEdge, ImportGraph
 from repocontext.ranking import (
     ImportantFileScore,
     rank_important_files,
@@ -147,6 +148,179 @@ def test_invalid_pyproject_does_not_crash_entrypoint_detection() -> None:
     assert "Likely Python entry point" in reasons_for(ranked, "src/demo/cli.py")
 
 
+def test_import_centrality_ranks_frequently_imported_file_above_leaf_file() -> None:
+    graph = ImportGraph(
+        modules={
+            "demo.cli": "src/demo/cli.py",
+            "demo.api": "src/demo/api.py",
+            "demo.worker": "src/demo/worker.py",
+            "demo.core": "src/demo/core.py",
+            "demo.helper": "src/demo/helper.py",
+        },
+        edges=[
+            ImportEdge(
+                source_module="demo.cli",
+                target_module="demo.core",
+                source_path="src/demo/cli.py",
+                target_path="src/demo/core.py",
+                import_type="from",
+                line_number=1,
+            ),
+            ImportEdge(
+                source_module="demo.api",
+                target_module="demo.core",
+                source_path="src/demo/api.py",
+                target_path="src/demo/core.py",
+                import_type="from",
+                line_number=1,
+            ),
+            ImportEdge(
+                source_module="demo.worker",
+                target_module="demo.core",
+                source_path="src/demo/worker.py",
+                target_path="src/demo/core.py",
+                import_type="from",
+                line_number=1,
+            ),
+        ],
+    )
+
+    ranked = rank_important_files(
+        [
+            make_file("src/demo/cli.py"),
+            make_file("src/demo/api.py"),
+            make_file("src/demo/worker.py"),
+            make_file("src/demo/core.py"),
+            make_file("src/demo/helper.py"),
+        ],
+        import_graph=graph,
+    )
+
+    assert paths(ranked)[0] == "src/demo/core.py"
+    assert "src/demo/helper.py" not in paths(ranked)
+
+    core_score = score_for(ranked, "src/demo/core.py")
+    assert core_score.signals.import_centrality_score > 0
+    assert "Imported by 3 local files" in core_score.reasons
+
+
+def test_import_centrality_gives_small_bonus_to_orchestrating_importers() -> None:
+    graph = ImportGraph(
+        modules={
+            "demo.cli": "src/demo/cli.py",
+            "demo.core": "src/demo/core.py",
+            "demo.config": "src/demo/config.py",
+        },
+        edges=[
+            ImportEdge(
+                source_module="demo.cli",
+                target_module="demo.core",
+                source_path="src/demo/cli.py",
+                target_path="src/demo/core.py",
+                import_type="from",
+                line_number=1,
+            ),
+            ImportEdge(
+                source_module="demo.cli",
+                target_module="demo.config",
+                source_path="src/demo/cli.py",
+                target_path="src/demo/config.py",
+                import_type="from",
+                line_number=2,
+            ),
+        ],
+    )
+
+    ranked = rank_important_files(
+        [
+            make_file("src/demo/cli.py"),
+            make_file("src/demo/core.py"),
+            make_file("src/demo/config.py"),
+        ],
+        import_graph=graph,
+    )
+
+    cli_score = score_for(ranked, "src/demo/cli.py")
+    assert cli_score.signals.import_centrality_score > 0
+    assert "Imports 2 local files" in cli_score.reasons
+
+
+def test_import_centrality_ignores_unknown_graph_nodes() -> None:
+    graph = ImportGraph(
+        modules={
+            "demo.interface": "src/demo/interface.py",
+            "demo.core": "src/demo/core.py",
+            "demo.ghost": "src/demo/ghost.py",
+        },
+        edges=[
+            ImportEdge(
+                source_module="demo.ghost",
+                target_module="demo.core",
+                source_path="src/demo/ghost.py",
+                target_path="src/demo/core.py",
+                import_type="from",
+                line_number=1,
+            ),
+            ImportEdge(
+                source_module="demo.interface",
+                target_module="demo.ghost",
+                source_path="src/demo/interface.py",
+                target_path="src/demo/ghost.py",
+                import_type="from",
+                line_number=2,
+            ),
+        ],
+    )
+
+    ranked = rank_important_files(
+        [
+            make_file("src/demo/interface.py"),
+            make_file("src/demo/core.py"),
+        ],
+        import_graph=graph,
+    )
+
+    assert ranked == ()
+
+
+def test_import_centrality_deduplicates_repeated_edges_by_source_and_target() -> None:
+    graph = ImportGraph(
+        modules={
+            "demo.cli": "src/demo/cli.py",
+            "demo.core": "src/demo/core.py",
+        },
+        edges=[
+            ImportEdge(
+                source_module="demo.cli",
+                target_module="demo.core",
+                source_path="src/demo/cli.py",
+                target_path="src/demo/core.py",
+                import_type="from",
+                line_number=1,
+            ),
+            ImportEdge(
+                source_module="demo.cli",
+                target_module="demo.core",
+                source_path="src/demo/cli.py",
+                target_path="src/demo/core.py",
+                import_type="from",
+                line_number=2,
+            ),
+        ],
+    )
+
+    ranked = rank_important_files(
+        [
+            make_file("src/demo/cli.py"),
+            make_file("src/demo/core.py"),
+        ],
+        import_graph=graph,
+    )
+
+    core_score = score_for(ranked, "src/demo/core.py")
+    assert "Imported by 1 local file" in core_score.reasons
+
+
 def test_documentation_ranking_prioritizes_readme_and_architecture_docs() -> None:
     ranked = rank_important_files(
         [
@@ -239,3 +413,16 @@ def test_package_initializer_gets_small_structural_score_without_overranking() -
     initializer_score = ranked[1]
     assert initializer_score.signals.structural_score == 5
     assert initializer_score.reasons == ("Package initializer",)
+
+
+def test_empty_optional_graphs_do_not_break_existing_ranking_signals() -> None:
+    ranked = rank_important_files(
+        [
+            make_file("README.md"),
+            make_file("pyproject.toml"),
+        ],
+        import_graph=None,
+        call_graph=None,
+    )
+
+    assert paths(ranked) == ["README.md", "pyproject.toml"]
