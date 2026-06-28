@@ -1105,42 +1105,145 @@ def _append_grouped_call_graph_edges(lines, edges, *, max_edges):
         lines.append(f"- ... {remaining_count} more")
 
 
-def _format_call_graph_section(call_graph, *, max_edges=200):
-    """Render a compact Call Graph section for full.txt."""
+def _is_internal_call_graph_edge(edge):
+    """Return True for repo-relevant resolved call graph edges."""
+
+    return edge.confidence in {"local", "local_method", "imported_local"}
+
+
+def _is_external_call_graph_edge(edge):
+    """Return True for calls known to target external modules."""
+
+    return edge.confidence == "external"
+
+
+def _is_ambiguous_call_graph_edge(edge):
+    """Return True for intentionally ambiguous call graph edges."""
+
+    return edge.confidence == "ambiguous"
+
+
+def _is_unresolved_call_graph_edge(edge):
+    """Return True for unresolved call graph edges."""
+
+    return edge.confidence.startswith("unresolved")
+
+
+def _format_call_graph_summary_edge_line(edge):
+    """Format one compact non-prominent call graph edge."""
+
+    line_number = edge.line_number if edge.line_number is not None else "unknown"
+    return (
+        f"- {edge.caller_key} -> {edge.callee_key} "
+        f"(line {line_number}, {edge.call_type}, {edge.confidence})"
+    )
+
+
+def _split_call_graph_edges(edges):
+    """Split call graph edges into prominent and noisy groups."""
+
+    internal_edges = []
+    external_edges = []
+    ambiguous_edges = []
+    unresolved_edges = []
+    other_edges = []
+
+    for edge in edges:
+        if _is_internal_call_graph_edge(edge):
+            internal_edges.append(edge)
+        elif _is_external_call_graph_edge(edge):
+            external_edges.append(edge)
+        elif _is_ambiguous_call_graph_edge(edge):
+            ambiguous_edges.append(edge)
+        elif _is_unresolved_call_graph_edge(edge):
+            unresolved_edges.append(edge)
+        else:
+            other_edges.append(edge)
+
+    return (
+        tuple(internal_edges),
+        tuple(external_edges),
+        tuple(ambiguous_edges),
+        tuple(unresolved_edges),
+        tuple(other_edges),
+    )
+
+
+def _format_call_graph_section(
+    call_graph,
+    *,
+    max_edges=200,
+    max_external_edges=25,
+    max_ambiguous_edges=25,
+    max_unresolved_edges=25,
+):
+    """Render a compact Call Graph section for full.txt.
+
+    Resolved repo-internal calls are shown prominently and grouped by caller.
+    External, ambiguous, and unresolved calls are separated and limited so the
+    export remains useful for large projects.
+    """
 
     edges = tuple(call_graph.sorted_edges())
-
-    local_count = sum(
-        1
-        for edge in edges
-        if edge.confidence in {"local", "local_method", "imported_local"}
-    )
-    external_count = sum(1 for edge in edges if edge.confidence == "external")
-    ambiguous_count = sum(1 for edge in edges if edge.confidence == "ambiguous")
-    unresolved_count = sum(
-        1
-        for edge in edges
-        if edge.confidence.startswith("unresolved")
-    )
+    (
+        internal_edges,
+        external_edges,
+        ambiguous_edges,
+        unresolved_edges,
+        other_edges,
+    ) = _split_call_graph_edges(edges)
 
     lines = [
         "## Call Graph",
         "",
         "Summary:",
         f"- Call edges: {len(edges)}",
-        f"- Local/internal calls: {local_count}",
-        f"- External calls: {external_count}",
-        f"- Ambiguous calls: {ambiguous_count}",
-        f"- Unresolved calls: {unresolved_count}",
+        f"- Local/internal calls: {len(internal_edges)}",
+        f"- External calls: {len(external_edges)}",
+        f"- Ambiguous calls: {len(ambiguous_edges)}",
+        f"- Unresolved calls: {len(unresolved_edges)}",
         "",
-        "Calls by caller:",
+        "Internal calls by caller:",
     ]
 
     _append_grouped_call_graph_edges(
         lines,
-        edges,
+        internal_edges,
         max_edges=max_edges,
     )
+
+    lines.extend(["", "External calls:"])
+    _append_limited_items(
+        lines,
+        external_edges,
+        max_items=max_external_edges,
+        formatter=_format_call_graph_summary_edge_line,
+    )
+
+    lines.extend(["", "Ambiguous calls:"])
+    _append_limited_items(
+        lines,
+        ambiguous_edges,
+        max_items=max_ambiguous_edges,
+        formatter=_format_call_graph_summary_edge_line,
+    )
+
+    lines.extend(["", "Unresolved calls:"])
+    _append_limited_items(
+        lines,
+        unresolved_edges,
+        max_items=max_unresolved_edges,
+        formatter=_format_call_graph_summary_edge_line,
+    )
+
+    if other_edges:
+        lines.extend(["", "Other calls:"])
+        _append_limited_items(
+            lines,
+            other_edges,
+            max_items=max_unresolved_edges,
+            formatter=_format_call_graph_summary_edge_line,
+        )
 
     return "\n".join(lines).rstrip()
 

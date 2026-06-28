@@ -425,7 +425,11 @@ def test_format_call_graph_section_summarizes_and_limits_edges() -> None:
         ]
     )
 
-    section = _format_call_graph_section(graph, max_edges=1)
+    section = _format_call_graph_section(
+        graph,
+        max_edges=1,
+        max_external_edges=0,
+    )
 
     assert section.startswith("## Call Graph")
     assert "- Call edges: 2" in section
@@ -434,12 +438,12 @@ def test_format_call_graph_section_summarizes_and_limits_edges() -> None:
     assert "- Ambiguous calls: 0" in section
     assert "- Unresolved calls: 0" in section
     assert (
-        "Calls by caller:\n"
+        "Internal calls by caller:\n"
         "app.main.main (src/app/main.py)\n"
         "  - line 4: calls app.utils.helper [function, imported_local]"
     ) in section
+    assert "External calls:\n- ... 1 more" in section
     assert "pathlib.Path" not in section
-    assert "- ... 1 more" in section
 
 def test_format_call_graph_section_groups_multiple_edges_by_caller() -> None:
     graph = CallGraph(
@@ -480,14 +484,117 @@ def test_format_call_graph_section_groups_multiple_edges_by_caller() -> None:
     section = _format_call_graph_section(graph)
 
     assert (
-        "Calls by caller:\n"
+        "Internal calls by caller:\n"
         "app.main.main (src/app/main.py)\n"
         "  - line 3: calls app.main.prepare [function, local]\n"
-        "  - line 4: calls app.runner.run [function, imported_local]\n"
-        "\n"
-        "app.worker.work (src/app/worker.py)\n"
-        "  - line 8: calls pathlib.Path [function, external]"
+        "  - line 4: calls app.runner.run [function, imported_local]"
     ) in section
+    assert "app.worker.work (src/app/worker.py)" not in section
+    assert (
+        "External calls:\n"
+        "- app.worker.work -> pathlib.Path (line 8, function, external)"
+    ) in section
+
+def test_format_call_graph_section_separates_and_limits_noisy_calls() -> None:
+    graph = CallGraph(
+        [
+            CallEdge(
+                caller_file="src/app/main.py",
+                caller_name="main",
+                caller_qualified_name="app.main.main",
+                callee_name="helper",
+                callee_qualified_name="app.helper",
+                line_number=2,
+                call_type="function",
+                confidence="local",
+            ),
+            CallEdge(
+                caller_file="src/app/main.py",
+                caller_name="main",
+                caller_qualified_name="app.main.main",
+                callee_name="Path",
+                callee_qualified_name="pathlib.Path",
+                line_number=3,
+                call_type="function",
+                confidence="external",
+            ),
+            CallEdge(
+                caller_file="src/app/main.py",
+                caller_name="main",
+                caller_qualified_name="app.main.main",
+                callee_name="run",
+                callee_qualified_name="subprocess.run",
+                line_number=4,
+                call_type="method",
+                confidence="external",
+            ),
+            CallEdge(
+                caller_file="src/app/main.py",
+                caller_name="main",
+                caller_qualified_name="app.main.main",
+                callee_name="maybe",
+                callee_qualified_name=None,
+                line_number=5,
+                call_type="function",
+                confidence="unresolved",
+            ),
+            CallEdge(
+                caller_file="src/app/main.py",
+                caller_name="main",
+                caller_qualified_name="app.main.main",
+                callee_name="duplicate",
+                callee_qualified_name=None,
+                line_number=6,
+                call_type="function",
+                confidence="ambiguous",
+            ),
+        ]
+    )
+
+    section = _format_call_graph_section(
+        graph,
+        max_external_edges=1,
+        max_unresolved_edges=1,
+        max_ambiguous_edges=1,
+    )
+
+    assert "Internal calls by caller:" in section
+    assert "app.main.main (src/app/main.py)" in section
+    assert "  - line 2: calls app.helper [function, local]" in section
+
+    assert "External calls:" in section
+    assert "- app.main.main -> pathlib.Path (line 3, function, external)" in section
+    assert "- app.main.main -> subprocess.run" not in section
+    assert "- ... 1 more" in section
+
+    assert "Ambiguous calls:" in section
+    assert "- app.main.main -> duplicate (line 6, function, ambiguous)" in section
+
+    assert "Unresolved calls:" in section
+    assert "- app.main.main -> maybe (line 5, function, unresolved)" in section
+
+
+def test_format_call_graph_section_shows_none_for_empty_noisy_groups() -> None:
+    graph = CallGraph(
+        [
+            CallEdge(
+                caller_file="src/app/main.py",
+                caller_name="main",
+                caller_qualified_name="app.main.main",
+                callee_name="helper",
+                callee_qualified_name="app.helper",
+                line_number=2,
+                call_type="function",
+                confidence="local",
+            ),
+        ]
+    )
+
+    section = _format_call_graph_section(graph)
+
+    assert "External calls:\n- none" in section
+    assert "Ambiguous calls:\n- none" in section
+    assert "Unresolved calls:\n- none" in section
 
 
 def _make_call_graph_full_export_context(repo_root: Path):
