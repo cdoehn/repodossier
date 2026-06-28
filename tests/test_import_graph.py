@@ -239,6 +239,132 @@ from repocontext.symbols import *
     ]
 
 
+
+
+def test_parse_imports_from_source_detects_multiple_plain_imports_in_one_statement() -> None:
+    references, errors = parse_imports_from_source(
+        """
+import os, sys as system
+""",
+        source_path="src/repocontext/example.py",
+        source_module="repocontext.example",
+    )
+
+    assert errors == []
+    assert [
+        (ref.import_type, ref.imported_module, ref.imported_name, ref.alias, ref.line_number)
+        for ref in references
+    ] == [
+        ("import", "os", None, None, 2),
+        ("import", "sys", None, "system", 2),
+    ]
+
+
+def test_parse_imports_from_source_detects_multiline_from_imports() -> None:
+    references, errors = parse_imports_from_source(
+        """
+from repocontext.symbols import (
+    Symbol,
+    SymbolKind as Kind,
+)
+""",
+        source_path="src/repocontext/example.py",
+        source_module="repocontext.example",
+    )
+
+    assert errors == []
+    assert [
+        (ref.import_type, ref.imported_module, ref.imported_name, ref.alias, ref.line_number)
+        for ref in references
+    ] == [
+        ("from", "repocontext.symbols", "Symbol", None, 2),
+        ("from", "repocontext.symbols", "SymbolKind", "Kind", 2),
+    ]
+
+
+def test_parse_imports_from_source_detects_imports_inside_scopes() -> None:
+    references, errors = parse_imports_from_source(
+        """
+class Loader:
+    import json as json_module
+
+    def load(self):
+        from pathlib import Path
+
+def helper():
+    import collections.abc
+""",
+        source_path="src/repocontext/example.py",
+        source_module="repocontext.example",
+    )
+
+    assert errors == []
+    assert [
+        (ref.import_type, ref.imported_module, ref.imported_name, ref.alias, ref.line_number)
+        for ref in references
+    ] == [
+        ("import", "json", None, "json_module", 3),
+        ("from", "pathlib", "Path", None, 6),
+        ("import", "collections.abc", None, None, 9),
+    ]
+
+
+def test_parse_imports_from_source_detects_conditional_imports() -> None:
+    references, errors = parse_imports_from_source(
+        """
+if TYPE_CHECKING:
+    from repocontext.scanner import ScannedFile
+
+try:
+    import tomllib
+except ImportError:
+    import tomli as tomllib
+""",
+        source_path="src/repocontext/example.py",
+        source_module="repocontext.example",
+    )
+
+    assert errors == []
+    assert [
+        (ref.import_type, ref.imported_module, ref.imported_name, ref.alias, ref.line_number)
+        for ref in references
+    ] == [
+        ("from", "repocontext.scanner", "ScannedFile", None, 3),
+        ("import", "tomllib", None, None, 6),
+        ("import", "tomli", None, "tomllib", 8),
+    ]
+
+
+def test_parse_imports_from_source_detects_relative_package_import_aliases() -> None:
+    references, errors = parse_imports_from_source(
+        """
+from .. import git as repo_git
+from . import scanner, symbols as symbol_module
+from .scanner import *
+""",
+        source_path="src/repocontext/subpkg/example.py",
+        source_module="repocontext.subpkg.example",
+    )
+
+    assert errors == []
+    assert [
+        (
+            ref.imported_module,
+            ref.imported_name,
+            ref.alias,
+            ref.level,
+            ref.is_relative,
+            ref.line_number,
+        )
+        for ref in references
+    ] == [
+        (None, "git", "repo_git", 2, True, 2),
+        (None, "scanner", None, 1, True, 3),
+        (None, "symbols", "symbol_module", 1, True, 3),
+        ("scanner", "*", None, 1, True, 4),
+    ]
+
+
 def test_parse_imports_from_source_collects_syntax_errors_without_raising() -> None:
     references, errors = parse_imports_from_source(
         "from import broken\n",
