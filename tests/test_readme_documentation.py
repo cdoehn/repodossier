@@ -42,7 +42,7 @@ def test_readme_documents_ai_export_usage_and_completed_status() -> None:
     assert "## Output: ai.txt" in readme
     assert "The AI export is intentionally compact" in readme
     assert "Planned but not complete yet:\n\n- `ai.txt`" not in readme
-    assert "`changed.txt` is planned but not complete yet" in readme
+    assert "`changed.txt` is planned but not complete yet" not in readme
 
 
 def test_readme_documents_docs_export_usage_and_completed_status():
@@ -120,4 +120,50 @@ def test_readme_no_longer_lists_important_file_ranking_as_planned() -> None:
     )[0]
 
     assert "advanced important-file ranking" not in planned_section
+
+
+def test_readme_documents_changed_export_usage() -> None:
+    readme = Path("README.md").read_text(encoding="utf-8")
+
+    assert "### Changed-files export" in readme
+    assert "repocontext changed" in readme
+    assert "repocontext changed --branch main" in readme
+    assert "repocontext changed --output review-changes.txt" in readme
+    assert "repocontext changed --no-diff" in readme
+
+
+def test_readme_documents_changed_txt_output() -> None:
+    readme = Path("README.md").read_text(encoding="utf-8")
+
+    assert "## Output: changed.txt" in readme
+    assert "Changed Files Summary" in readme
+    assert "Git Diff" in readme
+    assert "Changed File Contents" in readme
+    assert "Deleted Files" in readme
+    assert "Binary / Skipped Files" in readme
+
+
+def test_readme_no_longer_lists_changed_export_as_planned_or_incomplete() -> None:
+    readme = Path("README.md").read_text(encoding="utf-8")
+
+    planned_start = readme.find("Planned but not complete yet:")
+    assert planned_start != -1
+
+    next_heading = readme.find("## Installation", planned_start)
+    assert next_heading != -1
+
+    planned_section = readme[planned_start:next_heading]
+
+    assert "- `changed.txt`" not in planned_section
+    assert "`changed.txt` is planned but not complete yet" not in readme
+    assert "- `changed.txt` export for git diffs, changed file contents, and branch comparisons" in readme
+    assert "The `changed.txt` export is different" in readme
+
+
+def test_readme_changed_export_code_fences_are_plain_markdown() -> None:
+    readme = Path("README.md").read_text(encoding="utf-8")
+
+    assert '```bash id="' not in readme
+    assert '```text id="' not in readme
+    assert '``` id="' not in readme
 

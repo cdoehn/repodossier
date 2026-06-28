@@ -2,9 +2,9 @@
 
 RepoContext creates AI-friendly exports of Git repositories.
 
-It scans Git-tracked files, builds a structured repository overview, and writes `full.txt`, a compact `ai.txt` export, and an explicit documentation-only `docs.txt` export that can be pasted into large language models such as ChatGPT, Claude, Gemini, Aider, and other coding assistants.
+It scans Git-tracked files, builds a structured repository overview, and writes `full.txt`, a compact `ai.txt` export, an explicit documentation-only `docs.txt` export, and a focused `changed.txt` export that can be pasted into large language models such as ChatGPT, Claude, Gemini, Aider, and other coding assistants.
 
-The current implementation focuses on robust **Full Export**, compact **AI Export**, and documentation-only **Docs Export** modes for Python projects. It includes repository statistics, file summaries, a tree view, complete source export, documentation extraction, warnings, important-file ranking, a Python symbol index, a Python import graph, and a static Python call graph.
+The current implementation focuses on robust **Full Export**, compact **AI Export**, documentation-only **Docs Export**, and focused **Changed Export** modes for Python projects. It includes repository statistics, file summaries, a tree view, complete source export, documentation extraction, warnings, important-file ranking, a Python symbol index, a Python import graph, and a static Python call graph.
 
 ## Why RepoContext exists
 
@@ -44,11 +44,11 @@ Implemented:
 - dependency detection from `pyproject.toml` and requirements files
 - database schema extraction from SQLite databases and SQL schema files
 - multi-signal important-file ranking for AI exports
+- `changed.txt` export for git diffs, changed file contents, and branch comparisons
 - CLI aliases for full and AI exports
 
 Planned but not complete yet:
 
-- `changed.txt`
 - secret detection
 - configuration via `.repocontext.yml`
 - split exports for very large repositories
@@ -149,6 +149,43 @@ to the repository root.
 
 The documentation export contains Git-tracked documentation files such as README, architecture notes, specifications, tasks, roadmaps, changelogs, contributing documents, licenses, and files under `docs/`. It excludes generated RepoContext export files such as `full.txt`, `ai.txt`, `docs.txt`, and `changed.txt`.
 
+### Changed-files export
+
+```bash
+repocontext changed
+```
+
+This writes:
+
+```text
+changed.txt
+```
+
+to the repository root.
+
+The changed export focuses on files changed in the current Git working tree. It includes a changed-file summary, unified Git diff output, changed text-file contents, deleted-file entries, and binary/skipped-file entries.
+
+For feature branches, compare committed changes against another branch with Git's three-dot comparison:
+
+```bash
+repocontext changed --branch main
+```
+
+Use a custom output path when needed:
+
+```bash
+repocontext changed --output review-changes.txt
+```
+
+Disable the Git diff section while keeping the changed file contents:
+
+```bash
+repocontext changed --no-diff
+```
+
+The changed export can include modified, staged, deleted, renamed, and untracked non-ignored files. Generated RepoContext export files such as `full.txt`, `ai.txt`, `docs.txt`, and `changed.txt` are kept in `.gitignore` to avoid self-reference loops.
+
+
 ### Repository info
 
 ```bash
@@ -224,11 +261,30 @@ The current `docs.txt` export contains:
 
 The docs export is documentation-only. It includes documentation-like Git-tracked text files and excludes source-code files plus generated RepoContext exports.
 
+## Output: changed.txt
+
+The current `changed.txt` export contains:
+
+1. Changed Export header
+2. Repository path
+3. Compare Mode
+4. Changed Files Summary
+5. Changed Files overview
+6. Git Diff
+7. Changed File Contents
+8. Deleted Files
+9. Binary / Skipped Files
+
+The changed export is intended for focused code review and AI-assisted patch work. It shows what changed without dumping the entire repository.
+
+Default mode compares the current working tree, including staged and unstaged changes. Branch mode compares committed changes against another branch, for example `repocontext changed --branch main`.
+
+
 ## What gets exported
 
-RepoContext exports **Git-tracked files only**.
+RepoContext's standard `full.txt`, `ai.txt`, and `docs.txt` exports use **Git-tracked files only**.
 
-File discovery is based on:
+File discovery for those standard exports is based on:
 
 ```bash
 git ls-files
@@ -236,10 +292,12 @@ git ls-files
 
 This means:
 
-- untracked files are ignored
+- untracked files are ignored by the standard full, AI, and docs exports
 - ignored files are ignored unless they are already tracked
 - generated exports such as `full.txt`, `ai.txt`, `docs.txt`, and `changed.txt` are normally not included
 - binary files are detected and skipped from the source dump
+
+The `changed.txt` export is different: it is Git-diff based and focuses on current changes. It can include untracked files when they are not ignored by `.gitignore`.
 
 ## Automatic .gitignore integration
 
@@ -506,6 +564,7 @@ Typical local workflow:
 source .venv/bin/activate
 python3 -m pytest --color=yes
 repocontext full
+repocontext changed
 git status --short
 ```
 
@@ -544,8 +603,8 @@ Current limitations:
 - object types are not inferred deeply
 - import resolution is static and best-effort
 - external packages are not inspected
-- only Git-tracked files are considered
-- `changed.txt` is planned but not complete yet
+- standard `full.txt`, `ai.txt`, and `docs.txt` exports consider Git-tracked files
+- `changed.txt` is diff-based and can include untracked, non-ignored files
 - configuration support is planned but not complete yet
 
 ## Roadmap
