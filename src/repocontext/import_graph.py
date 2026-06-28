@@ -270,6 +270,102 @@ def resolve_absolute_imports(
         for reference in references
     ]
 
+
+def _source_package_parts(reference: ImportReference) -> list[str]:
+    """Return package parts for resolving relative imports from a source module."""
+
+    source_parts = reference.source_module.split(".") if reference.source_module else []
+
+    if reference.source_path.name == "__init__.py":
+        return source_parts
+
+    return source_parts[:-1]
+
+
+def _relative_import_base_parts(reference: ImportReference) -> list[str] | None:
+    """Return base package parts after applying a relative import level."""
+
+    if reference.level <= 0:
+        return None
+
+    package_parts = _source_package_parts(reference)
+    parent_hops = reference.level - 1
+
+    if parent_hops > len(package_parts):
+        return None
+
+    if parent_hops == 0:
+        return package_parts
+
+    return package_parts[:-parent_hops]
+
+
+def _relative_local_import_candidates(reference: ImportReference) -> list[str]:
+    """Return local module candidates for a relative import reference."""
+
+    base_parts = _relative_import_base_parts(reference)
+    if base_parts is None:
+        return []
+
+    candidates: list[str] = []
+
+    if reference.imported_module:
+        module_parts = base_parts + reference.imported_module.split(".")
+        module_name = ".".join(module_parts)
+
+        if reference.imported_name and reference.imported_name != "*":
+            candidates.append(f"{module_name}.{reference.imported_name}")
+
+        candidates.append(module_name)
+        return candidates
+
+    if reference.imported_name and reference.imported_name != "*":
+        candidates.append(".".join(base_parts + [reference.imported_name]))
+
+    return candidates
+
+
+def resolve_relative_import_reference(
+    reference: ImportReference,
+    module_map: Mapping[str, str | Path],
+) -> ImportReference:
+    """Resolve one relative import reference against known local modules."""
+
+    if not reference.is_relative and reference.level <= 0:
+        return reference
+
+    for candidate in _relative_local_import_candidates(reference):
+        resolved = _lookup_local_module(candidate, module_map)
+        if resolved is None:
+            continue
+
+        resolved_module, resolved_path = resolved
+        return replace(
+            reference,
+            is_local=True,
+            resolved_module=resolved_module,
+            resolved_path=resolved_path,
+        )
+
+    return replace(
+        reference,
+        is_local=False,
+        resolved_module=None,
+        resolved_path=None,
+    )
+
+
+def resolve_relative_imports(
+    references: list[ImportReference] | tuple[ImportReference, ...],
+    module_map: Mapping[str, str | Path],
+) -> list[ImportReference]:
+    """Resolve relative import references against known local modules."""
+
+    return [
+        resolve_relative_import_reference(reference, module_map)
+        for reference in references
+    ]
+
 def parse_imports_from_source(
     source: str,
     *,
@@ -356,6 +452,8 @@ __all__ = [
     "module_name_from_python_path",
     "resolve_absolute_import_reference",
     "resolve_absolute_imports",
+    "resolve_relative_import_reference",
+    "resolve_relative_imports",
     "parse_imports_from_file",
     "parse_imports_from_source",
 ]
