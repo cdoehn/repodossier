@@ -666,6 +666,120 @@ def test_format_call_graph_section_keeps_deterministic_group_order() -> None:
 
     assert section.index("app.a.main (src/app/a.py)") < section.index("app.z.run (src/app/z.py)")
 
+def test_build_call_graph_for_export_reuses_provided_import_graph(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    files = [
+        _write_import_graph_fixture_file(tmp_path, "src/app/__init__.py", ""),
+        _write_import_graph_fixture_file(
+            tmp_path,
+            "src/app/helpers.py",
+            "def helper():\n"
+            "    return 'ok'\n",
+        ),
+        _write_import_graph_fixture_file(
+            tmp_path,
+            "src/app/main.py",
+            "from app.helpers import helper\n"
+            "\n"
+            "def main():\n"
+            "    return helper()\n",
+        ),
+    ]
+
+    import_graph = _build_import_graph_for_export(tmp_path, files)
+
+    import repocontext.import_graph as import_graph_module
+
+    def fail_if_import_graph_is_rebuilt(*_args, **_kwargs):
+        raise AssertionError("build_import_graph should not be called again")
+
+    monkeypatch.setattr(
+        import_graph_module,
+        "build_import_graph",
+        fail_if_import_graph_is_rebuilt,
+    )
+
+    call_graph = _build_call_graph_for_export(
+        tmp_path,
+        files,
+        import_graph=import_graph,
+    )
+
+    assert call_graph.sorted_edges() == [
+        CallEdge(
+            caller_file="src/app/main.py",
+            caller_name="main",
+            caller_qualified_name="app.main.main",
+            callee_name="helper",
+            callee_qualified_name="app.helpers.helper",
+            line_number=4,
+            call_type="function",
+            confidence="imported_local",
+        )
+    ]
+
+
+def test_build_call_graph_for_export_reuses_scanner_content_for_call_analysis(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    app_source = (
+        "from app.helpers import helper\n"
+        "\n"
+        "def main():\n"
+        "    return helper()\n"
+    )
+    files = [
+        _write_import_graph_fixture_file(tmp_path, "src/app/__init__.py", ""),
+        _write_import_graph_fixture_file(
+            tmp_path,
+            "src/app/helpers.py",
+            "def helper():\n"
+            "    return 'ok'\n",
+        ),
+        _write_import_graph_fixture_file(
+            tmp_path,
+            "src/app/main.py",
+            app_source,
+        ),
+    ]
+
+    # Simuliere eine spätere Änderung auf der Platte. Die Call-Analyse soll
+    # trotzdem den bereits gescannten FileInfo.content verwenden.
+    (tmp_path / "src" / "app" / "main.py").write_text(
+        "def main():\n"
+        "    return changed_on_disk()\n",
+        encoding="utf-8",
+    )
+
+    import_graph = _build_import_graph_for_export(tmp_path, files)
+
+    import repocontext.call_graph as call_graph_module
+
+    captured_sources = []
+
+    def fake_parse_calls_from_source(source, **_kwargs):
+        captured_sources.append(source)
+        return CallGraph()
+
+    monkeypatch.setattr(
+        call_graph_module,
+        "parse_calls_from_source",
+        fake_parse_calls_from_source,
+    )
+
+    _build_call_graph_for_export(
+        tmp_path,
+        files,
+        import_graph=import_graph,
+    )
+
+    assert app_source in captured_sources
+    assert all("changed_on_disk" not in source for source in captured_sources)
+
+
 def test_build_call_graph_for_export_skips_syntax_error_python_files(
     tmp_path: Path,
 ) -> None:

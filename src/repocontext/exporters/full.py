@@ -1018,6 +1018,32 @@ def _call_graph_export_source_paths(repo_root, files):
     )
 
 
+def _call_graph_export_source_entries(repo_root, files):
+    """Return Python source paths and optional scanner-provided source text."""
+
+    entries = []
+
+    for file_info in files:
+        source_path = _import_graph_export_source_path(file_info, repo_root)
+        if source_path is None:
+            continue
+
+        source_content = None
+        if not isinstance(file_info, (str, Path)):
+            content = getattr(file_info, "content", None)
+            if isinstance(content, str):
+                source_content = content
+
+        entries.append((source_path, source_content))
+
+    return tuple(
+        sorted(
+            entries,
+            key=lambda item: Path(item[0]).as_posix(),
+        )
+    )
+
+
 def _call_graph_display_source_path(source_path, repo_root):
     """Return a stable repository-relative source path for call graph edges."""
 
@@ -1037,7 +1063,11 @@ def _build_call_graph_for_export(repo_root, files, *, import_graph=None):
     from repocontext.import_graph import build_import_graph, module_name_from_python_path
     from repocontext.symbols import build_symbol_index
 
-    source_paths = _call_graph_export_source_paths(repo_root, files)
+    source_entries = _call_graph_export_source_entries(repo_root, files)
+    source_paths = tuple(
+        source_path
+        for source_path, _source_content in source_entries
+    )
     symbol_index = build_symbol_index(source_paths, base_path=repo_root)
 
     if import_graph is None:
@@ -1045,13 +1075,17 @@ def _build_call_graph_for_export(repo_root, files, *, import_graph=None):
 
     call_graph = CallGraph()
 
-    for source_path in source_paths:
+    for source_path, source_content in source_entries:
         module_name = module_name_from_python_path(source_path, repo_root=repo_root)
         if module_name is None:
             continue
 
         try:
-            source = Path(source_path).read_text(encoding="utf-8")
+            source = (
+                source_content
+                if source_content is not None
+                else Path(source_path).read_text(encoding="utf-8")
+            )
             file_graph = parse_calls_from_source(
                 source,
                 source_path=_call_graph_display_source_path(source_path, repo_root),
