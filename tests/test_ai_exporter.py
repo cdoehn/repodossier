@@ -228,32 +228,53 @@ def test_architecture_summary_detects_core_repocontext_areas(tmp_path: Path) -> 
     assert "- Symbol extraction: src/repocontext/symbols.py" in rendered
 
 
-def test_important_files_prioritizes_project_config_docs_and_entrypoints(tmp_path: Path) -> None:
+def test_important_files_uses_shared_ranking_for_entrypoints_and_central_files(tmp_path: Path) -> None:
     context = make_ai_export_context_from_files(
         tmp_path,
         {
-            "pyproject.toml": "[project]\nname = \"example\"\n",
+            "pyproject.toml": """
+[project]
+name = "example"
+
+[project.scripts]
+example = "example.cli:main"
+""",
             "README.md": "# Example\n",
             "src/example/__init__.py": "",
-            "src/example/cli.py": "def main():\n    return 0\n",
-            "src/example/scanner.py": "def scan():\n    return []\n",
+            "src/example/cli.py": "from example.core import run\n\n\ndef main():\n    return run()\n",
+            "src/example/api.py": "from example.core import run\n\n\ndef handle():\n    return run()\n",
+            "src/example/core.py": "def run():\n    return 0\n",
+            "src/example/helper.py": "VALUE = 1\n",
         },
     )
 
     rendered = render_ai_export(context)
 
     assert "## Important Files" in rendered
-    assert "- pyproject.toml\n  Reason: Python project configuration" in rendered
-    assert "- README.md\n  Reason: Primary project documentation" in rendered
-    assert "- src/example/cli.py" in rendered
-    assert "CLI entry point" in rendered
-    assert "- src/example/scanner.py" in rendered
-    assert "Repository file scanning implementation" in rendered
 
     important_files_section = rendered.split("## Important Files", 1)[1].split("## Symbol Index", 1)[0]
-    assert important_files_section.index("- pyproject.toml") < important_files_section.index("- README.md")
-    assert important_files_section.index("- README.md") < important_files_section.index("- src/example/cli.py")
-    assert important_files_section.index("- src/example/cli.py") < important_files_section.index("- src/example/scanner.py")
+
+    assert "- src/example/cli.py" in important_files_section
+    assert "Project script entry point" in important_files_section
+    assert "Likely Python entry point" in important_files_section
+
+    assert "- src/example/core.py" in important_files_section
+    assert (
+        "Imported by 2 local files" in important_files_section
+        or "Called by 2 local files" in important_files_section
+    )
+
+    assert "- README.md" in important_files_section
+    assert "Primary project documentation" in important_files_section
+
+    assert "- pyproject.toml" in important_files_section
+    assert "Python project configuration" in important_files_section
+
+    assert "- src/example/helper.py" not in important_files_section
+
+    assert important_files_section.index("- src/example/cli.py") < important_files_section.index("- README.md")
+    assert "- src/example/core.py" in important_files_section
+    assert "- pyproject.toml" in important_files_section
 
 
 def test_important_files_excludes_generated_exports(tmp_path: Path) -> None:
@@ -294,7 +315,7 @@ def test_important_files_ranking_is_deterministic(tmp_path: Path) -> None:
 
     assert first_render == second_render
     important_files_section = first_render.split("## Important Files", 1)[1].split("## Symbol Index", 1)[0]
-    assert important_files_section.index("- pyproject.toml") < important_files_section.index("- README.md")
+    assert important_files_section.index("- README.md") < important_files_section.index("- pyproject.toml")
 
 
 
@@ -319,11 +340,11 @@ def test_important_files_prioritizes_config_and_docs_before_large_test_files(tmp
     rendered = render_ai_export(context)
     important_files_section = rendered.split("## Important Files", 1)[1].split("## Symbol Index", 1)[0]
 
-    assert important_files_section.index("- pyproject.toml") < important_files_section.index("- README.md")
+    assert important_files_section.index("- README.md") < important_files_section.index("- pyproject.toml")
     assert important_files_section.index("- README.md") < important_files_section.index("- REPOCONTEXT_ARCHITECTURE.md")
     assert important_files_section.index("- REPOCONTEXT_ARCHITECTURE.md") < important_files_section.index("- REPOCONTEXT_SPEC_v1.3.txt")
     assert important_files_section.index("- REPOCONTEXT_SPEC_v1.3.txt") < important_files_section.index("- src/example/cli.py")
-    assert important_files_section.index("- src/example/cli.py") < important_files_section.index("- tests/test_big_module.py")
+    assert "- tests/test_big_module.py" not in important_files_section
 
 
 def test_ai_export_notes_are_final_and_describe_static_analysis_limits(tmp_path: Path) -> None:

@@ -509,6 +509,123 @@ def _rank_important_files(
     *,
     limit: int,
 ) -> tuple[tuple[str, str, int], ...]:
+    """Return important files from the shared Milestone 12 ranking logic."""
+
+    ranked_files = _rank_important_files_with_shared_ranker(
+        context,
+        limit=limit,
+    )
+
+    if ranked_files is not None:
+        return ranked_files
+
+    return _legacy_rank_important_files(context, limit=limit)
+
+
+def _rank_important_files_with_shared_ranker(
+    context: AIExportContext,
+    *,
+    limit: int,
+) -> tuple[tuple[str, str, int], ...] | None:
+    """Rank important files with the central repocontext.ranking module.
+
+    Returning None means the shared ranker could not be used and the older AI
+    export fallback should preserve existing output behavior.
+    """
+
+    try:
+        from repocontext.ranking import rank_important_files as shared_rank_important_files
+    except Exception:
+        return None
+
+    symbols, import_graph, call_graph = _build_ai_important_file_ranking_inputs(
+        context,
+    )
+
+    try:
+        ranked_scores = shared_rank_important_files(
+            context.full_context.sorted_files,
+            limit=limit,
+            symbols=symbols,
+            import_graph=import_graph,
+            call_graph=call_graph,
+        )
+    except Exception:
+        return None
+
+    return tuple(
+        (
+            ranked_file.path,
+            _format_ai_important_file_rank_reason(ranked_file),
+            ranked_file.score,
+        )
+        for ranked_file in ranked_scores
+    )
+
+
+def _build_ai_important_file_ranking_inputs(
+    context: AIExportContext,
+) -> tuple[object | None, object | None, object | None]:
+    """Build optional analysis inputs for AI important-file ranking.
+
+    Each input is best-effort. A failed symbol, import, or call analysis must
+    not break ai.txt rendering.
+    """
+
+    source_paths = _symbol_index_source_paths(context)
+    symbols = None
+    import_graph = None
+    call_graph = None
+
+    if source_paths:
+        try:
+            from repocontext.symbols import build_symbol_index
+
+            symbols = build_symbol_index(
+                source_paths,
+                base_path=context.repository_root,
+            )
+        except Exception:
+            symbols = None
+
+        try:
+            from repocontext.import_graph import build_import_graph
+
+            import_graph = build_import_graph(
+                source_paths,
+                repo_root=context.repository_root,
+            )
+        except Exception:
+            import_graph = None
+
+    call_graph_source_entries = _call_graph_source_entries(context)
+    if call_graph_source_entries:
+        try:
+            call_graph = _build_ai_call_graph(
+                context,
+                call_graph_source_entries,
+            )
+        except Exception:
+            call_graph = None
+
+    return symbols, import_graph, call_graph
+
+
+def _format_ai_important_file_rank_reason(ranked_file: object) -> str:
+    """Return a stable, compact reason string for one ranked file."""
+
+    reasons = tuple(getattr(ranked_file, "reasons", ()) or ())
+    if reasons:
+        return "; ".join(str(reason) for reason in reasons)
+
+    return "Important file ranking signal"
+
+
+def _legacy_rank_important_files(
+    context: AIExportContext,
+    *,
+    limit: int,
+) -> tuple[tuple[str, str, int], ...]:
     """Return important files as path, reason, score tuples."""
 
     candidates: list[tuple[int, str, str]] = []
