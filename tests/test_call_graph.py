@@ -1779,3 +1779,43 @@ def test_parse_calls_from_source_marks_external_alias_and_chain_conservatively()
         ),
     ]
 
+def test_symbol_index_does_not_make_same_file_local_calls_ambiguous(tmp_path):
+    from repocontext.call_graph import parse_calls_from_source
+    from repocontext.symbols import build_symbol_index
+
+    source_path = tmp_path / "src" / "example" / "app.py"
+    source_path.parent.mkdir(parents=True)
+    source = (
+        "def helper():\n"
+        "    return 1\n"
+        "\n"
+        "class Worker:\n"
+        "    def run(self):\n"
+        "        return self.done()\n"
+        "\n"
+        "    def done(self):\n"
+        "        return helper()\n"
+        "\n"
+        "def main():\n"
+        "    return helper()\n"
+    )
+    source_path.write_text(source, encoding="utf-8")
+
+    symbol_index = build_symbol_index([source_path], base_path=tmp_path)
+    graph = parse_calls_from_source(
+        source,
+        source_path="src/example/app.py",
+        module_name="example.app",
+        symbol_index=symbol_index,
+    )
+
+    edges = graph.sorted_edges()
+    edge_pairs = {
+        (edge.caller_key, edge.callee_key, edge.confidence)
+        for edge in edges
+    }
+
+    assert ("example.app.main", "example.app.helper", "local") in edge_pairs
+    assert ("example.app.Worker.done", "example.app.helper", "local") in edge_pairs
+    assert ("example.app.Worker.run", "example.app.Worker.done", "local_method") in edge_pairs
+    assert not any(edge.confidence == "ambiguous" for edge in edges)

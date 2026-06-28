@@ -507,6 +507,37 @@ def _collect_class_method_counts(tree: ast.AST) -> dict[str, dict[str, int]]:
     return counts
 
 
+def _only_missing_counts(
+    primary_counts: Mapping[str, int],
+    fallback_counts: Mapping[str, int],
+) -> dict[str, int]:
+    """Return fallback counts only for names absent from the primary counts."""
+
+    return {
+        name: count
+        for name, count in fallback_counts.items()
+        if name not in primary_counts
+    }
+
+
+def _only_missing_method_counts(
+    primary_counts: Mapping[str, Mapping[str, int]],
+    fallback_counts: Mapping[str, Mapping[str, int]],
+) -> dict[str, dict[str, int]]:
+    """Return fallback method counts only for class/method pairs absent from primary."""
+
+    missing_counts: dict[str, dict[str, int]] = {}
+
+    for class_name, method_counts in fallback_counts.items():
+        primary_method_counts = primary_counts.get(class_name, {})
+        for method_name, count in method_counts.items():
+            if method_name in primary_method_counts:
+                continue
+            missing_counts.setdefault(class_name, {})[method_name] = count
+
+    return missing_counts
+
+
 def _merge_counts(target: dict[str, int], source: dict[str, int]) -> dict[str, int]:
     """Return merged count dictionaries."""
 
@@ -916,19 +947,28 @@ def build_call_graph_from_ast(
 ) -> CallGraph:
     """Build a call graph from a parsed Python AST."""
 
+    # The current file AST is the source of truth for local same-file calls.
+    # The Symbol Index is only a fallback for symbols that are not present in
+    # the current AST, because blindly merging both sources double-counts every
+    # local symbol and turns clear local calls into false "ambiguous" calls.
+    ast_function_counts = _collect_top_level_function_counts(tree)
+    symbol_function_counts = _function_counts_from_symbol_index(
+        symbol_index,
+        source_path=source_path,
+    )
     known_function_counts = _merge_counts(
-        _collect_top_level_function_counts(tree),
-        _function_counts_from_symbol_index(
-            symbol_index,
-            source_path=source_path,
-        ),
+        ast_function_counts,
+        _only_missing_counts(ast_function_counts, symbol_function_counts),
+    )
+
+    ast_method_counts = _collect_class_method_counts(tree)
+    symbol_method_counts = _method_counts_from_symbol_index(
+        symbol_index,
+        source_path=source_path,
     )
     known_method_counts = _merge_method_counts(
-        _collect_class_method_counts(tree),
-        _method_counts_from_symbol_index(
-            symbol_index,
-            source_path=source_path,
-        ),
+        ast_method_counts,
+        _only_missing_method_counts(ast_method_counts, symbol_method_counts),
     )
 
     import_aliases = collect_import_aliases_from_ast(tree)

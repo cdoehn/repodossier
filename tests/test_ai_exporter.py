@@ -426,6 +426,91 @@ def test_import_graph_handles_syntax_errors_without_raw_object_repr(tmp_path: Pa
     assert "ImportReference(" not in import_graph_section
     assert "ImportEdge(" not in import_graph_section
 
+
+def test_call_graph_renders_local_function_and_method_calls(tmp_path: Path) -> None:
+    context = make_ai_export_context_from_files(
+        tmp_path,
+        {
+            "src/example/app.py": (
+                "def helper():\n"
+                "    return 1\n"
+                "\n"
+                "class Worker:\n"
+                "    def run(self):\n"
+                "        return self.done()\n"
+                "\n"
+                "    def done(self):\n"
+                "        return helper()\n"
+                "\n"
+                "def main():\n"
+                "    return helper()\n"
+            ),
+        },
+    )
+
+    rendered = render_ai_export(context)
+    call_graph_section = rendered.split("## Call Graph", 1)[1].split("## Notes", 1)[0]
+
+    assert "Summary:" in call_graph_section
+    assert "Internal calls by caller:" in call_graph_section
+    assert "- example.app.main (src/example/app.py)" in call_graph_section
+    assert "calls:" in call_graph_section
+    assert "example.app.helper" in call_graph_section
+    assert "- example.app.Worker.run (src/example/app.py)" in call_graph_section
+    assert "example.app.Worker.done" in call_graph_section
+
+
+def test_call_graph_renders_imported_local_function_calls(tmp_path: Path) -> None:
+    context = make_ai_export_context_from_files(
+        tmp_path,
+        {
+            "src/example/__init__.py": "",
+            "src/example/helper.py": "def help_me():\n    return 1\n",
+            "src/example/app.py": (
+                "from example.helper import help_me\n"
+                "\n"
+                "def main():\n"
+                "    return help_me()\n"
+            ),
+        },
+    )
+
+    rendered = render_ai_export(context)
+    call_graph_section = rendered.split("## Call Graph", 1)[1].split("## Notes", 1)[0]
+
+    assert "- example.app.main (src/example/app.py)" in call_graph_section
+    assert "example.helper.help_me" in call_graph_section
+    assert "imported_local" in call_graph_section
+
+
+def test_call_graph_reports_empty_graph_cleanly(tmp_path: Path) -> None:
+    context = make_ai_export_context_from_files(
+        tmp_path,
+        {
+            "src/example/constants.py": "VALUE = 1\n",
+        },
+    )
+
+    rendered = render_ai_export(context)
+    call_graph_section = rendered.split("## Call Graph", 1)[1].split("## Notes", 1)[0]
+
+    assert "No call graph edges found." in call_graph_section
+
+
+def test_call_graph_output_is_deterministic(tmp_path: Path) -> None:
+    context = make_ai_export_context_from_files(
+        tmp_path,
+        {
+            "src/example/a.py": "def helper():\n    return 1\n\ndef main():\n    return helper()\n",
+            "src/example/b.py": "def other():\n    return 2\n",
+        },
+    )
+
+    first_render = render_ai_export(context)
+    second_render = render_ai_export(context)
+
+    assert first_render == second_render
+
 def test_render_ai_export_contains_required_sections(tmp_path: Path) -> None:
     context = make_ai_export_context(tmp_path)
 

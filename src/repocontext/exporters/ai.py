@@ -49,6 +49,12 @@ GENERATED_EXPORT_FILENAMES: frozenset[str] = frozenset(
 )
 
 
+AI_CALL_GRAPH_MAX_INTERNAL_EDGES = 120
+AI_CALL_GRAPH_MAX_EXTERNAL_EDGES = 30
+AI_CALL_GRAPH_MAX_AMBIGUOUS_EDGES = 30
+AI_CALL_GRAPH_MAX_UNRESOLVED_EDGES = 30
+
+
 @dataclass(frozen=True)
 class AIExportContext:
     """Data required to render the compact AI export."""
@@ -96,7 +102,7 @@ def render_ai_export(context: AIExportContext) -> str:
         _render_important_files_section(context),
         _render_symbol_index_section(context),
         _render_import_graph_section(context),
-        _render_call_graph_section(),
+        _render_call_graph_section(context),
         _render_notes_section(),
     ]
 
@@ -1180,17 +1186,289 @@ def _format_ai_import_graph_error_lines(
 
     return lines
 
-def _render_call_graph_section() -> str:
-    """Render the placeholder Call Graph section."""
+def _render_call_graph_section(context: AIExportContext) -> str:
+    """Render a compact Call Graph section using the Milestone 7 graph builder."""
 
-    return "\n".join(
+    source_entries = _call_graph_source_entries(context)
+
+    lines = [
+        AI_EXPORT_SECTION_HEADINGS["call_graph"],
+        "",
+    ]
+
+    if not source_entries:
+        lines.append("No Python source files available for call graph analysis.")
+        return "\n".join(lines)
+
+    try:
+        call_graph = _build_ai_call_graph(context, source_entries)
+    except Exception as exc:
+        lines.append(f"Could not build call graph: {type(exc).__name__}: {exc}")
+        return "\n".join(lines)
+
+    edges = tuple(call_graph.sorted_edges())
+    if not edges:
+        lines.append("No call graph edges found.")
+        return "\n".join(lines)
+
+    (
+        internal_edges,
+        external_edges,
+        ambiguous_edges,
+        unresolved_edges,
+        other_edges,
+    ) = _split_ai_call_graph_edges(edges)
+
+    lines.extend(
         [
-            AI_EXPORT_SECTION_HEADINGS["call_graph"],
+            "Summary:",
+            f"- Call edges: {len(edges)}",
+            f"- Local/internal calls: {len(internal_edges)}",
+            f"- External calls: {len(external_edges)}",
+            f"- Ambiguous calls: {len(ambiguous_edges)}",
+            f"- Unresolved calls: {len(unresolved_edges)}",
             "",
-            "Call graph rendering is not implemented yet.",
+            "Internal calls by caller:",
         ]
     )
 
+    _append_ai_grouped_call_graph_edges(
+        lines,
+        internal_edges,
+        max_edges=AI_CALL_GRAPH_MAX_INTERNAL_EDGES,
+    )
+
+    lines.extend(["", "External calls:"])
+    _append_ai_flat_call_graph_edges(
+        lines,
+        external_edges,
+        max_edges=AI_CALL_GRAPH_MAX_EXTERNAL_EDGES,
+    )
+
+    lines.extend(["", "Ambiguous calls:"])
+    _append_ai_flat_call_graph_edges(
+        lines,
+        ambiguous_edges,
+        max_edges=AI_CALL_GRAPH_MAX_AMBIGUOUS_EDGES,
+    )
+
+    lines.extend(["", "Unresolved calls:"])
+    _append_ai_flat_call_graph_edges(
+        lines,
+        unresolved_edges,
+        max_edges=AI_CALL_GRAPH_MAX_UNRESOLVED_EDGES,
+    )
+
+    if other_edges:
+        lines.extend(["", "Other calls:"])
+        _append_ai_flat_call_graph_edges(
+            lines,
+            other_edges,
+            max_edges=AI_CALL_GRAPH_MAX_UNRESOLVED_EDGES,
+        )
+
+    return "\n".join(lines)
+
+
+def _call_graph_source_entries(
+    context: AIExportContext,
+) -> tuple[tuple[Path, str | None], ...]:
+    """Return Python source paths and scanner-provided source text."""
+
+    entries: list[tuple[Path, str | None]] = []
+
+    for file_info in context.full_context.exported_text_files:
+        relative_path = getattr(file_info, "relative_path", None)
+        if relative_path is None:
+            continue
+
+        relative_path_obj = Path(relative_path)
+        if relative_path_obj.suffix.lower() != ".py":
+            continue
+
+        if getattr(file_info, "is_binary", False) is True:
+            continue
+
+        if getattr(file_info, "error", None) is not None:
+            continue
+
+        absolute_path = getattr(file_info, "absolute_path", None)
+        source_path = (
+            Path(absolute_path)
+            if absolute_path is not None
+            else context.repository_root / relative_path_obj
+        )
+
+        content = getattr(file_info, "content", None)
+        entries.append((source_path, content if isinstance(content, str) else None))
+
+    return tuple(
+        sorted(
+            entries,
+            key=lambda item: _repository_relative_display_path(
+                item[0],
+                context.repository_root,
+            ),
+        )
+    )
+
+
+def _build_ai_call_graph(
+    context: AIExportContext,
+    source_entries: tuple[tuple[Path, str | None], ...],
+) -> object:
+    """Build a repository call graph for the AI export."""
+
+    from repocontext.call_graph import CallGraph, parse_calls_from_source
+    from repocontext.import_graph import build_import_graph, module_name_from_python_path
+    from repocontext.symbols import build_symbol_index
+
+    source_paths = tuple(source_path for source_path, _content in source_entries)
+    symbol_index = build_symbol_index(source_paths, base_path=context.repository_root)
+    import_graph = build_import_graph(source_paths, repo_root=context.repository_root)
+    call_graph = CallGraph()
+
+    for source_path, source_content in source_entries:
+        module_name = module_name_from_python_path(
+            source_path,
+            repo_root=context.repository_root,
+        )
+        if module_name is None:
+            continue
+
+        try:
+            source = (
+                source_content
+                if source_content is not None
+                else source_path.read_text(encoding="utf-8")
+            )
+            file_graph = parse_calls_from_source(
+                source,
+                source_path=_repository_relative_display_path(
+                    source_path,
+                    context.repository_root,
+                ),
+                module_name=module_name,
+                symbol_index=symbol_index,
+                import_graph=import_graph,
+            )
+        except (OSError, SyntaxError, UnicodeDecodeError, ValueError):
+            continue
+
+        for edge in file_graph.sorted_edges():
+            call_graph.add_edge(edge)
+
+    return call_graph
+
+
+def _split_ai_call_graph_edges(
+    edges: tuple[object, ...],
+) -> tuple[
+    tuple[object, ...],
+    tuple[object, ...],
+    tuple[object, ...],
+    tuple[object, ...],
+    tuple[object, ...],
+]:
+    """Split call graph edges into display groups."""
+
+    internal_edges = []
+    external_edges = []
+    ambiguous_edges = []
+    unresolved_edges = []
+    other_edges = []
+
+    for edge in edges:
+        confidence = getattr(edge, "confidence", "")
+        if confidence in {"local", "local_method", "imported_local"}:
+            internal_edges.append(edge)
+        elif confidence == "external":
+            external_edges.append(edge)
+        elif confidence == "ambiguous":
+            ambiguous_edges.append(edge)
+        elif confidence.startswith("unresolved"):
+            unresolved_edges.append(edge)
+        else:
+            other_edges.append(edge)
+
+    return (
+        tuple(internal_edges),
+        tuple(external_edges),
+        tuple(ambiguous_edges),
+        tuple(unresolved_edges),
+        tuple(other_edges),
+    )
+
+
+def _append_ai_grouped_call_graph_edges(
+    lines: list[str],
+    edges: tuple[object, ...],
+    *,
+    max_edges: int,
+) -> None:
+    """Append call graph edges grouped by caller."""
+
+    if not edges:
+        lines.append("- none")
+        return
+
+    visible_edges = edges[:max_edges]
+    current_caller = None
+
+    for edge in visible_edges:
+        caller = getattr(edge, "caller_key", getattr(edge, "caller_name", "unknown"))
+        caller_file = getattr(edge, "caller_file", "unknown")
+
+        if caller != current_caller:
+            if current_caller is not None:
+                lines.append("")
+            lines.append(f"- {caller} ({caller_file})")
+            lines.append("  calls:")
+            current_caller = caller
+
+        lines.append(f"  - {_format_ai_call_graph_callee(edge)}")
+
+    remaining_count = len(edges) - len(visible_edges)
+    if remaining_count > 0:
+        lines.append(f"- ... {remaining_count} more internal calls")
+
+
+def _append_ai_flat_call_graph_edges(
+    lines: list[str],
+    edges: tuple[object, ...],
+    *,
+    max_edges: int,
+) -> None:
+    """Append compact non-internal call graph edges."""
+
+    if not edges:
+        lines.append("- none")
+        return
+
+    visible_edges = edges[:max_edges]
+    for edge in visible_edges:
+        caller = getattr(edge, "caller_key", getattr(edge, "caller_name", "unknown"))
+        lines.append(f"- {caller} -> {_format_ai_call_graph_callee(edge)}")
+
+    remaining_count = len(edges) - len(visible_edges)
+    if remaining_count > 0:
+        lines.append(f"- ... {remaining_count} more calls")
+
+
+def _format_ai_call_graph_callee(edge: object) -> str:
+    """Format the callee side of one call graph edge."""
+
+    callee = getattr(edge, "callee_key", getattr(edge, "callee_name", "unknown"))
+    line_number = getattr(edge, "line_number", None)
+    call_type = getattr(edge, "call_type", "unknown")
+    confidence = getattr(edge, "confidence", "unknown")
+
+    if line_number is None:
+        line_display = "unknown"
+    else:
+        line_display = str(line_number)
+
+    return f"{callee} (line {line_display}, {call_type}, {confidence})"
 
 def _render_notes_section() -> str:
     """Render compact AI export notes."""
