@@ -32,3 +32,15 @@ def test_readme_documents_call_graph_duplicate_semantics() -> None:
 
     assert "identical call edges at the same call location are deduplicated" in readme
     assert "repeated calls on different lines remain visible" in readme
+
+def test_readme_documents_ai_export_usage_and_completed_status() -> None:
+    readme = Path("README.md").read_text(encoding="utf-8")
+
+    assert "compact `ai.txt` export" in readme
+    assert "repocontext export-ai" in readme
+    assert "full.txt\nai.txt" in readme
+    assert "## Output: ai.txt" in readme
+    assert "The AI export is intentionally compact" in readme
+    assert "Planned but not complete yet:\n\n- `ai.txt`" not in readme
+    assert "`docs.txt` and `changed.txt` are planned but not complete yet" in readme
+

@@ -2,9 +2,9 @@
 
 RepoContext creates AI-friendly exports of Git repositories.
 
-It scans Git-tracked files, builds a structured repository overview, and writes a `full.txt` export that can be pasted into large language models such as ChatGPT, Claude, Gemini, Aider, and other coding assistants.
+It scans Git-tracked files, builds a structured repository overview, and writes `full.txt` plus a compact `ai.txt` export that can be pasted into large language models such as ChatGPT, Claude, Gemini, Aider, and other coding assistants.
 
-The current implementation focuses on a robust **Full Export** for Python projects. It includes repository statistics, file summaries, a tree view, complete source export, warnings, a Python import graph, and a static Python call graph.
+The current implementation focuses on robust **Full Export** and compact **AI Export** modes for Python projects. It includes repository statistics, file summaries, a tree view, complete source export, warnings, important-file ranking, a Python symbol index, a Python import graph, and a static Python call graph.
 
 ## Why RepoContext exists
 
@@ -39,17 +39,17 @@ Implemented:
 - Python symbol extraction
 - Python import graph
 - Python call graph
-- CLI aliases for full export
+- compact `ai.txt` export
+- CLI aliases for full and AI exports
 
 Planned but not complete yet:
 
-- `ai.txt`
 - `docs.txt`
 - `changed.txt`
 - dependency summary from `pyproject.toml` and requirements files
 - database schema extraction
 - secret detection
-- important-file ranking
+- advanced important-file ranking
 - configuration via `.repocontext.yml`
 - split exports for very large repositories
 - Bash symbol and call graph support
@@ -90,19 +90,18 @@ repocontext info
 
 Run RepoContext inside a Git repository or any subdirectory of a Git repository.
 
-### Default full export
+### Default export
 
 ```bash
 repocontext
 ```
 
-This writes:
+This writes both standard export files to the repository root:
 
 ```text
 full.txt
+ai.txt
 ```
-
-to the repository root.
 
 ### Explicit full export command
 
@@ -110,13 +109,29 @@ to the repository root.
 repocontext full
 ```
 
+This also writes both `full.txt` and `ai.txt`.
+
 ### Export alias
 
 ```bash
 repocontext export
 ```
 
-`repocontext export` currently behaves like `repocontext full`.
+`repocontext export` behaves like `repocontext full` and writes both `full.txt` and `ai.txt`.
+
+### AI-only export
+
+```bash
+repocontext export-ai
+```
+
+This writes only:
+
+```text
+ai.txt
+```
+
+to the repository root.
 
 ### Repository info
 
@@ -147,6 +162,20 @@ The current `full.txt` export contains:
 
 The export is Markdown-oriented and designed to be readable both by humans and AI systems.
 
+## Output: ai.txt
+
+The current `ai.txt` export contains:
+
+1. Project summary
+2. Architecture Summary
+3. Important Files
+4. Symbol Index
+5. Import Graph
+6. Call Graph
+7. Notes
+
+The AI export is intentionally compact and does not include a complete source dump.
+
 ## What gets exported
 
 RepoContext exports **Git-tracked files only**.
@@ -161,7 +190,7 @@ This means:
 
 - untracked files are ignored
 - ignored files are ignored unless they are already tracked
-- generated exports such as `full.txt` are normally not included
+- generated exports such as `full.txt` and `ai.txt` are normally not included
 - binary files are detected and skipped from the source dump
 
 ## Automatic .gitignore integration
@@ -321,6 +350,7 @@ Binary files are detected and excluded from the complete source dump.
 │   └── repocontext
 │       ├── cli.py
 │       ├── exporters
+│       │   ├── ai.py
 │       │   └── full.py
 │       ├── git.py
 │       ├── gitignore.py
@@ -353,10 +383,10 @@ File scanner
 Static analysis
       |
       v
-Full export renderer
+Export renderers
       |
       v
-full.txt
+full.txt / ai.txt
 ```
 
 Main modules:
@@ -371,6 +401,7 @@ Main modules:
 | `repocontext.import_graph` | Python import analysis and dependency graph |
 | `repocontext.call_graph` | Python static call graph analysis |
 | `repocontext.exporters.full` | `full.txt` context creation, rendering, and writing |
+| `repocontext.exporters.ai` | compact `ai.txt` context creation, rendering, and writing |
 | `repocontext.models` | shared data models |
 
 ## Development
@@ -403,7 +434,7 @@ python3 -m pytest --color=yes tests/test_full_exporter.py
 python3 -m pytest --color=yes tests/test_cli.py
 ```
 
-### Generate a fresh export of the current repository
+### Generate fresh exports of the current repository
 
 ```bash
 repocontext full
@@ -462,7 +493,7 @@ Current limitations:
 - import resolution is static and best-effort
 - external packages are not inspected
 - only Git-tracked files are considered
-- `ai.txt`, `docs.txt`, and `changed.txt` are planned but not complete yet
+- `docs.txt` and `changed.txt` are planned but not complete yet
 - configuration support is planned but not complete yet
 
 ## Roadmap

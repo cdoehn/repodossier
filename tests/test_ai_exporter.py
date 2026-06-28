@@ -249,6 +249,11 @@ def test_important_files_prioritizes_project_config_docs_and_entrypoints(tmp_pat
     assert "- src/example/scanner.py" in rendered
     assert "Repository file scanning implementation" in rendered
 
+    important_files_section = rendered.split("## Important Files", 1)[1].split("## Symbol Index", 1)[0]
+    assert important_files_section.index("- pyproject.toml") < important_files_section.index("- README.md")
+    assert important_files_section.index("- README.md") < important_files_section.index("- src/example/cli.py")
+    assert important_files_section.index("- src/example/cli.py") < important_files_section.index("- src/example/scanner.py")
+
 
 def test_important_files_excludes_generated_exports(tmp_path: Path) -> None:
     context = make_ai_export_context_from_files(
@@ -289,6 +294,54 @@ def test_important_files_ranking_is_deterministic(tmp_path: Path) -> None:
     assert first_render == second_render
     important_files_section = first_render.split("## Important Files", 1)[1].split("## Symbol Index", 1)[0]
     assert important_files_section.index("- pyproject.toml") < important_files_section.index("- README.md")
+
+
+
+
+def test_important_files_prioritizes_config_and_docs_before_large_test_files(tmp_path: Path) -> None:
+    large_test_content = "\n".join(
+        f"def test_case_{index}():\n    assert True\n"
+        for index in range(80)
+    )
+    context = make_ai_export_context_from_files(
+        tmp_path,
+        {
+            "pyproject.toml": "[project]\nname = \"example\"\n",
+            "README.md": "# Example\n",
+            "REPOCONTEXT_ARCHITECTURE.md": "# Architecture\n",
+            "REPOCONTEXT_SPEC_v1.3.txt": "SPEC\n",
+            "src/example/cli.py": "def main():\n    return 0\n",
+            "tests/test_big_module.py": large_test_content,
+        },
+    )
+
+    rendered = render_ai_export(context)
+    important_files_section = rendered.split("## Important Files", 1)[1].split("## Symbol Index", 1)[0]
+
+    assert important_files_section.index("- pyproject.toml") < important_files_section.index("- README.md")
+    assert important_files_section.index("- README.md") < important_files_section.index("- REPOCONTEXT_ARCHITECTURE.md")
+    assert important_files_section.index("- REPOCONTEXT_ARCHITECTURE.md") < important_files_section.index("- REPOCONTEXT_SPEC_v1.3.txt")
+    assert important_files_section.index("- REPOCONTEXT_SPEC_v1.3.txt") < important_files_section.index("- src/example/cli.py")
+    assert important_files_section.index("- src/example/cli.py") < important_files_section.index("- tests/test_big_module.py")
+
+
+def test_ai_export_notes_are_final_and_describe_static_analysis_limits(tmp_path: Path) -> None:
+    context = make_ai_export_context_from_files(
+        tmp_path,
+        {
+            "src/example/app.py": "def main():\n    return 1\n",
+        },
+    )
+
+    rendered = render_ai_export(context)
+    notes_section = rendered.split("## Notes", 1)[1]
+
+    assert "Detailed section content will be expanded" not in notes_section
+    assert "complete source dumps" in notes_section
+    assert "Git-tracked scanner data" in notes_section
+    assert "static Python AST analysis" in notes_section
+    assert "best-effort and deterministic" in notes_section
+    assert "Dynamic runtime behavior" in notes_section
 
 
 def test_symbol_index_renders_classes_functions_and_methods(tmp_path: Path) -> None:

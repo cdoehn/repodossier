@@ -562,6 +562,45 @@ def _is_ai_important_file_candidate(file_info: object) -> bool:
     return True
 
 
+def _important_file_order_priority(lower_path: str, filename: str) -> int:
+    """Return a coarse priority boost for AI-facing important-file ordering."""
+
+    if filename in {"pyproject.toml", "setup.py", "requirements.txt", "requirements-dev.txt"}:
+        return 1000
+
+    if filename in {"readme.md", "readme.txt"}:
+        return 950
+
+    if "architecture" in filename:
+        return 940
+
+    if "spec" in filename:
+        return 930
+
+    if "tasks" in filename or "roadmap" in filename:
+        return 850
+
+    if filename == "cli.py" or lower_path.endswith("/cli.py"):
+        return 800
+
+    if filename == "__main__.py":
+        return 780
+
+    if lower_path.endswith("exporters/full.py") or lower_path.endswith("exporters/ai.py"):
+        return 720
+
+    if lower_path.endswith(("scanner.py", "git.py", "symbols.py", "import_graph.py", "call_graph.py")):
+        return 700
+
+    if lower_path.startswith("tests/") and filename.startswith("test_"):
+        return 100
+
+    if "milestone" in filename:
+        return 90
+
+    return 0
+
+
 def _score_important_file(
     context: AIExportContext,
     file_info: object,
@@ -575,6 +614,10 @@ def _score_important_file(
 
     score = 0
     reasons: list[str] = []
+
+    base_priority = _important_file_order_priority(lower_path, filename)
+    if base_priority:
+        score += base_priority
 
     if filename == "pyproject.toml":
         score += 100
@@ -1501,10 +1544,11 @@ def _render_notes_section() -> str:
             AI_EXPORT_SECTION_HEADINGS["notes"],
             "",
             "- This export intentionally excludes complete source dumps.",
-            "- Detailed section content will be expanded in later Milestone 8 steps.",
+            "- It is generated from Git-tracked scanner data plus static Python AST analysis.",
+            "- Symbol, import, and call graph data are best-effort and deterministic.",
+            "- Dynamic runtime behavior, reflection, monkeypatching, and unresolved external types may be incomplete.",
         ]
     )
-
 
 __all__ = [
     "AI_EXPORT_DOCUMENT_HEADING",
