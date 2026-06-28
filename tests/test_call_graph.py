@@ -1,8 +1,12 @@
+import ast
+
 from repocontext.call_graph import (
     CallEdge,
     CallGraph,
+    build_call_graph_from_ast,
     parse_calls_from_source,
 )
+from repocontext.symbols import FileSymbolIndex, SymbolInfo
 
 
 def test_call_edge_exposes_stable_caller_and_callee_keys():
@@ -172,10 +176,10 @@ def test_parse_calls_from_source_detects_direct_function_call():
             caller_name="main",
             caller_qualified_name="app.main",
             callee_name="helper",
-            callee_qualified_name=None,
+            callee_qualified_name="app.helper",
             line_number=5,
             call_type="function",
-            confidence="unresolved",
+            confidence="local",
         )
     ]
 
@@ -819,5 +823,100 @@ def test_parse_calls_from_source_keeps_self_call_local_inside_chain_but_chain_un
             call_type="method",
             confidence="unresolved_method",
         ),
+    ]
+
+def test_parse_calls_from_source_keeps_unknown_direct_function_call_unresolved():
+    source = (
+        "def main():\n"
+        "    return missing_helper()\n"
+    )
+
+    graph = parse_calls_from_source(
+        source,
+        source_path="src/app.py",
+        module_name="app",
+    )
+
+    assert graph.sorted_edges() == [
+        CallEdge(
+            caller_file="src/app.py",
+            caller_name="main",
+            caller_qualified_name="app.main",
+            callee_name="missing_helper",
+            callee_qualified_name=None,
+            line_number=2,
+            call_type="function",
+            confidence="unresolved",
+        )
+    ]
+
+
+def test_parse_calls_from_source_resolves_async_local_function_call():
+    source = (
+        "async def load_data():\n"
+        "    return 1\n"
+        "\n"
+        "def main():\n"
+        "    return load_data()\n"
+    )
+
+    graph = parse_calls_from_source(
+        source,
+        source_path="src/app.py",
+        module_name="app",
+    )
+
+    assert graph.sorted_edges() == [
+        CallEdge(
+            caller_file="src/app.py",
+            caller_name="main",
+            caller_qualified_name="app.main",
+            callee_name="load_data",
+            callee_qualified_name="app.load_data",
+            line_number=5,
+            call_type="function",
+            confidence="local",
+        )
+    ]
+
+
+def test_build_call_graph_from_ast_can_use_existing_symbol_index_for_local_functions():
+    source = (
+        "def main():\n"
+        "    return helper()\n"
+    )
+    tree = ast.parse(source, filename="src/app.py")
+    symbol_index = [
+        FileSymbolIndex(
+            file_path="src/app.py",
+            symbols=[
+                SymbolInfo(
+                    name="helper",
+                    kind="function",
+                    file_path="src/app.py",
+                    line_start=10,
+                )
+            ],
+        )
+    ]
+
+    graph = build_call_graph_from_ast(
+        tree,
+        source_path="src/app.py",
+        module_name="app",
+        symbol_index=symbol_index,
+    )
+
+    assert graph.sorted_edges() == [
+        CallEdge(
+            caller_file="src/app.py",
+            caller_name="main",
+            caller_qualified_name="app.main",
+            callee_name="helper",
+            callee_qualified_name="app.helper",
+            line_number=2,
+            call_type="function",
+            confidence="local",
+        )
     ]
 

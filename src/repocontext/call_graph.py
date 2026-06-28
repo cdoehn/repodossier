@@ -160,10 +160,12 @@ class PythonCallVisitor(ast.NodeVisitor):
         source_path: str | Path,
         module_name: str | None = None,
         known_class_names: set[str] | None = None,
+        known_function_names: set[str] | None = None,
     ) -> None:
         self.source_path = Path(source_path).as_posix()
         self.module_name = module_name
         self.known_class_names = set(known_class_names or ())
+        self.known_function_names = set(known_function_names or ())
         self.graph = CallGraph()
         self._class_stack: list[str] = []
         self._function_stack: list[tuple[str, str]] = []
@@ -192,16 +194,17 @@ class PythonCallVisitor(ast.NodeVisitor):
         caller_name, caller_qualified_name = self._current_caller()
 
         if isinstance(node.func, ast.Name):
+            callee_qualified_name, confidence = self._resolve_function_call(node.func.id)
             self.graph.add_edge(
                 CallEdge(
                     caller_file=self.source_path,
                     caller_name=caller_name,
                     caller_qualified_name=caller_qualified_name,
                     callee_name=node.func.id,
-                    callee_qualified_name=None,
+                    callee_qualified_name=callee_qualified_name,
                     line_number=getattr(node, "lineno", None),
                     call_type="function",
-                    confidence="unresolved",
+                    confidence=confidence,
                 )
             )
         elif isinstance(node.func, ast.Attribute):
@@ -220,6 +223,14 @@ class PythonCallVisitor(ast.NodeVisitor):
             )
 
         self.generic_visit(node)
+
+    def _resolve_function_call(self, callee_name: str) -> tuple[str | None, str]:
+        """Resolve direct calls to top-level functions in the same file."""
+
+        if callee_name in self.known_function_names:
+            return self._qualify(callee_name), "local"
+
+        return None, "unresolved"
 
     def _resolve_attribute_call(self, node: ast.Call) -> tuple[str | None, str]:
         """Resolve local class method calls when possible."""
@@ -327,6 +338,7 @@ class PythonCallVisitor(ast.NodeVisitor):
             return f"{self.module_name}.{name}"
         return name
 
+
 def _collect_class_names(tree: ast.AST) -> set[str]:
     """Return class names defined in a parsed Python AST."""
 
@@ -337,22 +349,74 @@ def _collect_class_names(tree: ast.AST) -> set[str]:
     }
 
 
+def _collect_top_level_function_names(tree: ast.AST) -> set[str]:
+    """Return top-level function names defined in a parsed Python AST."""
+
+    if not isinstance(tree, ast.Module):
+        return set()
+
+    return {
+        node.name
+        for node in tree.body
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+    }
+
+
+def _function_names_from_symbol_index(
+    symbol_index: object,
+    *,
+    source_path: str | Path,
+) -> set[str]:
+    """Return top-level function names for a file from an existing symbol index."""
+
+    target_path = Path(source_path).as_posix()
+    function_names: set[str] = set()
+
+    for file_index in symbol_index or ():
+        raw_file_path = getattr(file_index, "file_path", "")
+        file_path = Path(str(raw_file_path)).as_posix()
+
+        if file_path != target_path and not target_path.endswith(file_path) and not file_path.endswith(target_path):
+            continue
+
+        for symbol in getattr(file_index, "symbols", ()):
+            if getattr(symbol, "kind", None) != "function":
+                continue
+            if getattr(symbol, "parent", None) is not None:
+                continue
+
+            name = getattr(symbol, "name", None)
+            if isinstance(name, str) and name:
+                function_names.add(name)
+
+    return function_names
+
+
 def build_call_graph_from_ast(
     tree: ast.AST,
     *,
     source_path: str | Path,
     module_name: str | None = None,
+    symbol_index: object = None,
 ) -> CallGraph:
     """Build a call graph from a parsed Python AST."""
+
+    known_function_names = _collect_top_level_function_names(tree)
+    known_function_names.update(
+        _function_names_from_symbol_index(
+            symbol_index,
+            source_path=source_path,
+        )
+    )
 
     visitor = PythonCallVisitor(
         source_path=source_path,
         module_name=module_name,
         known_class_names=_collect_class_names(tree),
+        known_function_names=known_function_names,
     )
     visitor.visit(tree)
     return visitor.graph
-
 
 def parse_calls_from_source(
     source: str,
