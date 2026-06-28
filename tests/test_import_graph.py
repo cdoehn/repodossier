@@ -6,6 +6,8 @@ from repocontext.import_graph import (
     ImportAnalysisError,
     ImportEdge,
     ImportReference,
+    parse_imports_from_file,
+    parse_imports_from_source,
 )
 
 
@@ -161,3 +163,124 @@ def test_import_reference_rejects_negative_level() -> None:
 def test_line_numbers_must_not_be_negative(factory) -> None:
     with pytest.raises(ValueError, match="line_number"):
         factory()
+
+
+def test_parse_imports_from_source_detects_plain_imports() -> None:
+    references, errors = parse_imports_from_source(
+        """
+import os
+import pathlib as p
+import package.module
+""",
+        source_path="src/repocontext/example.py",
+        source_module="repocontext.example",
+    )
+
+    assert errors == []
+    assert [
+        (ref.import_type, ref.imported_module, ref.imported_name, ref.alias, ref.line_number)
+        for ref in references
+    ] == [
+        ("import", "os", None, None, 2),
+        ("import", "pathlib", None, "p", 3),
+        ("import", "package.module", None, None, 4),
+    ]
+
+
+def test_parse_imports_from_source_detects_from_imports() -> None:
+    references, errors = parse_imports_from_source(
+        """
+from pathlib import Path, PurePath as PP
+from repocontext.scanner import scan_files
+""",
+        source_path="src/repocontext/example.py",
+        source_module="repocontext.example",
+    )
+
+    assert errors == []
+    assert [
+        (ref.import_type, ref.imported_module, ref.imported_name, ref.alias, ref.line_number)
+        for ref in references
+    ] == [
+        ("from", "pathlib", "Path", None, 2),
+        ("from", "pathlib", "PurePath", "PP", 2),
+        ("from", "repocontext.scanner", "scan_files", None, 3),
+    ]
+
+
+def test_parse_imports_from_source_detects_relative_and_wildcard_imports() -> None:
+    references, errors = parse_imports_from_source(
+        """
+from .scanner import scan_files
+from ..git import discover_repo as discover
+from . import symbols
+from repocontext.symbols import *
+""",
+        source_path="src/repocontext/exporter.py",
+        source_module="repocontext.exporter",
+    )
+
+    assert errors == []
+    assert [
+        (
+            ref.imported_module,
+            ref.imported_name,
+            ref.alias,
+            ref.level,
+            ref.is_relative,
+            ref.line_number,
+        )
+        for ref in references
+    ] == [
+        ("scanner", "scan_files", None, 1, True, 2),
+        ("git", "discover_repo", "discover", 2, True, 3),
+        (None, "symbols", None, 1, True, 4),
+        ("repocontext.symbols", "*", None, 0, False, 5),
+    ]
+
+
+def test_parse_imports_from_source_collects_syntax_errors_without_raising() -> None:
+    references, errors = parse_imports_from_source(
+        "from import broken\n",
+        source_path="src/repocontext/broken.py",
+        source_module="repocontext.broken",
+    )
+
+    assert references == []
+    assert len(errors) == 1
+    assert errors[0].source_path == Path("src/repocontext/broken.py")
+    assert errors[0].error_type == "SyntaxError"
+    assert errors[0].line_number == 1
+
+
+def test_parse_imports_from_file_reads_python_file(tmp_path: Path) -> None:
+    source_path = tmp_path / "module.py"
+    source_path.write_text("import os\nfrom pathlib import Path\n", encoding="utf-8")
+
+    references, errors = parse_imports_from_file(
+        source_path,
+        source_module="module",
+    )
+
+    assert errors == []
+    assert [
+        (ref.import_type, ref.imported_module, ref.imported_name)
+        for ref in references
+    ] == [
+        ("import", "os", None),
+        ("from", "pathlib", "Path"),
+    ]
+
+
+def test_parse_imports_from_file_collects_read_errors(tmp_path: Path) -> None:
+    missing_path = tmp_path / "missing.py"
+
+    references, errors = parse_imports_from_file(
+        missing_path,
+        source_module="missing",
+    )
+
+    assert references == []
+    assert len(errors) == 1
+    assert errors[0].source_path == missing_path
+    assert errors[0].error_type in {"FileNotFoundError", "OSError"}

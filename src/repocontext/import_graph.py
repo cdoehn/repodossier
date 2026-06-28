@@ -1,7 +1,8 @@
-"""Data models for Python import analysis and dependency graphs."""
+"""Data models and parsers for Python import analysis and dependency graphs."""
 
 from __future__ import annotations
 
+import ast
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
@@ -79,9 +80,130 @@ class ImportAnalysisError:
             object.__setattr__(self, "source_path", Path(self.source_path))
 
 
+class _ImportVisitor(ast.NodeVisitor):
+    """Collect import references from a parsed Python AST."""
+
+    def __init__(self, source_path: Path, source_module: str) -> None:
+        self.source_path = source_path
+        self.source_module = source_module
+        self.references: list[ImportReference] = []
+
+    def visit_Import(self, node: ast.Import) -> None:
+        for alias in node.names:
+            self.references.append(
+                ImportReference(
+                    source_path=self.source_path,
+                    source_module=self.source_module,
+                    imported_module=alias.name,
+                    imported_name=None,
+                    alias=alias.asname,
+                    import_type="import",
+                    level=0,
+                    line_number=getattr(node, "lineno", 0),
+                    is_relative=False,
+                )
+            )
+
+    def visit_ImportFrom(self, node: ast.ImportFrom) -> None:
+        level = node.level or 0
+        for alias in node.names:
+            self.references.append(
+                ImportReference(
+                    source_path=self.source_path,
+                    source_module=self.source_module,
+                    imported_module=node.module,
+                    imported_name=alias.name,
+                    alias=alias.asname,
+                    import_type="from",
+                    level=level,
+                    line_number=getattr(node, "lineno", 0),
+                    is_relative=level > 0,
+                )
+            )
+
+
+def parse_imports_from_source(
+    source: str,
+    *,
+    source_path: str | Path,
+    source_module: str,
+) -> tuple[list[ImportReference], list[ImportAnalysisError]]:
+    """Parse Python source text and return discovered imports plus non-fatal errors."""
+
+    normalized_source_path = Path(source_path)
+
+    try:
+        tree = ast.parse(source, filename=str(normalized_source_path))
+    except SyntaxError as exc:
+        return [], [
+            ImportAnalysisError(
+                source_path=normalized_source_path,
+                message=exc.msg or str(exc),
+                error_type="SyntaxError",
+                line_number=exc.lineno,
+            )
+        ]
+    except ValueError as exc:
+        return [], [
+            ImportAnalysisError(
+                source_path=normalized_source_path,
+                message=str(exc),
+                error_type=type(exc).__name__,
+                line_number=None,
+            )
+        ]
+
+    visitor = _ImportVisitor(
+        source_path=normalized_source_path,
+        source_module=source_module,
+    )
+    visitor.visit(tree)
+    return visitor.references, []
+
+
+def parse_imports_from_file(
+    source_path: str | Path,
+    *,
+    source_module: str,
+    encoding: str = "utf-8",
+) -> tuple[list[ImportReference], list[ImportAnalysisError]]:
+    """Read a Python file and return discovered imports plus non-fatal errors."""
+
+    normalized_source_path = Path(source_path)
+
+    try:
+        source = normalized_source_path.read_text(encoding=encoding)
+    except OSError as exc:
+        return [], [
+            ImportAnalysisError(
+                source_path=normalized_source_path,
+                message=str(exc),
+                error_type=type(exc).__name__,
+                line_number=None,
+            )
+        ]
+    except UnicodeDecodeError as exc:
+        return [], [
+            ImportAnalysisError(
+                source_path=normalized_source_path,
+                message=str(exc),
+                error_type=type(exc).__name__,
+                line_number=None,
+            )
+        ]
+
+    return parse_imports_from_source(
+        source,
+        source_path=normalized_source_path,
+        source_module=source_module,
+    )
+
+
 __all__ = [
     "ImportAnalysisError",
     "ImportEdge",
     "ImportReference",
     "ImportType",
+    "parse_imports_from_file",
+    "parse_imports_from_source",
 ]
