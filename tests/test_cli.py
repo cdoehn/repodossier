@@ -47,6 +47,45 @@ def setup_repository(repo_path: Path) -> Path:
     return repo_path
 
 
+
+
+def test_cli_info_command_includes_import_graph_summary(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    repo_path = setup_repository(tmp_path / "repo_info_import_graph")
+    package_dir = repo_path / "src" / "app"
+    package_dir.mkdir(parents=True)
+
+    (package_dir / "__init__.py").write_text("", encoding="utf-8")
+    (package_dir / "main.py").write_text(
+        "import os\n"
+        "import app.utils\n",
+        encoding="utf-8",
+    )
+    (package_dir / "utils.py").write_text(
+        "def helper():\n"
+        "    return 'ok'\n",
+        encoding="utf-8",
+    )
+
+    run_git_command(repo_path, "add", "src/app/__init__.py", "src/app/main.py", "src/app/utils.py")
+    run_git_command(repo_path, "commit", "-m", "Add Python package", env=COMMIT_ENV)
+    monkeypatch.chdir(repo_path)
+
+    exit_code = main(["info"])
+
+    assert exit_code == 0
+    output = capsys.readouterr().out
+    assert "Import graph:" in output
+    assert "Python modules: 3" in output
+    assert "Import dependencies: 1" in output
+    assert "External imports: 1" in output
+    assert "Unresolved imports: 0" in output
+    assert "Analysis errors: 0" in output
+
+
 def test_cli_info_command_inside_repository(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
     repo_path = setup_repository(tmp_path / "repo")
     monkeypatch.chdir(repo_path)

@@ -10,6 +10,7 @@ from typing import Iterable, Optional
 from .exporters import generate_full_export
 from .git import RepositoryInfo, find_repository_root, get_repository_info
 from .gitignore import GitignoreUpdateError
+from .import_graph import build_import_graph, calculate_import_graph_metrics
 
 
 _FALLBACK_VERSION = "0.1.0.dev0"
@@ -59,6 +60,40 @@ def _print_repository_info(repository_info: RepositoryInfo) -> None:
     print(f"  Tracked files: {len(repository_info.tracked_files)}")
 
 
+
+def _python_source_paths_from_repository_info(repository_info: RepositoryInfo) -> tuple[Path, ...]:
+    """Return Git-tracked Python source paths for import graph analysis."""
+
+    return tuple(
+        repository_info.root_path / tracked_file.path
+        for tracked_file in repository_info.tracked_files
+        if tracked_file.path.suffix == ".py"
+    )
+
+
+def _print_import_graph_info(repository_info: RepositoryInfo) -> None:
+    """Display a compact import graph summary for the info command."""
+
+    print("Import graph:")
+
+    try:
+        import_graph = build_import_graph(
+            _python_source_paths_from_repository_info(repository_info),
+            repo_root=repository_info.root_path,
+        )
+        metrics = calculate_import_graph_metrics(import_graph)
+    except Exception as exc:
+        print("  Status: unavailable")
+        print(f"  Error: {type(exc).__name__}: {exc}")
+        return
+
+    print(f"  Python modules: {metrics.module_count}")
+    print(f"  Import dependencies: {metrics.local_dependency_count}")
+    print(f"  External imports: {metrics.external_import_count}")
+    print(f"  Unresolved imports: {metrics.unresolved_import_count}")
+    print(f"  Analysis errors: {metrics.error_count}")
+
+
 def _find_repository_root_or_report_error() -> Optional[Path]:
     repository_root = find_repository_root()
     if repository_root is None:
@@ -94,6 +129,7 @@ def _handle_info_command(_args: argparse.Namespace) -> int:
 
     repository_info = get_repository_info(repository_root)
     _print_repository_info(repository_info)
+    _print_import_graph_info(repository_info)
     return 0
 
 
