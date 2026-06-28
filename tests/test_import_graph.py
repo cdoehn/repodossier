@@ -6,10 +6,14 @@ from repocontext.import_graph import (
     ImportAnalysisError,
     ImportEdge,
     ImportGraph,
+    ImportGraphMetrics,
     ImportReference,
     build_import_graph,
     build_python_module_map,
+    calculate_import_graph_metrics,
     import_edge_from_reference,
+    import_graph_depends_on,
+    import_graph_used_by,
     module_name_from_python_path,
     parse_imports_from_file,
     parse_imports_from_source,
@@ -1076,6 +1080,212 @@ def test_import_edge_from_reference_returns_none_for_external_import() -> None:
     )
 
     assert import_edge_from_reference(reference) is None
+
+
+
+
+def test_build_import_graph_complete_project_flow(tmp_path: Path) -> None:
+    project_files = {
+        "README.md": "# ignored\n",
+        "src/app/__init__.py": "",
+        "src/app/broken.py": "from import broken\n",
+        "src/app/config.py": """
+from .utils import helper
+""",
+        "src/app/main.py": """
+import os
+import app.config
+from app import utils
+from .utils import helper
+from .missing import nope
+""",
+        "src/app/utils.py": "def helper(): pass\n",
+        "src/app/worker.py": """
+from app.main import run
+from . import config
+import json
+""",
+        "src/bad-package/ignored.py": "import os\n",
+    }
+
+    source_paths: list[Path] = []
+    for relative_path, content in project_files.items():
+        path = tmp_path / relative_path
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content, encoding="utf-8")
+        source_paths.append(path)
+
+    graph = build_import_graph(list(reversed(source_paths)), repo_root=tmp_path)
+
+    assert graph.modules == {
+        "app": tmp_path / "src/app/__init__.py",
+        "app.broken": tmp_path / "src/app/broken.py",
+        "app.config": tmp_path / "src/app/config.py",
+        "app.main": tmp_path / "src/app/main.py",
+        "app.utils": tmp_path / "src/app/utils.py",
+        "app.worker": tmp_path / "src/app/worker.py",
+    }
+
+    assert [
+        (
+            edge.source_module,
+            edge.target_module,
+            edge.source_path.relative_to(tmp_path).as_posix(),
+            edge.target_path.relative_to(tmp_path).as_posix(),
+            edge.import_type,
+            edge.imported_name,
+            edge.line_number,
+        )
+        for edge in graph.edges
+    ] == [
+        (
+            "app.config",
+            "app.utils",
+            "src/app/config.py",
+            "src/app/utils.py",
+            "from",
+            "helper",
+            2,
+        ),
+        (
+            "app.main",
+            "app.config",
+            "src/app/main.py",
+            "src/app/config.py",
+            "import",
+            None,
+            3,
+        ),
+        (
+            "app.main",
+            "app.utils",
+            "src/app/main.py",
+            "src/app/utils.py",
+            "from",
+            "utils",
+            4,
+        ),
+        (
+            "app.worker",
+            "app.main",
+            "src/app/worker.py",
+            "src/app/main.py",
+            "from",
+            "run",
+            2,
+        ),
+        (
+            "app.worker",
+            "app.config",
+            "src/app/worker.py",
+            "src/app/config.py",
+            "from",
+            "config",
+            3,
+        ),
+    ]
+
+    assert [
+        (
+            reference.source_module,
+            reference.imported_module,
+            reference.imported_name,
+            reference.line_number,
+            reference.is_local,
+        )
+        for reference in graph.external_imports
+    ] == [
+        ("app.main", "os", None, 2, False),
+        ("app.worker", "json", None, 4, False),
+    ]
+
+    assert [
+        (
+            reference.source_module,
+            reference.imported_module,
+            reference.imported_name,
+            reference.line_number,
+            reference.is_relative,
+            reference.is_local,
+        )
+        for reference in graph.unresolved_imports
+    ] == [
+        ("app.main", "missing", "nope", 6, True, False),
+    ]
+
+    assert len(graph.errors) == 1
+    assert graph.errors[0].source_path == tmp_path / "src/app/broken.py"
+    assert graph.errors[0].error_type == "SyntaxError"
+
+    assert import_graph_depends_on(graph) == {
+        "app": (),
+        "app.broken": (),
+        "app.config": ("app.utils",),
+        "app.main": ("app.config", "app.utils"),
+        "app.utils": (),
+        "app.worker": ("app.config", "app.main"),
+    }
+
+    assert import_graph_used_by(graph) == {
+        "app": (),
+        "app.broken": (),
+        "app.config": ("app.main", "app.worker"),
+        "app.main": ("app.worker",),
+        "app.utils": ("app.config", "app.main"),
+        "app.worker": (),
+    }
+
+    assert calculate_import_graph_metrics(graph) == ImportGraphMetrics(
+        module_count=6,
+        local_dependency_count=5,
+        external_import_count=2,
+        unresolved_import_count=1,
+        error_count=1,
+        root_modules=("app", "app.broken", "app.worker"),
+        leaf_modules=("app", "app.broken", "app.utils"),
+    )
+
+
+def test_build_import_graph_complete_project_flow_is_deterministic(tmp_path: Path) -> None:
+    project_files = {
+        "src/pkg/__init__.py": "",
+        "src/pkg/a.py": """
+import pkg.b
+from .b import thing
+import os
+""",
+        "src/pkg/b.py": """
+from . import c
+""",
+        "src/pkg/c.py": "",
+    }
+
+    source_paths: list[Path] = []
+    for relative_path, content in project_files.items():
+        path = tmp_path / relative_path
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content, encoding="utf-8")
+        source_paths.append(path)
+
+    first_graph = build_import_graph(source_paths, repo_root=tmp_path)
+    second_graph = build_import_graph(list(reversed(source_paths)), repo_root=tmp_path)
+
+    assert first_graph == second_graph
+    assert [
+        (edge.source_module, edge.target_module, edge.line_number)
+        for edge in first_graph.edges
+    ] == [
+        ("pkg.a", "pkg.b", 2),
+        ("pkg.b", "pkg.c", 2),
+    ]
+    assert [
+        (reference.source_module, reference.imported_module, reference.line_number)
+        for reference in first_graph.external_imports
+    ] == [
+        ("pkg.a", "os", 4),
+    ]
+    assert first_graph.unresolved_imports == ()
+    assert first_graph.errors == ()
 
 
 def test_build_import_graph_builds_local_edges_and_separates_external_and_unresolved(tmp_path: Path) -> None:
