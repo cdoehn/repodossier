@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from repocontext.changed_exporter import write_changed_export
+from repocontext.gitignore import ensure_repocontext_gitignore_entries
 
 
 def add_changed_subparser(subparsers: Any) -> Any:
@@ -52,8 +53,11 @@ def add_changed_subparser(subparsers: Any) -> Any:
 def run_changed_command(args: Namespace) -> int:
     """Run the changed export command from parsed CLI arguments."""
 
+    repository_root = Path.cwd()
+    ensure_repocontext_gitignore_entries(repository_root)
+
     output = write_changed_export(
-        Path.cwd(),
+        repository_root,
         getattr(args, "output", "changed.txt"),
         branch=getattr(args, "branch", None),
         include_diff=getattr(args, "include_diff", True),

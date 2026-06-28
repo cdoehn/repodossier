@@ -163,3 +163,39 @@ def test_ensure_repocontext_gitignore_entries_keeps_export_order_stable(
 
     assert lines[0] == REPOCONTEXT_GITIGNORE_HEADER
     assert export_lines == list(REPOCONTEXT_EXPORT_FILES)
+
+
+def test_repocontext_export_files_include_changed_txt_in_expected_order() -> None:
+    assert REPOCONTEXT_EXPORT_FILES == (
+        "full.txt",
+        "ai.txt",
+        "docs.txt",
+        "changed.txt",
+    )
+
+
+def test_ensure_repocontext_gitignore_entries_adds_missing_changed_txt_to_existing_block(
+    tmp_path: Path,
+) -> None:
+    gitignore_path = tmp_path / ".gitignore"
+    gitignore_path.write_text(
+        "# RepoContext exports\n"
+        "full.txt\n"
+        "ai.txt\n"
+        "docs.txt\n",
+        encoding="utf-8",
+    )
+
+    changed = ensure_repocontext_gitignore_entries(tmp_path)
+
+    content = gitignore_path.read_text(encoding="utf-8")
+    export_lines = [
+        line
+        for line in content.splitlines()
+        if line in REPOCONTEXT_EXPORT_FILES
+    ]
+
+    assert changed is True
+    assert content.count("changed.txt") == 1
+    assert export_lines == list(REPOCONTEXT_EXPORT_FILES)
+

@@ -75,3 +75,45 @@ def test_run_changed_command_writes_changed_export(
 
     assert status == 0
     assert "Wrote" in capsys.readouterr().out
+
+
+def test_run_changed_command_ensures_repocontext_gitignore_entries(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.chdir(tmp_path)
+
+    ensured_roots: list[Path] = []
+
+    def fake_ensure_repocontext_gitignore_entries(repository_root: Path) -> bool:
+        ensured_roots.append(repository_root)
+        return True
+
+    def fake_write_changed_export(
+        repo_path: Path,
+        output_path: str,
+        *,
+        branch: str | None,
+        include_diff: bool,
+    ) -> Path:
+        assert repo_path == tmp_path
+        output = tmp_path / output_path
+        output.write_text("# Changed Export\n", encoding="utf-8")
+        return output
+
+    monkeypatch.setattr(
+        "repocontext.changed_command.ensure_repocontext_gitignore_entries",
+        fake_ensure_repocontext_gitignore_entries,
+    )
+    monkeypatch.setattr(
+        "repocontext.changed_command.write_changed_export",
+        fake_write_changed_export,
+    )
+
+    status = run_changed_command(
+        Namespace(output="changed.txt", branch=None, include_diff=True)
+    )
+
+    assert status == 0
+    assert ensured_roots == [tmp_path]
+
