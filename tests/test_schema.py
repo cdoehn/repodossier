@@ -13,6 +13,7 @@ from repocontext.schema import (
     SchemaIndex,
     SchemaTable,
     discover_database_schema_files,
+    extract_sqlite_schema_file,
     has_sqlite_magic_header,
     is_generated_export_file,
     is_sql_schema_candidate_path,
@@ -177,6 +178,153 @@ def test_sqlite_magic_header_rejects_non_sqlite_file(tmp_path: Path) -> None:
 
     assert has_sqlite_magic_header(fake_database_path) is False
 
+
+
+def test_extract_sqlite_schema_file_reads_simple_table(tmp_path: Path) -> None:
+    database_path = tmp_path / "app.sqlite"
+    create_sqlite_database(database_path)
+
+    report = extract_sqlite_schema_file(database_path, repo_root=tmp_path)
+
+    assert report.database_files == ("app.sqlite",)
+    assert report.warnings == ()
+    assert report.unsupported_files == ()
+    assert [table.name for table in report.tables] == ["users"]
+
+    users_table = report.tables[0]
+    assert users_table.source_file == "app.sqlite"
+    assert users_table.table_type == "table"
+    assert [column.name for column in users_table.columns] == ["id", "name"]
+    assert users_table.columns[0].data_type == "INTEGER"
+    assert users_table.columns[0].is_primary_key is True
+    assert users_table.columns[1].data_type == "TEXT"
+    assert users_table.columns[1].nullable is False
+
+
+def test_extract_sqlite_schema_file_reads_multiple_tables_foreign_key_and_index(tmp_path: Path) -> None:
+    database_path = tmp_path / "data" / "app.sqlite"
+    database_path.parent.mkdir(parents=True)
+
+    connection = sqlite3.connect(database_path)
+    try:
+        connection.execute("PRAGMA foreign_keys = ON")
+        connection.execute("CREATE TABLE roles (id INTEGER PRIMARY KEY, name TEXT NOT NULL)")
+        connection.execute(
+            """
+            CREATE TABLE users (
+                id INTEGER PRIMARY KEY,
+                role_id INTEGER NOT NULL,
+                email TEXT NOT NULL DEFAULT 'unknown',
+                FOREIGN KEY(role_id) REFERENCES roles(id) ON DELETE CASCADE
+            )
+            """
+        )
+        connection.execute("CREATE UNIQUE INDEX users_email_idx ON users(email)")
+        connection.commit()
+    finally:
+        connection.close()
+
+    report = extract_sqlite_schema_file(database_path, repo_root=tmp_path)
+
+    assert [table.name for table in report.tables] == ["roles", "users"]
+
+    users_table = next(table for table in report.tables if table.name == "users")
+    assert [column.name for column in users_table.columns] == ["id", "email", "role_id"]
+
+    email_column = next(column for column in users_table.columns if column.name == "email")
+    assert email_column.data_type == "TEXT"
+    assert email_column.nullable is False
+    assert email_column.default_value == "'unknown'"
+
+    assert len(users_table.foreign_keys) == 1
+    foreign_key = users_table.foreign_keys[0]
+    assert foreign_key.from_column == "role_id"
+    assert foreign_key.to_table == "roles"
+    assert foreign_key.to_column == "id"
+    assert foreign_key.on_delete == "CASCADE"
+
+    assert len(users_table.indexes) == 1
+    index = users_table.indexes[0]
+    assert index.name == "users_email_idx"
+    assert index.unique is True
+    assert index.columns == ("email",)
+
+
+def test_extract_sqlite_schema_file_reads_views_separately(tmp_path: Path) -> None:
+    database_path = tmp_path / "app.sqlite"
+
+    connection = sqlite3.connect(database_path)
+    try:
+        connection.execute("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT NOT NULL)")
+        connection.execute("CREATE VIEW active_users AS SELECT id, name FROM users")
+        connection.commit()
+    finally:
+        connection.close()
+
+    report = extract_sqlite_schema_file(database_path, repo_root=tmp_path)
+
+    assert [table.name for table in report.tables] == ["users"]
+    assert [view.name for view in report.views] == ["active_users"]
+    assert report.views[0].table_type == "view"
+    assert [column.name for column in report.views[0].columns] == ["id", "name"]
+
+
+def test_extract_sqlite_schema_file_filters_internal_sqlite_tables(tmp_path: Path) -> None:
+    database_path = tmp_path / "app.sqlite"
+
+    connection = sqlite3.connect(database_path)
+    try:
+        connection.execute("CREATE TABLE users (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT)")
+        connection.commit()
+    finally:
+        connection.close()
+
+    report = extract_sqlite_schema_file(database_path, repo_root=tmp_path)
+
+    assert [table.name for table in report.tables] == ["users"]
+    assert "sqlite_sequence" not in [table.name for table in report.tables]
+
+
+def test_extract_sqlite_schema_file_marks_non_sqlite_file_as_unsupported(tmp_path: Path) -> None:
+    database_path = tmp_path / "broken.sqlite"
+    database_path.write_bytes(b"not sqlite")
+
+    report = extract_sqlite_schema_file(database_path, repo_root=tmp_path)
+
+    assert report.database_files == ()
+    assert report.unsupported_files == ("broken.sqlite",)
+    assert "broken.sqlite: file extension suggests SQLite but magic header is missing" in report.warnings
+
+
+def test_extract_sqlite_schema_file_handles_corrupt_sqlite_database_without_crashing(tmp_path: Path) -> None:
+    database_path = tmp_path / "corrupt.sqlite"
+    database_path.write_bytes(b"SQLite format 3\x00" + b"broken data")
+
+    report = extract_sqlite_schema_file(database_path, repo_root=tmp_path)
+
+    assert report.database_files == ("corrupt.sqlite",)
+    assert report.tables == ()
+    assert report.views == ()
+    assert any("could not read SQLite schema" in warning or "could not open SQLite database" in warning for warning in report.warnings)
+
+
+def test_extract_sqlite_schema_file_does_not_export_table_data(tmp_path: Path) -> None:
+    database_path = tmp_path / "app.sqlite"
+
+    connection = sqlite3.connect(database_path)
+    try:
+        connection.execute("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT NOT NULL)")
+        connection.execute("INSERT INTO users (name) VALUES ('VerySecretUserName')")
+        connection.commit()
+    finally:
+        connection.close()
+
+    report = extract_sqlite_schema_file(database_path, repo_root=tmp_path)
+    report_text = repr(report)
+
+    assert "users" in report_text
+    assert "name" in report_text
+    assert "VerySecretUserName" not in report_text
 
 def test_discover_database_schema_files_detects_sqlite_and_sql_files(tmp_path: Path) -> None:
     database_path = tmp_path / "data" / "app.sqlite"

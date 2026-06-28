@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
+import sqlite3
 from typing import Iterable, Sequence
 
 from .gitignore import REPOCONTEXT_EXPORT_FILES
@@ -355,6 +356,283 @@ def _unique_sorted_posix(values: Sequence[str | Path]) -> tuple[str, ...]:
     return tuple(sorted({Path(value).as_posix() for value in values}))
 
 
+def extract_sqlite_schema_file(
+    database_path: str | Path,
+    *,
+    repo_root: str | Path | None = None,
+) -> DatabaseSchemaReport:
+    """Extract schema metadata from one SQLite database file.
+
+    The database is opened read-only. Only SQLite schema metadata and PRAGMA
+    metadata are queried; table contents are never selected or exported.
+    """
+
+    path = Path(database_path)
+    root = Path(repo_root) if repo_root is not None else path.parent
+    source_file = _relative_path(root, path)
+
+    if not has_sqlite_magic_header(path):
+        return DatabaseSchemaReport(
+            unsupported_files=(source_file,),
+            warnings=(f"{source_file}: file extension suggests SQLite but magic header is missing",),
+        )
+
+    try:
+        connection = _connect_sqlite_readonly(path)
+    except (OSError, sqlite3.Error) as exc:
+        return DatabaseSchemaReport(
+            database_files=(source_file,),
+            warnings=(f"{source_file}: could not open SQLite database read-only: {type(exc).__name__}: {exc}",),
+        )
+
+    try:
+        tables, views, warnings = _extract_sqlite_schema_from_connection(
+            connection,
+            source_file=source_file,
+        )
+    except sqlite3.Error as exc:
+        return DatabaseSchemaReport(
+            database_files=(source_file,),
+            warnings=(f"{source_file}: could not read SQLite schema: {type(exc).__name__}: {exc}",),
+        )
+    finally:
+        connection.close()
+
+    return DatabaseSchemaReport(
+        database_files=(source_file,),
+        tables=tuple(tables),
+        views=tuple(views),
+        warnings=tuple(warnings),
+    )
+
+
+def _connect_sqlite_readonly(path: Path) -> sqlite3.Connection:
+    """Open a SQLite database in read-only URI mode."""
+
+    uri = path.resolve().as_uri() + "?mode=ro"
+    return sqlite3.connect(uri, uri=True)
+
+
+def _extract_sqlite_schema_from_connection(
+    connection: sqlite3.Connection,
+    *,
+    source_file: str,
+) -> tuple[list[SchemaTable], list[SchemaTable], list[str]]:
+    """Return tables, views, and warnings from an open SQLite connection."""
+
+    rows = connection.execute(
+        """
+        SELECT type, name, tbl_name, sql
+        FROM sqlite_schema
+        WHERE type IN ('table', 'view')
+        ORDER BY type, name
+        """
+    ).fetchall()
+
+    tables: list[SchemaTable] = []
+    views: list[SchemaTable] = []
+    warnings: list[str] = []
+
+    for schema_type, name, table_name, create_sql in rows:
+        object_name = str(name or table_name or "").strip()
+        if not object_name:
+            warnings.append(f"{source_file}: skipped SQLite schema object without a name")
+            continue
+
+        if _is_internal_sqlite_object(object_name):
+            continue
+
+        normalized_create_sql = str(create_sql or "").strip()
+        table_type = _sqlite_table_type(schema_type, normalized_create_sql)
+
+        try:
+            columns = _read_sqlite_columns(connection, object_name)
+            foreign_keys = _read_sqlite_foreign_keys(connection, object_name)
+            indexes = _read_sqlite_indexes(connection, object_name)
+        except sqlite3.Error as exc:
+            warnings.append(
+                f"{source_file}: could not read metadata for {object_name}: "
+                f"{type(exc).__name__}: {exc}"
+            )
+            columns = ()
+            foreign_keys = ()
+            indexes = ()
+
+        schema_table = SchemaTable(
+            name=object_name,
+            table_type=table_type,
+            columns=columns,
+            foreign_keys=foreign_keys,
+            indexes=indexes,
+            create_sql=normalized_create_sql,
+            source_file=source_file,
+        )
+
+        if table_type == "view":
+            views.append(schema_table)
+        else:
+            tables.append(schema_table)
+
+    return tables, views, warnings
+
+
+def _sqlite_table_type(schema_type: object, create_sql: str) -> str:
+    """Return RepoContext's normalized table type for a SQLite schema object."""
+
+    schema_type_text = str(schema_type or "").strip().lower()
+
+    if schema_type_text == "view":
+        return "view"
+
+    if create_sql.lstrip().upper().startswith("CREATE VIRTUAL TABLE"):
+        return "virtual_table"
+
+    if schema_type_text == "table":
+        return "table"
+
+    return "unknown"
+
+
+def _is_internal_sqlite_object(name: str) -> bool:
+    """Return True for SQLite's internal bookkeeping tables and indexes."""
+
+    return name.lower().startswith("sqlite_")
+
+
+def _quote_sqlite_identifier(identifier: str) -> str:
+    """Return a safely quoted SQLite identifier for PRAGMA calls."""
+
+    return '"' + identifier.replace('"', '""') + '"'
+
+
+def _read_sqlite_columns(
+    connection: sqlite3.Connection,
+    table_name: str,
+) -> tuple[SchemaColumn, ...]:
+    """Read column metadata for one SQLite table or view."""
+
+    rows = connection.execute(
+        f"PRAGMA table_info({_quote_sqlite_identifier(table_name)})"
+    ).fetchall()
+
+    columns: list[SchemaColumn] = []
+    for row in rows:
+        # PRAGMA table_info columns:
+        # cid, name, type, notnull, dflt_value, pk
+        name = _clean_schema_value(row[1])
+        if not name:
+            continue
+
+        data_type = _clean_schema_value(row[2])
+        nullable = not bool(row[3])
+        default_value = None if row[4] is None else str(row[4])
+        primary_key_position = int(row[5] or 0)
+
+        columns.append(
+            SchemaColumn(
+                name=name,
+                data_type=data_type,
+                nullable=nullable,
+                default_value=default_value,
+                primary_key_position=primary_key_position,
+            )
+        )
+
+    return tuple(columns)
+
+
+def _read_sqlite_foreign_keys(
+    connection: sqlite3.Connection,
+    table_name: str,
+) -> tuple[SchemaForeignKey, ...]:
+    """Read foreign-key metadata for one SQLite table."""
+
+    rows = connection.execute(
+        f"PRAGMA foreign_key_list({_quote_sqlite_identifier(table_name)})"
+    ).fetchall()
+
+    foreign_keys: list[SchemaForeignKey] = []
+    for row in rows:
+        # PRAGMA foreign_key_list columns:
+        # id, seq, table, from, to, on_update, on_delete, match
+        foreign_keys.append(
+            SchemaForeignKey(
+                table=table_name,
+                from_column=_clean_schema_value(row[3], default="unknown"),
+                to_table=_clean_schema_value(row[2], default="unknown"),
+                to_column=_clean_schema_value(row[4], default="unknown"),
+                on_update=_clean_schema_value(row[5]),
+                on_delete=_clean_schema_value(row[6]),
+                match=_clean_schema_value(row[7]),
+            )
+        )
+
+    return tuple(foreign_keys)
+
+
+def _read_sqlite_indexes(
+    connection: sqlite3.Connection,
+    table_name: str,
+) -> tuple[SchemaIndex, ...]:
+    """Read non-internal index metadata for one SQLite table."""
+
+    rows = connection.execute(
+        f"PRAGMA index_list({_quote_sqlite_identifier(table_name)})"
+    ).fetchall()
+
+    indexes: list[SchemaIndex] = []
+    for row in rows:
+        # PRAGMA index_list columns:
+        # seq, name, unique, origin, partial
+        index_name = _clean_schema_value(row[1])
+        if not index_name or _is_internal_sqlite_object(index_name):
+            continue
+
+        columns = _read_sqlite_index_columns(connection, index_name)
+        indexes.append(
+            SchemaIndex(
+                name=index_name,
+                table=table_name,
+                unique=bool(row[2]),
+                columns=columns,
+                origin=_clean_schema_value(row[3]),
+                partial=bool(row[4]),
+            )
+        )
+
+    return tuple(indexes)
+
+
+def _read_sqlite_index_columns(
+    connection: sqlite3.Connection,
+    index_name: str,
+) -> tuple[str, ...]:
+    """Read indexed column names for one SQLite index."""
+
+    rows = connection.execute(
+        f"PRAGMA index_info({_quote_sqlite_identifier(index_name)})"
+    ).fetchall()
+
+    columns: list[str] = []
+    for row in rows:
+        # PRAGMA index_info columns:
+        # seqno, cid, name
+        column_name = _clean_schema_value(row[2])
+        if column_name:
+            columns.append(column_name)
+
+    return tuple(columns)
+
+
+def _clean_schema_value(value: object, *, default: str = "") -> str:
+    """Return a compact string value for schema metadata."""
+
+    if value is None:
+        return default
+    text = str(value).strip()
+    return text or default
+
+
 __all__ = [
     "DatabaseSchemaReport",
     "SQLITE_MAGIC_HEADER",
@@ -366,6 +644,7 @@ __all__ = [
     "SchemaIndex",
     "SchemaTable",
     "discover_database_schema_files",
+    "extract_sqlite_schema_file",
     "has_sqlite_magic_header",
     "is_generated_export_file",
     "is_sql_schema_candidate_path",
