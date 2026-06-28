@@ -1,6 +1,6 @@
 """Symbol extraction helpers for RepoContext.
 
-This module provides the foundation for static symbol extraction.
+This module provides static symbol extraction for Python source files.
 It intentionally does not execute project code.
 """
 
@@ -51,35 +51,72 @@ def _format_exception(error: BaseException) -> str:
     return f"{type(error).__name__}: {error}"
 
 
+def _symbol_from_function_node(
+    node: ast.FunctionDef | ast.AsyncFunctionDef,
+    *,
+    file_path: str,
+) -> SymbolInfo:
+    """Create symbol information for a top-level function node."""
+
+    return SymbolInfo(
+        name=node.name,
+        kind="function",
+        file_path=file_path,
+        line_start=node.lineno,
+        line_end=getattr(node, "end_lineno", None),
+    )
+
+
+def _extract_top_level_functions(
+    tree: ast.Module,
+    *,
+    file_path: str,
+) -> list[SymbolInfo]:
+    """Extract top-level function symbols from a parsed Python module.
+
+    Nested functions and methods are intentionally ignored in this MVP
+    step. Methods are handled separately by Method Discovery.
+    """
+
+    symbols: list[SymbolInfo] = []
+
+    for node in tree.body:
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            symbols.append(_symbol_from_function_node(node, file_path=file_path))
+
+    return symbols
+
+
 def extract_symbols_from_file(path: str | Path) -> FileSymbolIndex:
     """Parse one Python file and return its symbol extraction result.
 
-    Milestone 5.1 only establishes the stable parsing entrypoint and
-    error handling. Actual function, class, and method discovery is
-    implemented in the following milestone steps.
+    This function performs static parsing only. It does not import or
+    execute the analyzed file.
     """
 
     file_path = Path(path)
+    file_path_str = str(file_path)
 
     try:
         source = file_path.read_text(encoding="utf-8")
     except UnicodeDecodeError as error:
         return FileSymbolIndex(
-            file_path=str(file_path),
+            file_path=file_path_str,
             errors=[_format_exception(error)],
         )
     except OSError as error:
         return FileSymbolIndex(
-            file_path=str(file_path),
+            file_path=file_path_str,
             errors=[_format_exception(error)],
         )
 
     try:
-        ast.parse(source, filename=str(file_path))
+        tree = ast.parse(source, filename=file_path_str)
     except SyntaxError as error:
         return FileSymbolIndex(
-            file_path=str(file_path),
+            file_path=file_path_str,
             errors=[_format_syntax_error(error)],
         )
 
-    return FileSymbolIndex(file_path=str(file_path))
+    symbols = _extract_top_level_functions(tree, file_path=file_path_str)
+    return FileSymbolIndex(file_path=file_path_str, symbols=symbols)
