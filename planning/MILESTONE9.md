@@ -1,6 +1,3 @@
-Ja, hier ist **MILESTONE9.md vollständig** zum Kopieren:
-
-````text
 MILESTONE 9 – Documentation Export
 
 Ziel:
@@ -846,5 +843,3 @@ Milestone 9 ist fertig, wenn:
 - README ist aktualisiert und behauptet nicht mehr, docs.txt sei ungeplant.
 - Alle Tests sind grün.
 - Es gibt einen Commit für die Umsetzung.
-````
-
