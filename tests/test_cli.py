@@ -107,6 +107,88 @@ def test_cli_default_command_writes_full_txt_to_repository_root_from_subdirector
     assert not (nested_dir / "full.txt").exists()
 
 
+def test_cli_default_full_export_contains_tracked_text_file_in_all_mvp_sections(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo_path = setup_repository(tmp_path / "repo_full_export_text")
+    docs_dir = repo_path / "docs"
+    docs_dir.mkdir()
+    notes_path = docs_dir / "notes.txt"
+    notes_path.write_text("alpha\nbeta\n", encoding="utf-8")
+    run_git_command(repo_path, "add", "docs/notes.txt")
+    run_git_command(repo_path, "commit", "-m", "Add notes", env=COMMIT_ENV)
+    monkeypatch.chdir(repo_path)
+
+    exit_code = main([])
+
+    assert exit_code == 0
+    full_export = repo_path / "full.txt"
+    content = full_export.read_text(encoding="utf-8")
+
+    assert "# File Summary" in content
+    assert "| docs/notes.txt | Text | 2 |" in content
+
+    assert "# Repository Tree" in content
+    assert "docs" in content
+    assert "notes.txt" in content
+
+    assert "# Complete Source Export" in content
+    assert "## File: docs/notes.txt" in content
+    assert "alpha\nbeta\n" in content
+
+    assert "# Repository Statistics" in content
+    assert "Total lines:" in content
+    assert "Estimated tokens:" in content
+
+
+def test_cli_default_full_export_excludes_binary_file_from_source_dump_and_warns(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo_path = setup_repository(tmp_path / "repo_full_export_binary")
+    binary_path = repo_path / "binary.bin"
+    binary_path.write_bytes(b"\x00\x01\x02")
+    run_git_command(repo_path, "add", "binary.bin")
+    run_git_command(repo_path, "commit", "-m", "Add binary file", env=COMMIT_ENV)
+    monkeypatch.chdir(repo_path)
+
+    exit_code = main([])
+
+    assert exit_code == 0
+    content = (repo_path / "full.txt").read_text(encoding="utf-8")
+
+    assert "# Repository Tree" in content
+    assert "binary.bin [binary skipped]" in content
+
+    assert "# Complete Source Export" in content
+    assert "## File: binary.bin" not in content
+
+    assert "# Warnings" in content
+    assert "- Skipped binary file: binary.bin" in content
+
+
+def test_cli_default_full_export_preserves_known_text_line_and_token_values(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo_path = setup_repository(tmp_path / "repo_full_export_counts")
+    data_path = repo_path / "data.txt"
+    data_path.write_text("abcd\nefgh\n", encoding="utf-8")
+    run_git_command(repo_path, "add", "data.txt")
+    run_git_command(repo_path, "commit", "-m", "Add data file", env=COMMIT_ENV)
+    monkeypatch.chdir(repo_path)
+
+    exit_code = main([])
+
+    assert exit_code == 0
+    content = (repo_path / "full.txt").read_text(encoding="utf-8")
+
+    assert "| data.txt | Text | 2 | 3 |" in content
+    assert "## File: data.txt" in content
+    assert "abcd\nefgh\n" in content
+
+
 def test_cli_info_command_outside_repository(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
     non_repo_path = tmp_path / "outside"
     non_repo_path.mkdir()
