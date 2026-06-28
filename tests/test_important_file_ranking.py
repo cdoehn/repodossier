@@ -28,12 +28,19 @@ def paths(ranked: tuple[ImportantFileScore, ...]) -> list[str]:
     return [score.path for score in ranked]
 
 
+def score_for(
+    ranked: tuple[ImportantFileScore, ...],
+    path: str,
+) -> ImportantFileScore:
+    by_path = {score.path: score for score in ranked}
+    return by_path[path]
+
+
 def reasons_for(
     ranked: tuple[ImportantFileScore, ...],
     path: str,
 ) -> tuple[str, ...]:
-    by_path = {score.path: score for score in ranked}
-    return by_path[path].reasons
+    return score_for(ranked, path).reasons
 
 
 def test_rank_important_files_returns_score_model_with_signal_breakdown() -> None:
@@ -47,12 +54,97 @@ def test_rank_important_files_returns_score_model_with_signal_breakdown() -> Non
     assert ranked
     assert isinstance(ranked[0], ImportantFileScore)
 
-    readme_score = ranked[0]
-    assert readme_score.path == "README.md"
+    readme_score = score_for(ranked, "README.md")
     assert readme_score.signals.documentation_score > 0
     assert readme_score.signals.structural_score == 0
     assert readme_score.score == readme_score.signals.total
     assert "Primary project documentation" in readme_score.reasons
+
+
+def test_pyproject_project_scripts_rank_target_module_as_entrypoint() -> None:
+    ranked = rank_important_files(
+        [
+            make_file(
+                "pyproject.toml",
+                content="""
+[project.scripts]
+demo = "demo.cli:main"
+""",
+            ),
+            make_file("src/demo/cli.py", content="def main():\n    pass\n"),
+            make_file("src/demo/core.py", content="VALUE = 1\n"),
+        ]
+    )
+
+    assert paths(ranked)[:2] == ["src/demo/cli.py", "pyproject.toml"]
+
+    cli_score = score_for(ranked, "src/demo/cli.py")
+    assert cli_score.signals.entrypoint_score > 0
+    assert "Project script entry point" in cli_score.reasons
+    assert "Likely Python entry point" in cli_score.reasons
+
+
+def test_pyproject_poetry_scripts_rank_target_module_as_entrypoint() -> None:
+    ranked = rank_important_files(
+        [
+            make_file(
+                "pyproject.toml",
+                content="""
+[tool.poetry.scripts]
+demo = "demo.commands:run"
+""",
+            ),
+            make_file("src/demo/commands.py", content="def run():\n    pass\n"),
+            make_file("src/demo/helper.py", content="VALUE = 1\n"),
+        ]
+    )
+
+    assert "src/demo/commands.py" in paths(ranked)
+    command_score = score_for(ranked, "src/demo/commands.py")
+    assert command_score.signals.entrypoint_score > 0
+    assert command_score.reasons == ("Project script entry point",)
+
+
+def test_python_main_file_is_ranked_as_module_entrypoint() -> None:
+    ranked = rank_important_files(
+        [
+            make_file("package/__main__.py", content="def main():\n    pass\n"),
+            make_file("package/core.py", content="VALUE = 1\n"),
+        ]
+    )
+
+    assert paths(ranked) == ["package/__main__.py"]
+    main_score = ranked[0]
+    assert main_score.signals.entrypoint_score > 0
+    assert "Python module entry point" in main_score.reasons
+
+
+def test_classic_python_entrypoint_filenames_are_ranked() -> None:
+    ranked = rank_important_files(
+        [
+            make_file("random_helper.py"),
+            make_file("app.py"),
+            make_file("main.py"),
+            make_file("cli.py"),
+        ]
+    )
+
+    assert paths(ranked) == ["main.py", "cli.py", "app.py"]
+    assert "Likely Python entry point" in reasons_for(ranked, "main.py")
+    assert "Likely Python entry point" in reasons_for(ranked, "cli.py")
+    assert "Likely Python entry point" in reasons_for(ranked, "app.py")
+
+
+def test_invalid_pyproject_does_not_crash_entrypoint_detection() -> None:
+    ranked = rank_important_files(
+        [
+            make_file("pyproject.toml", content="[project.scripts\nbroken"),
+            make_file("src/demo/cli.py", content="def main():\n    pass\n"),
+        ]
+    )
+
+    assert paths(ranked) == ["src/demo/cli.py", "pyproject.toml"]
+    assert "Likely Python entry point" in reasons_for(ranked, "src/demo/cli.py")
 
 
 def test_documentation_ranking_prioritizes_readme_and_architecture_docs() -> None:

@@ -3,9 +3,8 @@
 The ranking module provides a reusable, deterministic foundation for deciding
 which repository files are most useful for AI-oriented context exports.
 
-This module intentionally starts with documentation and structural signals.
-Entrypoint, import-graph centrality, and call-graph centrality can be layered
-onto the same data model in later Milestone 12 patches.
+The ranking is explainable: every score is split into signal categories and
+each ranked file carries human-readable reasons.
 """
 
 from __future__ import annotations
@@ -13,6 +12,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
+import tomllib
 
 
 GENERATED_EXPORT_FILENAMES: frozenset[str] = frozenset(
@@ -39,6 +39,17 @@ DOCUMENTATION_EXTENSIONS: frozenset[str] = frozenset(
         ".txt",
     }
 )
+
+PYTHON_ENTRYPOINT_FILENAMES: dict[str, int] = {
+    "__main__.py": 85,
+    "main.py": 80,
+    "cli.py": 75,
+    "app.py": 70,
+    "server.py": 70,
+    "manage.py": 70,
+    "wsgi.py": 65,
+    "asgi.py": 65,
+}
 
 
 @dataclass(frozen=True, slots=True)
@@ -97,9 +108,16 @@ def rank_important_files(
 
     del symbols, import_graph, call_graph, project_metadata
 
+    file_items = list(files)
+    candidate_paths = _collect_candidate_paths(file_items)
+    pyproject_entrypoint_paths = _detect_pyproject_entrypoint_paths(
+        file_items,
+        candidate_paths,
+    )
+
     ranked: list[ImportantFileScore] = []
 
-    for file_info in files:
+    for file_info in file_items:
         path = _relative_path_from_file(file_info)
         if path is None:
             continue
@@ -107,7 +125,11 @@ def rank_important_files(
         if not _is_important_file_candidate(file_info, path):
             continue
 
-        score = _score_path(file_info, path)
+        score = _score_path(
+            file_info,
+            path,
+            pyproject_entrypoint_paths=pyproject_entrypoint_paths,
+        )
         if score is None or score.score <= 0:
             continue
 
@@ -119,6 +141,105 @@ def rank_important_files(
         return tuple(ranked[: max(0, limit)])
 
     return tuple(ranked)
+
+
+def _collect_candidate_paths(files: Iterable[object]) -> frozenset[str]:
+    """Return normalized candidate paths from FileInfo-like objects or paths."""
+
+    paths: set[str] = set()
+    for file_info in files:
+        path = _relative_path_from_file(file_info)
+        if path is None:
+            continue
+        paths.add(path.as_posix())
+    return frozenset(paths)
+
+
+def _detect_pyproject_entrypoint_paths(
+    files: Iterable[object],
+    candidate_paths: frozenset[str],
+) -> frozenset[str]:
+    """Return file paths referenced by pyproject console scripts."""
+
+    entrypoint_paths: set[str] = set()
+
+    for file_info in files:
+        path = _relative_path_from_file(file_info)
+        if path is None or path.name != "pyproject.toml":
+            continue
+
+        content = getattr(file_info, "content", None)
+        if not content:
+            continue
+
+        for target in _parse_pyproject_script_targets(content):
+            entrypoint_paths.update(
+                _resolve_script_target_to_paths(target, candidate_paths)
+            )
+
+    return frozenset(entrypoint_paths)
+
+
+def _parse_pyproject_script_targets(content: str) -> tuple[str, ...]:
+    """Parse console script targets from pyproject.toml content."""
+
+    try:
+        pyproject = tomllib.loads(content)
+    except tomllib.TOMLDecodeError:
+        return ()
+
+    targets: list[str] = []
+
+    project_scripts = pyproject.get("project", {}).get("scripts", {})
+    if isinstance(project_scripts, dict):
+        targets.extend(
+            target
+            for target in project_scripts.values()
+            if isinstance(target, str)
+        )
+
+    poetry_scripts = (
+        pyproject.get("tool", {})
+        .get("poetry", {})
+        .get("scripts", {})
+    )
+    if isinstance(poetry_scripts, dict):
+        targets.extend(
+            target
+            for target in poetry_scripts.values()
+            if isinstance(target, str)
+        )
+
+    return tuple(targets)
+
+
+def _resolve_script_target_to_paths(
+    target: str,
+    candidate_paths: frozenset[str],
+) -> tuple[str, ...]:
+    """Resolve a console script target such as package.cli:main to file paths."""
+
+    module_name = target.split(":", 1)[0].strip()
+    if not module_name:
+        return ()
+
+    module_path = module_name.replace(".", "/")
+    candidates = [
+        f"{module_path}.py",
+        f"src/{module_path}.py",
+    ]
+
+    if module_name.endswith(".__main__"):
+        package_path = module_name[: -len(".__main__")].replace(".", "/")
+        candidates.extend(
+            [
+                f"{package_path}/__main__.py",
+                f"src/{package_path}/__main__.py",
+            ]
+        )
+
+    matched = [candidate for candidate in candidates if candidate in candidate_paths]
+    return tuple(dict.fromkeys(matched))
 
 
 def _relative_path_from_file(file_info: object) -> Path | None:
@@ -161,18 +282,29 @@ def _is_important_file_candidate(file_info: object, path: Path) -> bool:
     return True
 
 
-def _score_path(file_info: object, path: Path) -> ImportantFileScore | None:
+def _score_path(
+    file_info: object,
+    path: Path,
+    *,
+    pyproject_entrypoint_paths: frozenset[str],
+) -> ImportantFileScore | None:
     """Score one file path and return an explainable ranking result."""
 
+    entrypoint_score, entrypoint_reasons = _score_entrypoint_path(
+        path,
+        pyproject_entrypoint_paths=pyproject_entrypoint_paths,
+    )
     documentation_score, documentation_reasons = _score_documentation_path(path)
     structural_score, structural_reasons = _score_structural_path(file_info, path)
 
     signals = ImportantFileSignals(
+        entrypoint_score=entrypoint_score,
         documentation_score=documentation_score,
         structural_score=structural_score,
     )
 
     reasons = (
+        *entrypoint_reasons,
         *documentation_reasons,
         *structural_reasons,
     )
@@ -186,6 +318,33 @@ def _score_path(file_info: object, path: Path) -> ImportantFileScore | None:
         reasons=tuple(reasons),
         signals=signals,
     )
+
+
+def _score_entrypoint_path(
+    path: Path,
+    *,
+    pyproject_entrypoint_paths: frozenset[str],
+) -> tuple[int, tuple[str, ...]]:
+    """Return entrypoint score and reasons for a Python file path."""
+
+    normalized_path = path.as_posix()
+    filename = path.name.lower()
+    score = 0
+    reasons: list[str] = []
+
+    if normalized_path in pyproject_entrypoint_paths:
+        score += 100
+        reasons.append("Project script entry point")
+
+    filename_score = PYTHON_ENTRYPOINT_FILENAMES.get(filename, 0)
+    if filename_score:
+        score += filename_score
+        if filename == "__main__.py":
+            reasons.append("Python module entry point")
+        else:
+            reasons.append("Likely Python entry point")
+
+    return score, tuple(reasons)
 
 
 def _score_documentation_path(path: Path) -> tuple[int, tuple[str, ...]]:
