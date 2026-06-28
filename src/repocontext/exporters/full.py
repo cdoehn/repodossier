@@ -164,7 +164,7 @@ def render_full_export(context: FullExportContext) -> str:
     sections = [
         _render_ai_quick_start(context),
         _render_repository_statistics(context),
-        _render_file_summary_placeholder(context),
+        _render_file_summary(context),
         _render_repository_tree_placeholder(context),
         _render_complete_source_export_placeholder(context),
         _render_warnings_placeholder(context),
@@ -465,15 +465,44 @@ def _render_repository_statistics(context: FullExportContext) -> str:
     return "\n".join(lines)
 
 
-def _render_file_summary_placeholder(context: FullExportContext) -> str:
-    return "\n".join(
+def _render_file_summary(context: FullExportContext) -> str:
+    """Render a compact summary of all exported text files."""
+    lines = [
+        FULL_EXPORT_SECTION_HEADINGS["file_summary"],
+        "",
+    ]
+
+    if not context.exported_text_files:
+        lines.append("No exportable text files.")
+        return "\n".join(lines)
+
+    lines.extend(
         [
-            FULL_EXPORT_SECTION_HEADINGS["file_summary"],
-            "",
-            f"Files ready for export: {len(context.exported_text_files)}",
-            "File Summary details will be expanded in Milestone 3.5.",
+            "| Path | Language | Lines | Tokens |",
+            "| --- | --- | ---: | ---: |",
         ]
     )
+
+    for file_info in context.exported_text_files:
+        language = (
+            _format_language_name(file_info.language)
+            if file_info.language
+            else "Unknown"
+        )
+        lines.append(
+            "| "
+            f"{_escape_markdown_table_cell(file_info.relative_path.as_posix())} | "
+            f"{_escape_markdown_table_cell(language)} | "
+            f"{file_info.line_count or 0} | "
+            f"{file_info.estimated_tokens or 0} |"
+        )
+
+    return "\n".join(lines)
+
+
+def _escape_markdown_table_cell(value: str) -> str:
+    """Escape Markdown table separators inside a cell."""
+    return value.replace("|", "\\|")
 
 
 def _render_repository_tree_placeholder(context: FullExportContext) -> str:

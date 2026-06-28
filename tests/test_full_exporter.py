@@ -261,6 +261,113 @@ def test_render_full_export_ai_quick_start_uses_unknown_fallbacks(tmp_path: Path
     assert "Purpose: Unknown" in rendered
 
 
+def test_render_full_export_renders_file_summary_table(tmp_path: Path) -> None:
+    repository_info = make_repository_info(tmp_path)
+    second = FileInfo(
+        relative_path=Path("src/module.py"),
+        absolute_path=tmp_path / "src/module.py",
+        is_text=True,
+        is_binary=False,
+        language="python",
+        line_count=2,
+        estimated_tokens=8,
+        content="print('hello')\nprint('world')\n",
+    )
+    first = FileInfo(
+        relative_path=Path("README.md"),
+        absolute_path=tmp_path / "README.md",
+        is_text=True,
+        is_binary=False,
+        language="markdown",
+        line_count=3,
+        estimated_tokens=10,
+        content="# Example\n\nText\n",
+    )
+    binary = FileInfo(
+        relative_path=Path("image.bin"),
+        absolute_path=tmp_path / "image.bin",
+        is_text=False,
+        is_binary=True,
+        content=None,
+    )
+
+    context = create_full_export_context(repository_info, [second, binary, first])
+    rendered = render_full_export(context)
+
+    assert "# File Summary" in rendered
+    assert "| Path | Language | Lines | Tokens |" in rendered
+    assert "| --- | --- | ---: | ---: |" in rendered
+    assert "| README.md | Markdown | 3 | 10 |" in rendered
+    assert "| src/module.py | Python | 2 | 8 |" in rendered
+    assert "image.bin |" not in rendered
+    assert "File Summary details will be expanded" not in rendered
+
+    readme_position = rendered.index("| README.md | Markdown | 3 | 10 |")
+    module_position = rendered.index("| src/module.py | Python | 2 | 8 |")
+    assert readme_position < module_position
+
+
+def test_render_full_export_file_summary_handles_unknown_language_and_missing_counts(
+    tmp_path: Path,
+) -> None:
+    repository_info = make_repository_info(tmp_path)
+    file_info = FileInfo(
+        relative_path=Path("notes.unknown"),
+        absolute_path=tmp_path / "notes.unknown",
+        is_text=True,
+        is_binary=False,
+        language=None,
+        line_count=None,
+        estimated_tokens=None,
+        content="notes\n",
+    )
+
+    context = create_full_export_context(repository_info, [file_info])
+    rendered = render_full_export(context)
+
+    assert "| notes.unknown | Unknown | 0 | 0 |" in rendered
+
+
+def test_render_full_export_file_summary_handles_no_exportable_text_files(
+    tmp_path: Path,
+) -> None:
+    repository_info = make_repository_info(tmp_path)
+    binary = FileInfo(
+        relative_path=Path("image.bin"),
+        absolute_path=tmp_path / "image.bin",
+        is_text=False,
+        is_binary=True,
+        content=None,
+    )
+
+    context = create_full_export_context(repository_info, [binary])
+    rendered = render_full_export(context)
+
+    assert "# File Summary" in rendered
+    assert "No exportable text files." in rendered
+
+
+def test_render_full_export_file_summary_escapes_markdown_table_pipes(
+    tmp_path: Path,
+) -> None:
+    repository_info = make_repository_info(tmp_path)
+    file_info = FileInfo(
+        relative_path=Path("docs/weird|name.txt"),
+        absolute_path=tmp_path / "docs" / "weird|name.txt",
+        is_text=True,
+        is_binary=False,
+        language="text",
+        line_count=1,
+        estimated_tokens=2,
+        content="text\n",
+    )
+
+    context = create_full_export_context(repository_info, [file_info])
+    rendered = render_full_export(context)
+
+    assert "| docs/weird\\|name.txt | Text | 1 | 2 |" in rendered
+
+
 def test_full_export_context_counts_file_types_from_scanned_files(tmp_path: Path) -> None:
     repository_info = make_repository_info(tmp_path)
     files = [
