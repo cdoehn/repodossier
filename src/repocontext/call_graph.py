@@ -159,9 +159,11 @@ class PythonCallVisitor(ast.NodeVisitor):
         *,
         source_path: str | Path,
         module_name: str | None = None,
+        known_class_names: set[str] | None = None,
     ) -> None:
         self.source_path = Path(source_path).as_posix()
         self.module_name = module_name
+        self.known_class_names = set(known_class_names or ())
         self.graph = CallGraph()
         self._class_stack: list[str] = []
         self._function_stack: list[tuple[str, str]] = []
@@ -169,6 +171,7 @@ class PythonCallVisitor(ast.NodeVisitor):
     def visit_ClassDef(self, node: ast.ClassDef) -> None:
         """Track class context while visiting class bodies."""
 
+        self.known_class_names.add(node.name)
         self._class_stack.append(node.name)
         self.generic_visit(node)
         self._class_stack.pop()
@@ -219,7 +222,7 @@ class PythonCallVisitor(ast.NodeVisitor):
         self.generic_visit(node)
 
     def _resolve_attribute_call(self, node: ast.Call) -> tuple[str | None, str]:
-        """Resolve self.method() calls to the current class when possible."""
+        """Resolve local class method calls when possible."""
 
         if not isinstance(node.func, ast.Attribute):
             return None, "unresolved"
@@ -227,6 +230,10 @@ class PythonCallVisitor(ast.NodeVisitor):
         if self._is_self_method_call(node):
             class_name = ".".join(self._class_stack)
             return self._qualify(f"{class_name}.{node.func.attr}"), "local_method"
+
+        cls_target = self._class_method_target(node)
+        if cls_target is not None:
+            return self._qualify(f"{cls_target}.{node.func.attr}"), "local_method"
 
         return None, "unresolved"
 
@@ -240,6 +247,28 @@ class PythonCallVisitor(ast.NodeVisitor):
             return False
 
         return isinstance(node.func.value, ast.Name) and node.func.value.id == "self"
+
+    def _class_method_target(self, node: ast.Call) -> str | None:
+        """Return the target class for cls.method() or ClassName.method()."""
+
+        if not self._class_stack:
+            return None
+
+        if not isinstance(node.func, ast.Attribute):
+            return None
+
+        if not isinstance(node.func.value, ast.Name):
+            return None
+
+        base_name = node.func.value.id
+
+        if base_name == "cls":
+            return ".".join(self._class_stack)
+
+        if base_name in self.known_class_names:
+            return base_name
+
+        return None
 
     def _visit_function_node(
         self,
@@ -287,6 +316,16 @@ class PythonCallVisitor(ast.NodeVisitor):
             return f"{self.module_name}.{name}"
         return name
 
+def _collect_class_names(tree: ast.AST) -> set[str]:
+    """Return class names defined in a parsed Python AST."""
+
+    return {
+        node.name
+        for node in ast.walk(tree)
+        if isinstance(node, ast.ClassDef)
+    }
+
+
 def build_call_graph_from_ast(
     tree: ast.AST,
     *,
@@ -298,6 +337,7 @@ def build_call_graph_from_ast(
     visitor = PythonCallVisitor(
         source_path=source_path,
         module_name=module_name,
+        known_class_names=_collect_class_names(tree),
     )
     visitor.visit(tree)
     return visitor.graph

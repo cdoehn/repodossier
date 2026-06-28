@@ -559,3 +559,154 @@ def test_parse_calls_from_source_does_not_resolve_non_self_method_call_as_local_
         )
     ]
 
+def test_parse_calls_from_source_resolves_cls_method_call_to_current_class():
+    source = (
+        "class Config:\n"
+        "    @classmethod\n"
+        "    def load(cls):\n"
+        "        return cls.from_path()\n"
+        "\n"
+        "    @classmethod\n"
+        "    def from_path(cls):\n"
+        "        return cls()\n"
+    )
+
+    graph = parse_calls_from_source(
+        source,
+        source_path="src/config.py",
+        module_name="app.config",
+    )
+
+    assert graph.sorted_edges() == [
+        CallEdge(
+            caller_file="src/config.py",
+            caller_name="Config.from_path",
+            caller_qualified_name="app.config.Config.from_path",
+            callee_name="cls",
+            callee_qualified_name=None,
+            line_number=8,
+            call_type="function",
+            confidence="unresolved",
+        ),
+        CallEdge(
+            caller_file="src/config.py",
+            caller_name="Config.load",
+            caller_qualified_name="app.config.Config.load",
+            callee_name="from_path",
+            callee_qualified_name="app.config.Config.from_path",
+            line_number=4,
+            call_type="method",
+            confidence="local_method",
+        ),
+    ]
+
+
+def test_parse_calls_from_source_resolves_class_name_method_call_for_known_class():
+    source = (
+        "class Config:\n"
+        "    def load(self):\n"
+        "        return Config.from_path()\n"
+        "\n"
+        "    @staticmethod\n"
+        "    def from_path():\n"
+        "        return Config()\n"
+    )
+
+    graph = parse_calls_from_source(
+        source,
+        source_path="src/config.py",
+        module_name="app.config",
+    )
+
+    assert graph.sorted_edges() == [
+        CallEdge(
+            caller_file="src/config.py",
+            caller_name="Config.from_path",
+            caller_qualified_name="app.config.Config.from_path",
+            callee_name="Config",
+            callee_qualified_name=None,
+            line_number=7,
+            call_type="function",
+            confidence="unresolved",
+        ),
+        CallEdge(
+            caller_file="src/config.py",
+            caller_name="Config.load",
+            caller_qualified_name="app.config.Config.load",
+            callee_name="from_path",
+            callee_qualified_name="app.config.Config.from_path",
+            line_number=3,
+            call_type="method",
+            confidence="local_method",
+        ),
+    ]
+
+
+def test_parse_calls_from_source_resolves_other_known_class_method_call():
+    source = (
+        "class Factory:\n"
+        "    @staticmethod\n"
+        "    def create():\n"
+        "        return object()\n"
+        "\n"
+        "class Service:\n"
+        "    def build(self):\n"
+        "        return Factory.create()\n"
+    )
+
+    graph = parse_calls_from_source(
+        source,
+        source_path="src/service.py",
+        module_name="app.service",
+    )
+
+    assert graph.sorted_edges() == [
+        CallEdge(
+            caller_file="src/service.py",
+            caller_name="Factory.create",
+            caller_qualified_name="app.service.Factory.create",
+            callee_name="object",
+            callee_qualified_name=None,
+            line_number=4,
+            call_type="function",
+            confidence="unresolved",
+        ),
+        CallEdge(
+            caller_file="src/service.py",
+            caller_name="Service.build",
+            caller_qualified_name="app.service.Service.build",
+            callee_name="create",
+            callee_qualified_name="app.service.Factory.create",
+            line_number=8,
+            call_type="method",
+            confidence="local_method",
+        ),
+    ]
+
+
+def test_parse_calls_from_source_does_not_resolve_unknown_class_name_method_call():
+    source = (
+        "class Service:\n"
+        "    def build(self):\n"
+        "        return MissingFactory.create()\n"
+    )
+
+    graph = parse_calls_from_source(
+        source,
+        source_path="src/service.py",
+        module_name="app.service",
+    )
+
+    assert graph.sorted_edges() == [
+        CallEdge(
+            caller_file="src/service.py",
+            caller_name="Service.build",
+            caller_qualified_name="app.service.Service.build",
+            callee_name="create",
+            callee_qualified_name=None,
+            line_number=3,
+            call_type="method",
+            confidence="unresolved",
+        )
+    ]
+
