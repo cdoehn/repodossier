@@ -7,7 +7,9 @@ from repocontext.call_graph import (
     build_call_graph_from_ast,
     collect_import_aliases_from_source,
     parse_calls_from_source,
+    resolve_import_aliases_with_import_graph,
 )
+from repocontext.import_graph import build_import_graph
 from repocontext.symbols import FileSymbolIndex, SymbolInfo
 
 
@@ -1194,6 +1196,177 @@ def test_parse_calls_from_source_keeps_import_aliases_available_on_visitor():
             callee_qualified_name=None,
             line_number=4,
             call_type="method",
+            confidence="unresolved",
+        )
+    ]
+
+def test_resolve_import_aliases_with_import_graph_marks_from_import_as_local(tmp_path):
+    source_root = tmp_path / "src" / "repocontext"
+    source_root.mkdir(parents=True)
+    scanner_path = source_root / "scanner.py"
+    app_path = source_root / "app.py"
+
+    scanner_path.write_text("def scan_single_file():\n    return None\n", encoding="utf-8")
+    app_path.write_text(
+        "from repocontext.scanner import scan_single_file\n"
+        "\n"
+        "def main():\n"
+        "    return scan_single_file()\n",
+        encoding="utf-8",
+    )
+
+    import_graph = build_import_graph(
+        [scanner_path, app_path],
+        repo_root=tmp_path,
+    )
+    aliases = collect_import_aliases_from_source(
+        app_path.read_text(encoding="utf-8"),
+        source_path=app_path,
+    )
+
+    resolved_aliases = resolve_import_aliases_with_import_graph(
+        aliases,
+        import_graph,
+        source_module="repocontext.app",
+        source_path=app_path,
+    )
+
+    assert resolved_aliases == {
+        "scan_single_file": ImportAlias(
+            local_name="scan_single_file",
+            qualified_name="repocontext.scanner.scan_single_file",
+            module_name="repocontext.scanner",
+            imported_name="scan_single_file",
+            alias=None,
+            import_type="from",
+            level=0,
+            line_number=1,
+            is_relative=False,
+            is_local=True,
+            resolved_module="repocontext.scanner",
+            resolved_path=scanner_path.as_posix(),
+        )
+    }
+
+
+def test_resolve_import_aliases_with_import_graph_marks_plain_import_alias_as_local(tmp_path):
+    source_root = tmp_path / "src" / "repocontext"
+    source_root.mkdir(parents=True)
+    scanner_path = source_root / "scanner.py"
+    app_path = source_root / "app.py"
+
+    scanner_path.write_text("def scan_single_file():\n    return None\n", encoding="utf-8")
+    app_path.write_text(
+        "import repocontext.scanner as scanner\n"
+        "\n"
+        "def main():\n"
+        "    return scanner.scan_single_file()\n",
+        encoding="utf-8",
+    )
+
+    import_graph = build_import_graph(
+        [scanner_path, app_path],
+        repo_root=tmp_path,
+    )
+    aliases = collect_import_aliases_from_source(
+        app_path.read_text(encoding="utf-8"),
+        source_path=app_path,
+    )
+
+    resolved_aliases = resolve_import_aliases_with_import_graph(
+        aliases,
+        import_graph,
+        source_module="repocontext.app",
+        source_path=app_path,
+    )
+
+    assert resolved_aliases == {
+        "scanner": ImportAlias(
+            local_name="scanner",
+            qualified_name="repocontext.scanner",
+            module_name="repocontext.scanner",
+            imported_name=None,
+            alias="scanner",
+            import_type="import",
+            level=0,
+            line_number=1,
+            is_relative=False,
+            is_local=True,
+            resolved_module="repocontext.scanner",
+            resolved_path=scanner_path.as_posix(),
+        )
+    }
+
+
+def test_resolve_import_aliases_with_import_graph_marks_external_alias_as_not_local():
+    aliases = collect_import_aliases_from_source(
+        "import pathlib as pl\n",
+        source_path="src/app.py",
+    )
+
+    resolved_aliases = resolve_import_aliases_with_import_graph(
+        aliases,
+        import_graph=object(),
+        source_module="app",
+        source_path="src/app.py",
+    )
+
+    assert resolved_aliases == {
+        "pl": ImportAlias(
+            local_name="pl",
+            qualified_name="pathlib",
+            module_name="pathlib",
+            imported_name=None,
+            alias="pl",
+            import_type="import",
+            level=0,
+            line_number=1,
+            is_relative=False,
+            is_local=False,
+            resolved_module=None,
+            resolved_path=None,
+        )
+    }
+
+
+def test_build_call_graph_from_ast_accepts_import_graph_for_alias_resolution(tmp_path):
+    source_root = tmp_path / "src" / "repocontext"
+    source_root.mkdir(parents=True)
+    scanner_path = source_root / "scanner.py"
+    app_path = source_root / "app.py"
+
+    scanner_path.write_text("def scan_single_file():\n    return None\n", encoding="utf-8")
+    app_source = (
+        "from repocontext.scanner import scan_single_file\n"
+        "\n"
+        "def main():\n"
+        "    return scan_single_file()\n"
+    )
+    app_path.write_text(app_source, encoding="utf-8")
+
+    import_graph = build_import_graph(
+        [scanner_path, app_path],
+        repo_root=tmp_path,
+    )
+
+    graph = build_call_graph_from_ast(
+        ast.parse(app_source, filename=app_path.as_posix()),
+        source_path=app_path,
+        module_name="repocontext.app",
+        import_graph=import_graph,
+    )
+
+    # 7.5.b verbindet nur Alias-Mapping mit dem Import Graph.
+    # Die eigentliche imported_local-Auflösung kommt erst in 7.5.c.
+    assert graph.sorted_edges() == [
+        CallEdge(
+            caller_file=app_path.as_posix(),
+            caller_name="main",
+            caller_qualified_name="repocontext.app.main",
+            callee_name="scan_single_file",
+            callee_qualified_name=None,
+            line_number=4,
+            call_type="function",
             confidence="unresolved",
         )
     ]

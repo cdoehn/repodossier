@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import ast
 from collections import defaultdict
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
@@ -164,6 +164,9 @@ class ImportAlias:
     level: int = 0
     line_number: int = 0
     is_relative: bool = False
+    is_local: bool | None = None
+    resolved_module: str | None = None
+    resolved_path: str | None = None
 
     def __post_init__(self) -> None:
         if self.import_type not in {"import", "from"}:
@@ -172,6 +175,12 @@ class ImportAlias:
             raise ValueError("level must not be negative")
         if self.line_number < 0:
             raise ValueError("line_number must not be negative")
+        if self.resolved_path is not None:
+            object.__setattr__(
+                self,
+                "resolved_path",
+                Path(self.resolved_path).as_posix(),
+            )
 
     def to_dict(self) -> dict[str, Any]:
         """Return a JSON-serializable representation of the alias."""
@@ -636,12 +645,167 @@ def collect_import_aliases_from_source(source: str, *, source_path: str | Path =
     tree = ast.parse(source, filename=str(source_path))
     return collect_import_aliases_from_ast(tree)
 
+
+def _import_graph_edges_for_source(
+    import_graph: object,
+    *,
+    source_module: str | None = None,
+    source_path: str | Path | None = None,
+) -> tuple[object, ...]:
+    """Return import graph edges matching a source module or path."""
+
+    edges = tuple(getattr(import_graph, "edges", ()))
+    if source_module is None and source_path is None:
+        return edges
+
+    normalized_source_path = (
+        Path(source_path).as_posix()
+        if source_path is not None
+        else None
+    )
+
+    matching_edges: list[object] = []
+
+    for edge in edges:
+        edge_source_module = getattr(edge, "source_module", None)
+        edge_source_path = getattr(edge, "source_path", None)
+
+        module_matches = (
+            source_module is not None
+            and edge_source_module == source_module
+        )
+
+        path_matches = False
+        if normalized_source_path is not None and edge_source_path is not None:
+            normalized_edge_path = Path(edge_source_path).as_posix()
+            path_matches = (
+                normalized_edge_path == normalized_source_path
+                or normalized_edge_path.endswith(normalized_source_path)
+                or normalized_source_path.endswith(normalized_edge_path)
+            )
+
+        if module_matches or path_matches:
+            matching_edges.append(edge)
+
+    return tuple(matching_edges)
+
+
+def _module_names_match(alias_module: str | None, target_module: str | None) -> bool:
+    """Return True when an import alias module can refer to a graph target."""
+
+    if not alias_module or not target_module:
+        return False
+
+    stripped_alias_module = alias_module.lstrip(".")
+    return (
+        stripped_alias_module == target_module
+        or target_module.endswith(f".{stripped_alias_module}")
+        or stripped_alias_module.endswith(f".{target_module}")
+    )
+
+
+def _resolve_from_import_alias_with_edges(
+    import_alias: ImportAlias,
+    edges: tuple[object, ...],
+) -> ImportAlias | None:
+    """Resolve a from-import alias using matching local import graph edges."""
+
+    for edge in edges:
+        edge_imported_name = getattr(edge, "imported_name", None)
+        edge_target_module = getattr(edge, "target_module", None)
+
+        imported_name_matches = (
+            import_alias.imported_name is not None
+            and edge_imported_name == import_alias.imported_name
+        )
+
+        module_matches = _module_names_match(
+            import_alias.module_name,
+            edge_target_module,
+        )
+
+        if not imported_name_matches or not module_matches:
+            continue
+
+        resolved_path = getattr(edge, "target_path", None)
+        qualified_name = f"{edge_target_module}.{import_alias.imported_name}"
+
+        return replace(
+            import_alias,
+            qualified_name=qualified_name,
+            module_name=edge_target_module,
+            is_local=True,
+            resolved_module=edge_target_module,
+            resolved_path=Path(resolved_path).as_posix() if resolved_path is not None else None,
+        )
+
+    return None
+
+
+def _resolve_plain_import_alias_with_edges(
+    import_alias: ImportAlias,
+    edges: tuple[object, ...],
+) -> ImportAlias | None:
+    """Resolve a plain import alias using matching local import graph edges."""
+
+    for edge in edges:
+        edge_target_module = getattr(edge, "target_module", None)
+        if not _module_names_match(import_alias.module_name, edge_target_module):
+            continue
+
+        resolved_path = getattr(edge, "target_path", None)
+
+        return replace(
+            import_alias,
+            qualified_name=edge_target_module,
+            module_name=edge_target_module,
+            is_local=True,
+            resolved_module=edge_target_module,
+            resolved_path=Path(resolved_path).as_posix() if resolved_path is not None else None,
+        )
+
+    return None
+
+
+def resolve_import_aliases_with_import_graph(
+    import_aliases: dict[str, ImportAlias],
+    import_graph: object,
+    *,
+    source_module: str | None = None,
+    source_path: str | Path | None = None,
+) -> dict[str, ImportAlias]:
+    """Resolve collected import aliases against local edges from an ImportGraph."""
+
+    edges = _import_graph_edges_for_source(
+        import_graph,
+        source_module=source_module,
+        source_path=source_path,
+    )
+
+    resolved_aliases: dict[str, ImportAlias] = {}
+
+    for local_name, import_alias in sorted(import_aliases.items()):
+        resolved_alias: ImportAlias | None = None
+
+        if import_alias.import_type == "from":
+            resolved_alias = _resolve_from_import_alias_with_edges(import_alias, edges)
+        elif import_alias.import_type == "import":
+            resolved_alias = _resolve_plain_import_alias_with_edges(import_alias, edges)
+
+        if resolved_alias is None:
+            resolved_aliases[local_name] = replace(import_alias, is_local=False)
+        else:
+            resolved_aliases[local_name] = resolved_alias
+
+    return resolved_aliases
+
 def build_call_graph_from_ast(
     tree: ast.AST,
     *,
     source_path: str | Path,
     module_name: str | None = None,
     symbol_index: object = None,
+    import_graph: object = None,
 ) -> CallGraph:
     """Build a call graph from a parsed Python AST."""
 
@@ -660,13 +824,22 @@ def build_call_graph_from_ast(
         ),
     )
 
+    import_aliases = collect_import_aliases_from_ast(tree)
+    if import_graph is not None:
+        import_aliases = resolve_import_aliases_with_import_graph(
+            import_aliases,
+            import_graph,
+            source_module=module_name,
+            source_path=source_path,
+        )
+
     visitor = PythonCallVisitor(
         source_path=source_path,
         module_name=module_name,
         known_class_names=_collect_class_names(tree),
         known_function_counts=known_function_counts,
         known_method_counts=known_method_counts,
-        import_aliases=collect_import_aliases_from_ast(tree),
+        import_aliases=import_aliases,
     )
     visitor.visit(tree)
     return visitor.graph
@@ -677,6 +850,7 @@ def parse_calls_from_source(
     source_path: str | Path,
     module_name: str | None = None,
     symbol_index: object = None,
+    import_graph: object = None,
 ) -> CallGraph:
     """Parse Python source text and return direct function call edges."""
 
@@ -686,6 +860,7 @@ def parse_calls_from_source(
         source_path=source_path,
         module_name=module_name,
         symbol_index=symbol_index,
+        import_graph=import_graph,
     )
 
 
@@ -694,6 +869,7 @@ def parse_calls_from_file(
     *,
     module_name: str | None = None,
     symbol_index: object = None,
+    import_graph: object = None,
     encoding: str = "utf-8",
 ) -> CallGraph:
     """Read a Python file and return direct function call edges."""
@@ -705,6 +881,7 @@ def parse_calls_from_file(
         source_path=path,
         module_name=module_name,
         symbol_index=symbol_index,
+        import_graph=import_graph,
     )
 
 
@@ -717,6 +894,7 @@ __all__ = [
     "PythonCallVisitor",
     "build_call_graph_from_ast",
     "parse_calls_from_file",
+    "resolve_import_aliases_with_import_graph",
     "parse_calls_from_source",
 ]
 
