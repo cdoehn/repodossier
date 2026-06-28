@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 
+import repocontext.scanner as scanner_module
 from repocontext.models import FileInfo
 from repocontext.scanner import (
     count_empty_lines,
@@ -189,6 +190,45 @@ def test_scan_single_file_classifies_binary_file(tmp_path: Path) -> None:
 
     assert info.is_text is False
     assert info.is_binary is True
+
+
+def test_scan_single_file_marks_invalid_utf8_without_null_byte_as_error(
+    tmp_path: Path,
+) -> None:
+    file_path = tmp_path / "invalid_utf8.txt"
+    file_path.write_bytes(b"\xff\xfe\xfa")
+
+    info = scan_single_file(tmp_path, file_path.relative_to(tmp_path))
+
+    assert info.is_text is False
+    assert info.is_binary is False
+    assert info.language == "text"
+    assert info.content is None
+    assert info.error is not None
+    assert "Unable to decode file as UTF-8" in info.error
+
+
+def test_scan_single_file_marks_late_read_errors_as_file_error(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    file_path = tmp_path / "late_error.txt"
+    file_path.write_text("initially readable\n", encoding="utf-8")
+
+    def raise_oserror(_path: Path | str) -> int:
+        raise OSError("file disappeared during scan")
+
+    monkeypatch.setattr(scanner_module, "count_total_lines", raise_oserror)
+
+    info = scan_single_file(tmp_path, file_path.relative_to(tmp_path))
+
+    assert info.is_text is True
+    assert info.is_binary is False
+    assert info.language == "text"
+    assert info.content is None
+    assert info.error is not None
+    assert "Unable to read file" in info.error
+    assert "file disappeared during scan" in info.error
 
 
 def test_scan_single_file_detects_extensionless_text(tmp_path: Path) -> None:

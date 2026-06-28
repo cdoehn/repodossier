@@ -340,6 +340,21 @@ def scan_single_file(repository_root: Path | str, relative_path: Path | str) -> 
 
     is_binary = is_binary_file(absolute_file_path)
     is_text = is_text_file(absolute_file_path)
+    detected_language = detect_language_from_extension(relative_file_path)
+    if detected_language is None:
+        detected_language = detect_language_from_filename(relative_file_path)
+
+    if not is_text and not is_binary:
+        return FileInfo(
+            relative_path=relative_file_path,
+            absolute_path=absolute_file_path,
+            size_bytes=file_stat.st_size,
+            is_text=False,
+            is_binary=False,
+            language=detected_language,
+            error=f"Unable to decode file as UTF-8: {absolute_file_path}",
+        )
+
     line_count: Optional[int] = None
     empty_line_count: Optional[int] = None
     comment_line_count: Optional[int] = None
@@ -347,21 +362,35 @@ def scan_single_file(repository_root: Path | str, relative_path: Path | str) -> 
     content: Optional[str] = None
 
     if is_text and not is_binary:
-        line_count = count_total_lines(absolute_file_path)
-        empty_line_count = count_empty_lines(absolute_file_path)
-        estimated_token_count = estimate_tokens(absolute_file_path)
-        content = load_text_content(absolute_file_path)
-        detected_language_for_comments = detect_language_from_extension(relative_file_path)
-        if detected_language_for_comments is None:
-            detected_language_for_comments = detect_language_from_filename(relative_file_path)
-        if detected_language_for_comments == "python":
-            comment_line_count = count_python_comment_lines(absolute_file_path)
-        elif detected_language_for_comments == "bash":
-            comment_line_count = count_shell_comment_lines(absolute_file_path)
-
-    detected_language = detect_language_from_extension(relative_file_path)
-    if detected_language is None:
-        detected_language = detect_language_from_filename(relative_file_path)
+        try:
+            line_count = count_total_lines(absolute_file_path)
+            empty_line_count = count_empty_lines(absolute_file_path)
+            estimated_token_count = estimate_tokens(absolute_file_path)
+            content = load_text_content(absolute_file_path)
+            if detected_language == "python":
+                comment_line_count = count_python_comment_lines(absolute_file_path)
+            elif detected_language == "bash":
+                comment_line_count = count_shell_comment_lines(absolute_file_path)
+        except UnicodeDecodeError as exc:
+            return FileInfo(
+                relative_path=relative_file_path,
+                absolute_path=absolute_file_path,
+                size_bytes=file_stat.st_size,
+                is_text=False,
+                is_binary=False,
+                language=detected_language,
+                error=f"Unable to decode file as UTF-8: {absolute_file_path} ({exc})",
+            )
+        except OSError as exc:
+            return FileInfo(
+                relative_path=relative_file_path,
+                absolute_path=absolute_file_path,
+                size_bytes=file_stat.st_size,
+                is_text=is_text,
+                is_binary=is_binary,
+                language=detected_language,
+                error=f"Unable to read file: {absolute_file_path} ({exc})",
+            )
 
     return FileInfo(
         relative_path=relative_file_path,
