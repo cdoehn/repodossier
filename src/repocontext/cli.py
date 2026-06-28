@@ -9,6 +9,7 @@ from typing import Iterable, Optional
 
 from .exporters import generate_full_export
 from .git import RepositoryInfo, find_repository_root, get_repository_info
+from .gitignore import GitignoreUpdateError
 
 
 _FALLBACK_VERSION = "0.1.0.dev0"
@@ -74,6 +75,9 @@ def _handle_full_export_command(_args: argparse.Namespace) -> int:
 
     try:
         output_path = generate_full_export(repository_root)
+    except GitignoreUpdateError as exc:
+        print(f"Error: Could not update .gitignore: {exc}")
+        return 1
     except OSError as exc:
         print(f"Error: Could not write full.txt: {exc}")
         return 1

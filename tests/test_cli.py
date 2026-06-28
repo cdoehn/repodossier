@@ -91,6 +91,60 @@ def test_cli_default_command_creates_full_export(tmp_path: Path, monkeypatch: py
     assert f"Wrote {output_path}" in captured.out
 
 
+
+def test_cli_default_command_creates_gitignore_entries_for_exports(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo_path = setup_repository(tmp_path / "repo_default_gitignore")
+    monkeypatch.chdir(repo_path)
+
+    assert not (repo_path / ".gitignore").exists()
+
+    exit_code = main([])
+
+    assert exit_code == 0
+    gitignore_content = (repo_path / ".gitignore").read_text(encoding="utf-8")
+    assert "# RepoContext exports" in gitignore_content
+    assert "full.txt" in gitignore_content
+    assert "ai.txt" in gitignore_content
+    assert "docs.txt" in gitignore_content
+    assert "changed.txt" in gitignore_content
+
+
+def test_cli_default_command_preserves_existing_gitignore_content(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo_path = setup_repository(tmp_path / "repo_existing_gitignore")
+    gitignore_path = repo_path / ".gitignore"
+    gitignore_path.write_text(".venv/\n__pycache__/\n", encoding="utf-8")
+    monkeypatch.chdir(repo_path)
+
+    exit_code = main([])
+
+    assert exit_code == 0
+    gitignore_content = gitignore_path.read_text(encoding="utf-8")
+    assert ".venv/" in gitignore_content
+    assert "__pycache__/" in gitignore_content
+    assert "# RepoContext exports" in gitignore_content
+    assert gitignore_content.count("full.txt") == 1
+
+
+def test_cli_default_command_gitignore_prevents_full_txt_untracked_status(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo_path = setup_repository(tmp_path / "repo_gitignore_status")
+    monkeypatch.chdir(repo_path)
+
+    exit_code = main([])
+
+    assert exit_code == 0
+    status_output = run_git_command(repo_path, "status", "--short").stdout
+    assert "full.txt" not in status_output
+
+
 def test_cli_default_command_writes_full_txt_to_repository_root_from_subdirectory(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -105,6 +159,8 @@ def test_cli_default_command_writes_full_txt_to_repository_root_from_subdirector
     assert exit_code == 0
     assert (repo_path / "full.txt").exists()
     assert not (nested_dir / "full.txt").exists()
+    assert (repo_path / ".gitignore").exists()
+    assert not (nested_dir / ".gitignore").exists()
 
 
 def test_cli_default_full_export_contains_tracked_text_file_in_all_mvp_sections(

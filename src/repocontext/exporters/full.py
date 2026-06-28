@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Sequence
 
 from repocontext.git import RepositoryInfo, get_repository_info
+from repocontext.gitignore import ensure_repocontext_gitignore_entries
 from repocontext.models import FileInfo
 from repocontext.scanner import RepositoryScanner
 
@@ -218,7 +219,9 @@ def _remove_temporary_output_file(temporary_output_path: Path) -> None:
 
 def generate_full_export(repository_root: Path | str) -> Path:
     """Build, render, and write the Full Export for a repository."""
-    context = build_full_export_context(repository_root)
+    resolved_repository_root = Path(repository_root).resolve()
+    ensure_repocontext_gitignore_entries(resolved_repository_root)
+    context = build_full_export_context(resolved_repository_root)
     return write_full_export(context)
 
 
