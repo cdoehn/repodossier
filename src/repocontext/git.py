@@ -363,3 +363,94 @@ def get_diff(repo_path: str | Path = ".", path: str | None = None) -> str:
         return ""
 
     return "\n".join(pieces).rstrip() + "\n"
+
+
+class GitBranchComparisonError(RuntimeError):
+    """Raised when a git branch comparison cannot be performed."""
+
+
+def _parse_name_status_changed_file(line: str) -> ChangedFile | None:
+    """Parse one git diff --name-status line."""
+    if not line:
+        return None
+
+    parts = line.split("\t")
+    if len(parts) < 2:
+        return None
+
+    status_code = parts[0]
+    status_prefix = status_code[0]
+    path = parts[-1].strip()
+
+    if not path:
+        return None
+
+    if status_prefix == "D":
+        status = "deleted"
+    elif status_prefix == "A":
+        status = "added"
+    elif status_prefix == "R":
+        status = "renamed"
+    else:
+        status = "modified"
+
+    return ChangedFile(
+        path=path,
+        status=status,
+        is_tracked=True,
+        is_untracked=False,
+        is_deleted=status == "deleted",
+    )
+
+
+def get_changed_files_against_branch(
+    repo_path: str | Path = ".",
+    branch: str = "main",
+) -> list[ChangedFile]:
+    """Return files changed between branch merge-base and HEAD.
+
+    Uses git's three-dot comparison so feature branches are compared against the
+    merge base with the target branch.
+    """
+    try:
+        output = _run_git_output(
+            repo_path,
+            ["diff", "--name-status", "--find-renames", f"{branch}...HEAD"],
+        )
+    except subprocess.CalledProcessError as exc:
+        raise GitBranchComparisonError(
+            f"Could not compare against branch {branch!r}."
+        ) from exc
+
+    by_path: dict[str, ChangedFile] = {}
+    for line in output.splitlines():
+        changed_file = _parse_name_status_changed_file(line)
+        if changed_file is None:
+            continue
+        by_path[changed_file.path] = changed_file
+
+    return [by_path[path] for path in sorted(by_path)]
+
+
+def get_diff_against_branch(
+    repo_path: str | Path = ".",
+    branch: str = "main",
+    path: str | None = None,
+) -> str:
+    """Return unified diff between branch merge-base and HEAD."""
+    args = ["diff", f"{branch}...HEAD"]
+    if path is not None:
+        args.extend(["--", path])
+
+    try:
+        output = _run_git_output(repo_path, args)
+    except subprocess.CalledProcessError as exc:
+        raise GitBranchComparisonError(
+            f"Could not build diff against branch {branch!r}."
+        ) from exc
+
+    if not output.strip():
+        return ""
+
+    return output.rstrip() + "\n"
+
