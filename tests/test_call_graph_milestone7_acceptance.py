@@ -254,6 +254,120 @@ def test_milestone7_acceptance_deduplicates_identical_same_line_call_edges() -> 
         )
     ]
 
+def test_milestone7_quality_keeps_same_call_when_it_occurs_on_different_lines() -> None:
+    source = (
+        "def helper():\n"
+        "    return 'ok'\n"
+        "\n"
+        "def main():\n"
+        "    helper()\n"
+        "    helper()\n"
+    )
+
+    graph = parse_calls_from_source(
+        source,
+        source_path="src/pkg/main.py",
+        module_name="pkg.main",
+    )
+
+    assert graph.sorted_edges() == [
+        CallEdge(
+            caller_file="src/pkg/main.py",
+            caller_name="main",
+            caller_qualified_name="pkg.main.main",
+            callee_name="helper",
+            callee_qualified_name="pkg.main.helper",
+            line_number=5,
+            call_type="function",
+            confidence="local",
+        ),
+        CallEdge(
+            caller_file="src/pkg/main.py",
+            caller_name="main",
+            caller_qualified_name="pkg.main.main",
+            callee_name="helper",
+            callee_qualified_name="pkg.main.helper",
+            line_number=6,
+            call_type="function",
+            confidence="local",
+        ),
+    ]
+
+
+def test_milestone7_quality_full_export_does_not_duplicate_same_call_location(
+    tmp_path: Path,
+) -> None:
+    source_root = tmp_path / "src" / "pkg"
+    source_root.mkdir(parents=True)
+
+    helper_path = source_root / "helpers.py"
+    main_path = source_root / "main.py"
+
+    helper_source = (
+        "def helper():\n"
+        "    return 'ok'\n"
+    )
+    main_source = (
+        "from pkg.helpers import helper\n"
+        "\n"
+        "def main():\n"
+        "    helper(); helper()\n"
+        "    helper()\n"
+    )
+
+    helper_path.write_text(helper_source, encoding="utf-8")
+    main_path.write_text(main_source, encoding="utf-8")
+
+    files = [
+        FileInfo(
+            relative_path=Path("src/pkg/helpers.py"),
+            absolute_path=helper_path,
+            size_bytes=len(helper_source.encode("utf-8")),
+            is_text=True,
+            is_binary=False,
+            language="python",
+            line_count=2,
+            estimated_tokens=10,
+            content=helper_source,
+        ),
+        FileInfo(
+            relative_path=Path("src/pkg/main.py"),
+            absolute_path=main_path,
+            size_bytes=len(main_source.encode("utf-8")),
+            is_text=True,
+            is_binary=False,
+            language="python",
+            line_count=5,
+            estimated_tokens=20,
+            content=main_source,
+        ),
+    ]
+    repository_info = RepositoryInfo(
+        name="example",
+        root_path=tmp_path,
+        is_current_directory_root=True,
+        branch="main",
+        commit_hash="a" * 40,
+        short_commit_hash="aaaaaaa",
+        remote_url=None,
+        is_dirty=False,
+        tracked_files=[
+            TrackedFile(path=Path("src/pkg/helpers.py")),
+            TrackedFile(path=Path("src/pkg/main.py")),
+        ],
+        commit_metadata=None,
+    )
+
+    context = create_full_export_context(repository_info, files)
+    rendered = render_full_export(context)
+
+    assert rendered.count(
+        "  - line 4: calls pkg.helpers.helper [function, imported_local]"
+    ) == 1
+    assert rendered.count(
+        "  - line 5: calls pkg.helpers.helper [function, imported_local]"
+    ) == 1
+
 
 def test_milestone7_acceptance_full_export_contains_stable_call_graph_section(
     tmp_path: Path,
