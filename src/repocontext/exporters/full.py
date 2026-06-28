@@ -757,3 +757,61 @@ def _collect_warnings(context: FullExportContext) -> tuple[str, ...]:
         warnings.append("No exportable text files found.")
 
     return tuple(warnings)
+
+
+# Import graph integration for the full export pipeline.
+#
+# This adapter connects the existing export file list to the import graph
+# builder. Rendering the graph into full.txt is handled separately.
+def _import_graph_export_source_path(file_info, repo_root):
+    """Return a Python source path from an export/scanner file object."""
+
+    from pathlib import Path
+
+    root = Path(repo_root)
+    raw_path = None
+
+    if isinstance(file_info, (str, Path)):
+        raw_path = file_info
+    else:
+        for attribute_name in (
+            "path",
+            "source_path",
+            "absolute_path",
+            "relative_path",
+            "repo_relative_path",
+        ):
+            if not hasattr(file_info, attribute_name):
+                continue
+
+            value = getattr(file_info, attribute_name)
+            if value:
+                raw_path = value
+                break
+
+    if raw_path is None:
+        return None
+
+    path = Path(raw_path)
+    if path.suffix != ".py":
+        return None
+
+    if not path.is_absolute():
+        path = root / path
+
+    return path
+
+
+def _build_import_graph_for_export(repo_root, files):
+    """Build an import graph from the file list used by the export pipeline."""
+
+    from repocontext.import_graph import build_import_graph
+
+    source_paths = []
+    for file_info in files:
+        source_path = _import_graph_export_source_path(file_info, repo_root)
+        if source_path is not None:
+            source_paths.append(source_path)
+
+    return build_import_graph(source_paths, repo_root=repo_root)
+
