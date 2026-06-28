@@ -31,6 +31,11 @@ FULL_EXPORT_SECTION_HEADINGS: dict[str, str] = {
 }
 
 
+CALL_GRAPH_MAX_INTERNAL_EDGES = 200
+CALL_GRAPH_MAX_EXTERNAL_EDGES = 25
+CALL_GRAPH_MAX_AMBIGUOUS_EDGES = 25
+CALL_GRAPH_MAX_UNRESOLVED_EDGES = 25
+
 def iter_full_export_headings() -> tuple[str, ...]:
     """Return Full Export section headings in stable render order."""
     return tuple(
@@ -1206,10 +1211,10 @@ def _split_call_graph_edges(edges):
 def _format_call_graph_section(
     call_graph,
     *,
-    max_edges=200,
-    max_external_edges=25,
-    max_ambiguous_edges=25,
-    max_unresolved_edges=25,
+    max_edges=CALL_GRAPH_MAX_INTERNAL_EDGES,
+    max_external_edges=CALL_GRAPH_MAX_EXTERNAL_EDGES,
+    max_ambiguous_edges=CALL_GRAPH_MAX_AMBIGUOUS_EDGES,
+    max_unresolved_edges=CALL_GRAPH_MAX_UNRESOLVED_EDGES,
 ):
     """Render a compact Call Graph section for full.txt.
 

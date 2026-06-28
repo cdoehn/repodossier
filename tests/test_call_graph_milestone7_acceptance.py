@@ -4,8 +4,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from repocontext.call_graph import CallEdge, parse_calls_from_source
-from repocontext.exporters.full import create_full_export_context, render_full_export
+from repocontext.call_graph import CallEdge, CallGraph, parse_calls_from_source
+from repocontext.exporters.full import (
+    _format_call_graph_section,
+    create_full_export_context,
+    render_full_export,
+)
 from repocontext.git import RepositoryInfo, TrackedFile
 from repocontext.import_graph import build_import_graph
 from repocontext.models import FileInfo
@@ -455,3 +459,87 @@ def test_milestone7_acceptance_full_export_contains_stable_call_graph_section(
     assert "pkg.main.main (src/pkg/main.py)" in rendered
     assert "  - line 4: calls pkg.helpers.helper [function, imported_local]" in rendered
     assert rendered.count("pkg.main.main (src/pkg/main.py)") == 1
+
+def test_milestone7_quality_limits_internal_call_graph_export_by_default() -> None:
+    graph = CallGraph(
+        [
+            CallEdge(
+                caller_file="src/pkg/main.py",
+                caller_name="main",
+                caller_qualified_name="pkg.main.main",
+                callee_name=f"helper_{index:03d}",
+                callee_qualified_name=f"pkg.main.helper_{index:03d}",
+                line_number=index + 1,
+                call_type="function",
+                confidence="local",
+            )
+            for index in range(205)
+        ]
+    )
+
+    section = _format_call_graph_section(graph)
+
+    assert "- Call edges: 205" in section
+    assert "- Local/internal calls: 205" in section
+    assert section.count("  - line ") == 200
+    assert "helper_199" in section
+    assert "helper_200" not in section
+    assert "- ... 5 more" in section
+
+
+def test_milestone7_quality_limits_noisy_call_graph_export_groups_by_default() -> None:
+    edges = []
+
+    for index in range(30):
+        edges.append(
+            CallEdge(
+                caller_file="src/pkg/main.py",
+                caller_name="main",
+                caller_qualified_name="pkg.main.main",
+                callee_name=f"external_{index:03d}",
+                callee_qualified_name=f"external.lib.external_{index:03d}",
+                line_number=index + 1,
+                call_type="function",
+                confidence="external",
+            )
+        )
+        edges.append(
+            CallEdge(
+                caller_file="src/pkg/main.py",
+                caller_name="main",
+                caller_qualified_name="pkg.main.main",
+                callee_name=f"ambiguous_{index:03d}",
+                callee_qualified_name=None,
+                line_number=100 + index,
+                call_type="function",
+                confidence="ambiguous",
+            )
+        )
+        edges.append(
+            CallEdge(
+                caller_file="src/pkg/main.py",
+                caller_name="main",
+                caller_qualified_name="pkg.main.main",
+                callee_name=f"unresolved_{index:03d}",
+                callee_qualified_name=None,
+                line_number=200 + index,
+                call_type="function",
+                confidence="unresolved",
+            )
+        )
+
+    section = _format_call_graph_section(CallGraph(edges))
+
+    assert "- External calls: 30" in section
+    assert "- Ambiguous calls: 30" in section
+    assert "- Unresolved calls: 30" in section
+
+    assert "external_024" in section
+    assert "external_025" not in section
+    assert "ambiguous_024" in section
+    assert "ambiguous_025" not in section
+    assert "unresolved_024" in section
+    assert "unresolved_025" not in section
+
+    assert section.count("- ... 5 more") == 3
+
