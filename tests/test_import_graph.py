@@ -6,6 +6,8 @@ from repocontext.import_graph import (
     ImportAnalysisError,
     ImportEdge,
     ImportReference,
+    build_python_module_map,
+    module_name_from_python_path,
     parse_imports_from_file,
     parse_imports_from_source,
 )
@@ -163,6 +165,74 @@ def test_import_reference_rejects_negative_level() -> None:
 def test_line_numbers_must_not_be_negative(factory) -> None:
     with pytest.raises(ValueError, match="line_number"):
         factory()
+
+
+
+
+def test_module_name_from_python_path_handles_src_layout_modules() -> None:
+    assert (
+        module_name_from_python_path("src/repocontext/scanner.py")
+        == "repocontext.scanner"
+    )
+    assert (
+        module_name_from_python_path("src/repocontext/nested/helper.py")
+        == "repocontext.nested.helper"
+    )
+
+
+def test_module_name_from_python_path_handles_src_layout_package_init() -> None:
+    assert (
+        module_name_from_python_path("src/repocontext/__init__.py")
+        == "repocontext"
+    )
+    assert (
+        module_name_from_python_path("src/repocontext/nested/__init__.py")
+        == "repocontext.nested"
+    )
+
+
+def test_module_name_from_python_path_handles_root_layout_and_tests() -> None:
+    assert (
+        module_name_from_python_path("repocontext/scanner.py")
+        == "repocontext.scanner"
+    )
+    assert (
+        module_name_from_python_path("tests/test_scanner.py")
+        == "tests.test_scanner"
+    )
+
+
+def test_module_name_from_python_path_respects_repo_root(tmp_path: Path) -> None:
+    source_path = tmp_path / "src" / "repocontext" / "scanner.py"
+
+    assert (
+        module_name_from_python_path(source_path, repo_root=tmp_path)
+        == "repocontext.scanner"
+    )
+
+
+def test_module_name_from_python_path_ignores_non_python_and_invalid_paths() -> None:
+    assert module_name_from_python_path("README.md") is None
+    assert module_name_from_python_path("src/example-data/module.py") is None
+    assert module_name_from_python_path("src/repocontext/__init__.py.md") is None
+
+
+def test_build_python_module_map_returns_deterministic_module_to_path_mapping() -> None:
+    module_map = build_python_module_map(
+        [
+            "README.md",
+            "src/repocontext/scanner.py",
+            "src/repocontext/__init__.py",
+            "tests/test_scanner.py",
+            "src/repocontext/scanner.py",
+        ]
+    )
+
+    assert module_map == {
+        "repocontext": Path("src/repocontext/__init__.py"),
+        "repocontext.scanner": Path("src/repocontext/scanner.py"),
+        "tests.test_scanner": Path("tests/test_scanner.py"),
+    }
 
 
 def test_parse_imports_from_source_detects_plain_imports() -> None:

@@ -122,6 +122,76 @@ class _ImportVisitor(ast.NodeVisitor):
             )
 
 
+
+def _path_relative_to_root(path: Path, repo_root: Path) -> Path:
+    """Return a best-effort repository-relative path without requiring files to exist."""
+
+    if path.is_absolute() and not repo_root.is_absolute():
+        repo_root = repo_root.resolve()
+
+    try:
+        return path.relative_to(repo_root)
+    except ValueError:
+        pass
+
+    try:
+        return path.resolve(strict=False).relative_to(repo_root.resolve(strict=False))
+    except ValueError:
+        return path
+
+
+def module_name_from_python_path(
+    source_path: str | Path,
+    *,
+    repo_root: str | Path = ".",
+) -> str | None:
+    """Convert a Python file path into its canonical dotted module name.
+
+    Examples:
+    - src/repocontext/scanner.py -> repocontext.scanner
+    - src/repocontext/__init__.py -> repocontext
+    - tests/test_scanner.py -> tests.test_scanner
+    """
+
+    path = Path(source_path)
+    if path.suffix != ".py":
+        return None
+
+    relative_path = _path_relative_to_root(path, Path(repo_root))
+    parts = list(relative_path.with_suffix("").parts)
+
+    if parts and parts[0] == "src":
+        parts = parts[1:]
+
+    if parts and parts[-1] == "__init__":
+        parts = parts[:-1]
+
+    if not parts:
+        return None
+
+    if not all(part.isidentifier() for part in parts):
+        return None
+
+    return ".".join(parts)
+
+
+def build_python_module_map(
+    source_paths: list[str | Path] | tuple[str | Path, ...],
+    *,
+    repo_root: str | Path = ".",
+) -> dict[str, Path]:
+    """Build a deterministic local module-name to file-path map for Python files."""
+
+    module_map: dict[str, Path] = {}
+
+    for source_path in sorted((Path(path) for path in source_paths), key=lambda path: path.as_posix()):
+        module_name = module_name_from_python_path(source_path, repo_root=repo_root)
+        if module_name is None:
+            continue
+        module_map.setdefault(module_name, source_path)
+
+    return module_map
+
 def parse_imports_from_source(
     source: str,
     *,
@@ -204,6 +274,8 @@ __all__ = [
     "ImportEdge",
     "ImportReference",
     "ImportType",
+    "build_python_module_map",
+    "module_name_from_python_path",
     "parse_imports_from_file",
     "parse_imports_from_source",
 ]
