@@ -166,7 +166,7 @@ def render_full_export(context: FullExportContext) -> str:
         _render_repository_statistics(context),
         _render_file_summary(context),
         _render_repository_tree(context),
-        _render_complete_source_export_placeholder(context),
+        _render_complete_source_export(context),
         _render_warnings_placeholder(context),
     ]
     return "\n\n".join(section.rstrip() for section in sections).rstrip() + "\n"
@@ -583,15 +583,68 @@ def _repository_tree_file_label(file_info: FileInfo) -> str:
     return label
 
 
-def _render_complete_source_export_placeholder(context: FullExportContext) -> str:
-    return "\n".join(
-        [
-            FULL_EXPORT_SECTION_HEADINGS["complete_source_export"],
-            "",
-            f"Source files ready for dumping: {len(context.exported_text_files)}",
-            "Complete Source Export rendering will be expanded in Milestone 3.7.",
-        ]
-    )
+def _render_complete_source_export(context: FullExportContext) -> str:
+    """Render the complete source dump for all exported text files."""
+    parts = [
+        FULL_EXPORT_SECTION_HEADINGS["complete_source_export"],
+        "",
+    ]
+
+    if not context.exported_text_files:
+        parts.append("No exportable text files.")
+        return "\n".join(parts)
+
+    for file_info in context.exported_text_files:
+        content = file_info.content or ""
+        fence = _choose_code_fence(content)
+        language = _code_fence_language(file_info.language)
+        opening_fence = f"{fence}{language}" if language else fence
+
+        file_block = (
+            f"## File: {file_info.relative_path.as_posix()}\n\n"
+            f"{opening_fence}\n"
+            f"{content}"
+        )
+
+        if not file_block.endswith("\n"):
+            file_block += "\n"
+
+        file_block += fence
+        parts.append(file_block)
+
+    return "\n\n".join(parts)
+
+
+def _choose_code_fence(content: str) -> str:
+    """Choose a Markdown code fence that is longer than fences in the content."""
+    backtick = chr(96)
+    fence = backtick * 3
+
+    while fence in content:
+        fence += backtick
+
+    return fence
+
+
+def _code_fence_language(language: str | None) -> str:
+    """Return a Markdown code fence language identifier."""
+    if language is None:
+        return "text"
+
+    language_identifiers = {
+        "bash": "bash",
+        "dockerfile": "dockerfile",
+        "ini": "ini",
+        "json": "json",
+        "makefile": "makefile",
+        "markdown": "markdown",
+        "python": "python",
+        "text": "text",
+        "toml": "toml",
+        "yaml": "yaml",
+    }
+
+    return language_identifiers.get(language.lower(), "text")
 
 
 def _render_warnings_placeholder(context: FullExportContext) -> str:

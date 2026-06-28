@@ -461,6 +461,139 @@ def test_render_full_export_repository_tree_handles_empty_repository(
     assert repository_tree_section.strip() == "."
 
 
+def test_render_full_export_renders_complete_source_export(tmp_path: Path) -> None:
+    repository_info = make_repository_info(tmp_path)
+    module = FileInfo(
+        relative_path=Path("src/module.py"),
+        absolute_path=tmp_path / "src/module.py",
+        is_text=True,
+        is_binary=False,
+        language="python",
+        line_count=1,
+        estimated_tokens=4,
+        content="print('hello')\n",
+    )
+    readme = FileInfo(
+        relative_path=Path("README.md"),
+        absolute_path=tmp_path / "README.md",
+        is_text=True,
+        is_binary=False,
+        language="markdown",
+        line_count=2,
+        estimated_tokens=8,
+        content="# Example\n\nOverview\n",
+    )
+    binary = FileInfo(
+        relative_path=Path("image.bin"),
+        absolute_path=tmp_path / "image.bin",
+        is_text=False,
+        is_binary=True,
+        content=None,
+    )
+
+    context = create_full_export_context(repository_info, [module, binary, readme])
+    rendered = render_full_export(context)
+    code_fence = chr(96) * 3
+
+    assert "# Complete Source Export" in rendered
+    assert "Complete Source Export rendering will be expanded" not in rendered
+
+    assert "## File: README.md" in rendered
+    assert f"{code_fence}markdown" in rendered
+    assert "# Example\n\nOverview\n" in rendered
+
+    assert "## File: src/module.py" in rendered
+    assert f"{code_fence}python" in rendered
+    assert "print('hello')\n" in rendered
+
+    assert "## File: image.bin" not in rendered
+
+    readme_position = rendered.index("## File: README.md")
+    module_position = rendered.index("## File: src/module.py")
+    assert readme_position < module_position
+
+
+def test_render_full_export_complete_source_export_handles_no_exportable_files(
+    tmp_path: Path,
+) -> None:
+    repository_info = make_repository_info(tmp_path)
+    binary = FileInfo(
+        relative_path=Path("image.bin"),
+        absolute_path=tmp_path / "image.bin",
+        is_text=False,
+        is_binary=True,
+        content=None,
+    )
+
+    context = create_full_export_context(repository_info, [binary])
+    rendered = render_full_export(context)
+
+    complete_source_section = rendered.split("# Complete Source Export", 1)[1].split(
+        "# Warnings",
+        1,
+    )[0]
+    assert "No exportable text files." in complete_source_section
+
+
+def test_render_full_export_complete_source_export_uses_longer_fence_for_nested_fences(
+    tmp_path: Path,
+) -> None:
+    repository_info = make_repository_info(tmp_path)
+    backtick = chr(96)
+    nested_fence = backtick * 3
+    longer_fence = backtick * 4
+    readme = FileInfo(
+        relative_path=Path("README.md"),
+        absolute_path=tmp_path / "README.md",
+        is_text=True,
+        is_binary=False,
+        language="markdown",
+        line_count=5,
+        estimated_tokens=20,
+        content=(
+            "# Example\n\n"
+            f"{nested_fence}python\n"
+            "print('inside markdown')\n"
+            f"{nested_fence}\n"
+        ),
+    )
+
+    context = create_full_export_context(repository_info, [readme])
+    rendered = render_full_export(context)
+
+    complete_source_section = rendered.split("# Complete Source Export", 1)[1].split(
+        "# Warnings",
+        1,
+    )[0]
+
+    assert f"{longer_fence}markdown" in complete_source_section
+    assert f"{nested_fence}python" in complete_source_section
+    assert complete_source_section.rstrip().endswith(longer_fence)
+
+
+def test_render_full_export_complete_source_export_uses_text_for_unknown_language(
+    tmp_path: Path,
+) -> None:
+    repository_info = make_repository_info(tmp_path)
+    file_info = FileInfo(
+        relative_path=Path("notes.unknown"),
+        absolute_path=tmp_path / "notes.unknown",
+        is_text=True,
+        is_binary=False,
+        language=None,
+        line_count=1,
+        estimated_tokens=2,
+        content="notes\n",
+    )
+
+    context = create_full_export_context(repository_info, [file_info])
+    rendered = render_full_export(context)
+    code_fence = chr(96) * 3
+
+    assert f"{code_fence}text" in rendered
+    assert "notes\n" in rendered
+
+
 def test_full_export_context_counts_file_types_from_scanned_files(tmp_path: Path) -> None:
     repository_info = make_repository_info(tmp_path)
     files = [
