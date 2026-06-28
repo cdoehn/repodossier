@@ -141,6 +141,8 @@ def test_cli_default_full_export_contains_tracked_text_file_in_all_mvp_sections(
     assert "# Repository Statistics" in content
     assert "Total lines:" in content
     assert "Estimated tokens:" in content
+
+
 def test_cli_default_full_export_excludes_binary_file_from_source_dump_and_warns(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -186,6 +188,8 @@ def test_cli_default_full_export_preserves_known_text_line_and_token_values(
     assert "- `data.txt` — 2 lines, ~3 tokens" in content
     assert "## File: data.txt" in content
     assert "abcd\nefgh\n" in content
+
+
 def test_cli_info_command_outside_repository(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
     non_repo_path = tmp_path / "outside"
     non_repo_path.mkdir()

@@ -313,6 +313,8 @@ def test_render_full_export_renders_file_summary_table(tmp_path: Path) -> None:
     readme_position = rendered.index("- `README.md` — 3 lines, ~10 tokens")
     module_position = rendered.index("- `src/module.py` — 2 lines, ~8 tokens")
     assert readme_position < module_position
+
+
 def test_render_full_export_file_summary_handles_unknown_language_and_missing_counts(
     tmp_path: Path,
 ) -> None:
@@ -333,6 +335,8 @@ def test_render_full_export_file_summary_handles_unknown_language_and_missing_co
 
     assert "## Unknown (1 file)" in rendered
     assert "- `notes.unknown` — 0 lines, ~0 tokens" in rendered
+
+
 def test_render_full_export_file_summary_handles_no_exportable_text_files(
     tmp_path: Path,
 ) -> None:
@@ -372,6 +376,8 @@ def test_render_full_export_file_summary_escapes_markdown_table_pipes(
 
     assert "## Text (1 file)" in rendered
     assert "- `docs/weird|name.txt` — 1 line, ~2 tokens" in rendered
+
+
 def test_render_full_export_renders_repository_tree(tmp_path: Path) -> None:
     repository_info = make_repository_info(tmp_path)
     files = [

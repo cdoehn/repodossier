@@ -214,6 +214,8 @@ def _remove_temporary_output_file(temporary_output_path: Path) -> None:
         temporary_output_path.unlink(missing_ok=True)
     except OSError:
         pass
+
+
 def generate_full_export(repository_root: Path | str) -> Path:
     """Build, render, and write the Full Export for a repository."""
     context = build_full_export_context(repository_root)
@@ -570,6 +572,7 @@ def _format_number(value: int) -> str:
 def _format_inline_code(value: str) -> str:
     """Format a value as Markdown inline code."""
     return f"`{value.replace('`', '\\`')}`"
+
 
 def _render_repository_tree(context: FullExportContext) -> str:
     """Render a deterministic tree view of scanned Git-tracked files."""
