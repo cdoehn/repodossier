@@ -113,7 +113,154 @@ def test_dependency_report_rejects_invalid_filter_type() -> None:
         report.dependencies_by_type("prod")
 
 
-def test_analyze_dependencies_returns_empty_report_for_initial_scaffold(tmp_path) -> None:
+def test_analyze_dependencies_reads_pep621_runtime_dependencies(tmp_path) -> None:
+    (tmp_path / "pyproject.toml").write_text(
+        """
+[project]
+dependencies = [
+  "click>=8",
+  "requests>=2.31",
+]
+""".strip(),
+        encoding="utf-8",
+    )
+
+    report = analyze_dependencies(tmp_path)
+
+    runtime_dependencies = report.dependencies_by_type("runtime")
+    assert [dependency.normalized_name for dependency in runtime_dependencies] == [
+        "click",
+        "requests",
+    ]
+    assert [dependency.version_constraint for dependency in runtime_dependencies] == [
+        ">=8",
+        ">=2.31",
+    ]
+    assert {dependency.source_section for dependency in runtime_dependencies} == {
+        "project.dependencies"
+    }
+    assert report.dependency_files == ("pyproject.toml",)
+
+
+def test_analyze_dependencies_reads_pep621_optional_dependencies(tmp_path) -> None:
+    (tmp_path / "pyproject.toml").write_text(
+        """
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+docs = ["mkdocs"]
+""".strip(),
+        encoding="utf-8",
+    )
+
+    report = analyze_dependencies(tmp_path)
+
+    optional_dependencies = report.dependencies_by_type("optional")
+    assert [
+        (dependency.normalized_name, dependency.group, dependency.source_section)
+        for dependency in optional_dependencies
+    ] == [
+        ("mkdocs", "docs", "project.optional-dependencies.docs"),
+        ("pytest", "dev", "project.optional-dependencies.dev"),
+    ]
+
+
+def test_analyze_dependencies_reads_poetry_dependencies(tmp_path) -> None:
+    (tmp_path / "pyproject.toml").write_text(
+        """
+[tool.poetry.dependencies]
+python = "^3.12"
+click = "^8.1"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.0"
+""".strip(),
+        encoding="utf-8",
+    )
+
+    report = analyze_dependencies(tmp_path)
+
+    assert [
+        (dependency.normalized_name, dependency.version_constraint)
+        for dependency in report.dependencies_by_type("runtime")
+    ] == [("click", "^8.1")]
+    assert [
+        (dependency.normalized_name, dependency.version_constraint)
+        for dependency in report.dependencies_by_type("development")
+    ] == [("pytest", "^8.0")]
+    assert "python" not in {
+        dependency.normalized_name
+        for dependency in report.dependencies
+    }
+
+
+def test_analyze_dependencies_reads_legacy_poetry_dev_dependencies(tmp_path) -> None:
+    (tmp_path / "pyproject.toml").write_text(
+        """
+[tool.poetry.dev-dependencies]
+pytest = "^8.0"
+ruff = "^0.6"
+""".strip(),
+        encoding="utf-8",
+    )
+
+    report = analyze_dependencies(tmp_path)
+
+    assert [
+        dependency.normalized_name
+        for dependency in report.dependencies_by_type("development")
+    ] == ["pytest", "ruff"]
+
+
+def test_analyze_dependencies_classifies_poetry_groups(tmp_path) -> None:
+    (tmp_path / "pyproject.toml").write_text(
+        """
+[tool.poetry.group.docs.dependencies]
+mkdocs = "^1.6"
+
+[tool.poetry.group.lint.dependencies]
+ruff = "^0.6"
+
+[tool.poetry.group.extra.dependencies]
+rich = "^13"
+""".strip(),
+        encoding="utf-8",
+    )
+
+    report = analyze_dependencies(tmp_path)
+
+    assert [
+        (dependency.normalized_name, dependency.group)
+        for dependency in report.dependencies_by_type("development")
+    ] == [
+        ("mkdocs", "docs"),
+        ("ruff", "lint"),
+    ]
+    assert [
+        (dependency.normalized_name, dependency.group)
+        for dependency in report.dependencies_by_type("optional")
+    ] == [("rich", "extra")]
+
+
+def test_analyze_dependencies_handles_invalid_pyproject_toml(tmp_path) -> None:
+    (tmp_path / "pyproject.toml").write_text(
+        """
+[project
+dependencies = ["click"]
+""".strip(),
+        encoding="utf-8",
+    )
+
+    report = analyze_dependencies(tmp_path)
+
+    assert report.dependencies == ()
+    assert report.dependency_files == ("pyproject.toml",)
+    assert report.warnings
+    assert "invalid pyproject.toml" in report.warnings[0]
+
+
+def test_analyze_dependencies_returns_empty_report_without_dependency_files(
+    tmp_path,
+) -> None:
     report = analyze_dependencies(tmp_path, files=[])
 
     assert isinstance(report, DependencyReport)
