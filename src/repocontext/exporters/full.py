@@ -1056,9 +1056,6 @@ def render_full_export(*args, **kwargs):
     except Exception:
         return output
 
-    if "## Import Graph" in output:
-        return output
-
     separator = "\n\n" if output and not output.endswith("\n\n") else ""
     return f"{output}{separator}{section}\n"
 

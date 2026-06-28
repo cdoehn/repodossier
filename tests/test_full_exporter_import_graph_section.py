@@ -315,6 +315,34 @@ def test_write_full_export_persists_import_graph_section_to_full_txt(
     assert "- app.main: missing.nope" in section
 
 
+
+
+def test_render_full_export_appends_generated_import_graph_when_source_dump_mentions_same_heading(
+    tmp_path: Path,
+) -> None:
+    context = _make_import_graph_full_export_context(tmp_path)
+
+    heading_file = _write_import_graph_fixture_file(
+        tmp_path,
+        "docs/mentions-import-graph.md",
+        "## Import Graph\nThis is only source content, not the generated section.\n",
+    )
+
+    context.repository_info.tracked_files.append(TrackedFile(path=heading_file.relative_path))
+    context = create_full_export_context(
+        context.repository_info,
+        [*context.scanned_files, heading_file],
+    )
+
+    rendered = render_full_export(context)
+    after_warnings = rendered.split("# Warnings", 1)[1]
+
+    assert "## Import Graph" in after_warnings
+    assert "Summary:" in after_warnings
+    assert "- app.main -> app.utils" in after_warnings
+    assert "External imports:\n- os" in after_warnings
+
+
 def test_render_full_export_import_graph_output_is_deterministic_for_file_order(
     tmp_path: Path,
 ) -> None:
