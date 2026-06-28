@@ -309,7 +309,7 @@ Generates:
 
     docs.txt
 
-Contains documentation files only.
+Contains documentation files only. It extracts Git-tracked documentation-like text files and excludes generated RepoContext export files.
 
 ---
 

@@ -2,9 +2,9 @@
 
 RepoContext creates AI-friendly exports of Git repositories.
 
-It scans Git-tracked files, builds a structured repository overview, and writes `full.txt` plus a compact `ai.txt` export that can be pasted into large language models such as ChatGPT, Claude, Gemini, Aider, and other coding assistants.
+It scans Git-tracked files, builds a structured repository overview, and writes `full.txt`, a compact `ai.txt` export, and an explicit documentation-only `docs.txt` export that can be pasted into large language models such as ChatGPT, Claude, Gemini, Aider, and other coding assistants.
 
-The current implementation focuses on robust **Full Export** and compact **AI Export** modes for Python projects. It includes repository statistics, file summaries, a tree view, complete source export, warnings, important-file ranking, a Python symbol index, a Python import graph, and a static Python call graph.
+The current implementation focuses on robust **Full Export**, compact **AI Export**, and documentation-only **Docs Export** modes for Python projects. It includes repository statistics, file summaries, a tree view, complete source export, documentation extraction, warnings, important-file ranking, a Python symbol index, a Python import graph, and a static Python call graph.
 
 ## Why RepoContext exists
 
@@ -40,11 +40,11 @@ Implemented:
 - Python import graph
 - Python call graph
 - compact `ai.txt` export
+- documentation-only `docs.txt` export
 - CLI aliases for full and AI exports
 
 Planned but not complete yet:
 
-- `docs.txt`
 - `changed.txt`
 - dependency summary from `pyproject.toml` and requirements files
 - database schema extraction
@@ -133,6 +133,22 @@ ai.txt
 
 to the repository root.
 
+### Documentation-only export
+
+```bash
+repocontext export-docs
+```
+
+This writes only:
+
+```text
+docs.txt
+```
+
+to the repository root.
+
+The documentation export contains Git-tracked documentation files such as README, architecture notes, specifications, tasks, roadmaps, changelogs, contributing documents, licenses, and files under `docs/`. It excludes generated RepoContext export files such as `full.txt`, `ai.txt`, `docs.txt`, and `changed.txt`.
+
 ### Repository info
 
 ```bash
@@ -176,6 +192,18 @@ The current `ai.txt` export contains:
 
 The AI export is intentionally compact and does not include a complete source dump.
 
+## Output: docs.txt
+
+The current `docs.txt` export contains:
+
+1. Documentation Quick Start
+2. Documentation Summary
+3. Documentation Files
+4. Extracted Documents
+5. Warnings
+
+The docs export is documentation-only. It includes documentation-like Git-tracked text files and excludes source-code files plus generated RepoContext exports.
+
 ## What gets exported
 
 RepoContext exports **Git-tracked files only**.
@@ -190,7 +218,7 @@ This means:
 
 - untracked files are ignored
 - ignored files are ignored unless they are already tracked
-- generated exports such as `full.txt` and `ai.txt` are normally not included
+- generated exports such as `full.txt`, `ai.txt`, `docs.txt`, and `changed.txt` are normally not included
 - binary files are detected and skipped from the source dump
 
 ## Automatic .gitignore integration
@@ -351,6 +379,7 @@ Binary files are detected and excluded from the complete source dump.
 │       ├── cli.py
 │       ├── exporters
 │       │   ├── ai.py
+│       │   ├── docs.py
 │       │   └── full.py
 │       ├── git.py
 │       ├── gitignore.py
@@ -386,7 +415,7 @@ Static analysis
 Export renderers
       |
       v
-full.txt / ai.txt
+full.txt / ai.txt / docs.txt
 ```
 
 Main modules:
@@ -402,6 +431,7 @@ Main modules:
 | `repocontext.call_graph` | Python static call graph analysis |
 | `repocontext.exporters.full` | `full.txt` context creation, rendering, and writing |
 | `repocontext.exporters.ai` | compact `ai.txt` context creation, rendering, and writing |
+| `repocontext.exporters.docs` | documentation-only `docs.txt` context creation, rendering, and writing |
 | `repocontext.models` | shared data models |
 
 ## Development
@@ -493,7 +523,7 @@ Current limitations:
 - import resolution is static and best-effort
 - external packages are not inspected
 - only Git-tracked files are considered
-- `docs.txt` and `changed.txt` are planned but not complete yet
+- `changed.txt` is planned but not complete yet
 - configuration support is planned but not complete yet
 
 ## Roadmap
