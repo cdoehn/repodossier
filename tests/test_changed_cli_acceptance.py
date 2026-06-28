@@ -93,3 +93,33 @@ def test_changed_cli_end_to_end_writes_branch_comparison_export(
     assert "# Changed File Contents" in content
     assert "## app.py" in content
     assert "print('feature')" in content
+
+
+def test_changed_cli_from_subdirectory_writes_changed_txt_to_repository_root(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    repo = init_repo(tmp_path)
+    commit_file(repo, "app.py", "print('initial')\n")
+
+    nested_dir = repo / "nested" / "dir"
+    nested_dir.mkdir(parents=True)
+
+    (repo / "app.py").write_text("print('changed')\n", encoding="utf-8")
+    monkeypatch.chdir(nested_dir)
+
+    status = main(["changed", "--no-diff"])
+
+    root_changed_txt = repo / "changed.txt"
+    nested_changed_txt = nested_dir / "changed.txt"
+    content = root_changed_txt.read_text(encoding="utf-8")
+    gitignore = (repo / ".gitignore").read_text(encoding="utf-8")
+
+    assert status == 0
+    assert root_changed_txt.exists()
+    assert not nested_changed_txt.exists()
+    assert "Compare Mode: Working tree" in content
+    assert "- `app.py` (modified)" in content
+    assert "print('changed')" in content
+    assert "changed.txt" in gitignore
+

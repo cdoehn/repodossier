@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from repocontext.changed_exporter import write_changed_export
+from repocontext.git import find_repository_root
 from repocontext.gitignore import ensure_repocontext_gitignore_entries
 
 
@@ -64,12 +65,23 @@ def add_changed_subparser(subparsers: Any) -> Any:
 def run_changed_command(args: Namespace) -> int:
     """Run the changed export command from parsed CLI arguments."""
 
-    repository_root = Path.cwd()
+    repository_root = find_repository_root(Path.cwd())
+    if repository_root is None:
+        print("Error: not inside a Git repository")
+        return 1
+
     ensure_repocontext_gitignore_entries(repository_root)
+
+    requested_output = Path(getattr(args, "output", "changed.txt"))
+    output_path = (
+        requested_output
+        if requested_output.is_absolute()
+        else repository_root / requested_output
+    )
 
     output = write_changed_export(
         repository_root,
-        getattr(args, "output", "changed.txt"),
+        output_path,
         branch=getattr(args, "branch", None),
         include_diff=getattr(args, "include_diff", True),
     )

@@ -48,19 +48,23 @@ def test_run_changed_command_writes_changed_export(
     capsys,
 ) -> None:
     monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(
+        "repocontext.changed_command.find_repository_root",
+        lambda current_path: tmp_path,
+    )
 
     def fake_write_changed_export(
         repo_path: Path,
-        output_path: str,
+        output_path: Path,
         *,
         branch: str | None,
         include_diff: bool,
     ) -> Path:
         assert repo_path == tmp_path
-        assert output_path == "changed.txt"
+        assert output_path == tmp_path / "changed.txt"
         assert branch == "main"
         assert include_diff is False
-        output = tmp_path / output_path
+        output = output_path
         output.write_text("# Changed Export\n", encoding="utf-8")
         return output
 
@@ -82,6 +86,10 @@ def test_run_changed_command_ensures_repocontext_gitignore_entries(
     monkeypatch,
 ) -> None:
     monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(
+        "repocontext.changed_command.find_repository_root",
+        lambda current_path: tmp_path,
+    )
 
     ensured_roots: list[Path] = []
 
@@ -91,13 +99,14 @@ def test_run_changed_command_ensures_repocontext_gitignore_entries(
 
     def fake_write_changed_export(
         repo_path: Path,
-        output_path: str,
+        output_path: Path,
         *,
         branch: str | None,
         include_diff: bool,
     ) -> Path:
         assert repo_path == tmp_path
-        output = tmp_path / output_path
+        assert output_path == tmp_path / "changed.txt"
+        output = output_path
         output.write_text("# Changed Export\n", encoding="utf-8")
         return output
 
