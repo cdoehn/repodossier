@@ -1069,13 +1069,40 @@ def _build_call_graph_for_export(repo_root, files, *, import_graph=None):
 
 
 def _format_call_graph_edge_line(edge):
-    """Format one call graph edge for full.txt."""
+    """Format one call graph edge below a grouped caller heading."""
 
     line_number = edge.line_number if edge.line_number is not None else "unknown"
     return (
-        f"- {edge.caller_key} -> {edge.callee_key} "
-        f"(line {line_number}, {edge.call_type}, {edge.confidence})"
+        f"  - line {line_number}: calls {edge.callee_key} "
+        f"[{edge.call_type}, {edge.confidence}]"
     )
+
+
+def _append_grouped_call_graph_edges(lines, edges, *, max_edges):
+    """Append call graph edges grouped by caller symbol."""
+
+    if not edges:
+        lines.append("- none")
+        return
+
+    visible_edges = edges[:max_edges]
+    current_caller = None
+
+    for edge in visible_edges:
+        caller = edge.caller_key
+        if caller != current_caller:
+            if current_caller is not None:
+                lines.append("")
+            lines.append(f"{caller} ({edge.caller_file})")
+            current_caller = caller
+
+        lines.append(_format_call_graph_edge_line(edge))
+
+    remaining_count = len(edges) - max_edges
+    if remaining_count > 0:
+        if lines and lines[-1] != "":
+            lines.append("")
+        lines.append(f"- ... {remaining_count} more")
 
 
 def _format_call_graph_section(call_graph, *, max_edges=200):
@@ -1106,14 +1133,13 @@ def _format_call_graph_section(call_graph, *, max_edges=200):
         f"- Ambiguous calls: {ambiguous_count}",
         f"- Unresolved calls: {unresolved_count}",
         "",
-        "Calls:",
+        "Calls by caller:",
     ]
 
-    _append_limited_items(
+    _append_grouped_call_graph_edges(
         lines,
         edges,
-        max_items=max_edges,
-        formatter=_format_call_graph_edge_line,
+        max_edges=max_edges,
     )
 
     return "\n".join(lines).rstrip()

@@ -434,12 +434,60 @@ def test_format_call_graph_section_summarizes_and_limits_edges() -> None:
     assert "- Ambiguous calls: 0" in section
     assert "- Unresolved calls: 0" in section
     assert (
-        "Calls:\n"
-        "- app.main.main -> app.utils.helper "
-        "(line 4, function, imported_local)"
+        "Calls by caller:\n"
+        "app.main.main (src/app/main.py)\n"
+        "  - line 4: calls app.utils.helper [function, imported_local]"
     ) in section
-    assert "- pathlib.Path" not in section
+    assert "pathlib.Path" not in section
     assert "- ... 1 more" in section
+
+def test_format_call_graph_section_groups_multiple_edges_by_caller() -> None:
+    graph = CallGraph(
+        [
+            CallEdge(
+                caller_file="src/app/main.py",
+                caller_name="main",
+                caller_qualified_name="app.main.main",
+                callee_name="prepare",
+                callee_qualified_name="app.main.prepare",
+                line_number=3,
+                call_type="function",
+                confidence="local",
+            ),
+            CallEdge(
+                caller_file="src/app/main.py",
+                caller_name="main",
+                caller_qualified_name="app.main.main",
+                callee_name="run",
+                callee_qualified_name="app.runner.run",
+                line_number=4,
+                call_type="function",
+                confidence="imported_local",
+            ),
+            CallEdge(
+                caller_file="src/app/worker.py",
+                caller_name="work",
+                caller_qualified_name="app.worker.work",
+                callee_name="Path",
+                callee_qualified_name="pathlib.Path",
+                line_number=8,
+                call_type="function",
+                confidence="external",
+            ),
+        ]
+    )
+
+    section = _format_call_graph_section(graph)
+
+    assert (
+        "Calls by caller:\n"
+        "app.main.main (src/app/main.py)\n"
+        "  - line 3: calls app.main.prepare [function, local]\n"
+        "  - line 4: calls app.runner.run [function, imported_local]\n"
+        "\n"
+        "app.worker.work (src/app/worker.py)\n"
+        "  - line 8: calls pathlib.Path [function, external]"
+    ) in section
 
 
 def _make_call_graph_full_export_context(repo_root: Path):
@@ -524,9 +572,10 @@ def test_render_full_export_appends_call_graph_section_after_import_graph(
     assert after_warnings.index("## Import Graph") < after_warnings.index("## Call Graph")
     assert "- Call edges: 1" in section
     assert "- Local/internal calls: 1" in section
+    assert "app.main.main (src/app/main.py)" in section
     assert (
-        "- app.main.main -> app.scanner.scan_single_file "
-        "(line 4, function, imported_local)"
+        "  - line 4: calls app.scanner.scan_single_file "
+        "[function, imported_local]"
     ) in section
 
 
@@ -540,5 +589,6 @@ def test_write_full_export_persists_call_graph_section_to_full_txt(
     content = output_path.read_text(encoding="utf-8")
     section = _rendered_call_graph_section(content)
     assert "- Call edges: 1" in section
-    assert "- app.main.main -> app.scanner.scan_single_file" in section
+    assert "app.main.main (src/app/main.py)" in section
+    assert "  - line 4: calls app.scanner.scan_single_file" in section
 
