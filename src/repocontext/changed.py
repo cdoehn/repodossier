@@ -39,20 +39,30 @@ class ChangedFileScan:
         return bool(getattr(self.file_info, "is_binary", False))
 
 
-def _default_scan_file(path: Path) -> Any:
-    """Scan a file by reusing the existing scanner module.
+def _default_scan_file(repository_root: Path, relative_path: str) -> Any:
+    """Scan a changed file by reusing the existing scanner module.
 
-    RepoContext has evolved over milestones, so this adapter supports the
-    stable scanner entrypoint while keeping the changed export independent
-    from exporter-specific details.
+    RepoContext has used two scanner entrypoints over time. Prefer the newer
+    scan_file(path) function when available, but support the existing
+    scan_single_file(repo_root, relative_path) API used by the repository
+    scanner.
     """
     from repocontext import scanner
 
-    scan_file = getattr(scanner, "scan_file", None)
-    if scan_file is None:
-        raise RuntimeError("repocontext.scanner.scan_file is not available")
+    absolute_path = repository_root / relative_path
 
-    return scan_file(path)
+    scan_file = getattr(scanner, "scan_file", None)
+    if scan_file is not None:
+        return scan_file(absolute_path)
+
+    scan_single_file = getattr(scanner, "scan_single_file", None)
+    if scan_single_file is not None:
+        return scan_single_file(repository_root, relative_path)
+
+    raise RuntimeError(
+        "Neither repocontext.scanner.scan_file nor "
+        "repocontext.scanner.scan_single_file is available"
+    )
 
 
 def scan_changed_file(
@@ -66,14 +76,19 @@ def scan_changed_file(
     if changed_file.is_deleted:
         return ChangedFileScan(changed_file=changed_file, file_info=None)
 
-    absolute_path = Path(repo_path) / changed_file.path
+    repo = Path(repo_path)
+    absolute_path = repo / changed_file.path
     if not absolute_path.exists():
         return ChangedFileScan(changed_file=changed_file, file_info=None)
 
-    scan = scanner or _default_scan_file
+    if scanner is None:
+        file_info = _default_scan_file(repo, changed_file.path)
+    else:
+        file_info = scanner(absolute_path)
+
     return ChangedFileScan(
         changed_file=changed_file,
-        file_info=scan(absolute_path),
+        file_info=file_info,
     )
 
 

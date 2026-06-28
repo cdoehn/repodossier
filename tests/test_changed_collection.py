@@ -70,6 +70,31 @@ def test_scan_changed_file_handles_missing_non_deleted_file(tmp_path: Path) -> N
     assert result.file_info is None
 
 
+def test_scan_changed_file_uses_default_repository_scanner(
+    tmp_path: Path,
+) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    file_path = repo / "src" / "app.py"
+    file_path.parent.mkdir()
+    file_path.write_text("print('hello')\n", encoding="utf-8")
+
+    result = scan_changed_file(
+        repo,
+        ChangedFile(path="src/app.py", status="modified"),
+    )
+
+    assert result.path == "src/app.py"
+    assert result.status == "modified"
+    assert result.file_info is not None
+    assert result.file_info.relative_path == Path("src/app.py")
+    assert result.file_info.absolute_path == file_path.resolve()
+    assert result.file_info.is_text is True
+    assert result.file_info.is_binary is False
+    assert result.file_info.language == "python"
+    assert result.file_info.content == "print('hello')\n"
+
+
 def test_collect_changed_file_scans_returns_stable_sorted_results(
     tmp_path: Path,
 ) -> None:
