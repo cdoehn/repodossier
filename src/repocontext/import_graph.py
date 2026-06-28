@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import ast
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Literal
@@ -478,6 +478,75 @@ def deduplicate_import_edges(
 
     return tuple(deduplicated_edges)
 
+
+def _normalize_module_names(modules: Iterable[str] | None) -> list[str]:
+    """Return deterministic module names for adjacency-list initialization."""
+
+    if modules is None:
+        return []
+
+    return sorted(set(modules))
+
+
+def build_depends_on_adjacency(
+    edges: list[ImportEdge] | tuple[ImportEdge, ...],
+    *,
+    modules: Iterable[str] | None = None,
+) -> dict[str, tuple[str, ...]]:
+    """Build module -> imported local modules adjacency from import edges."""
+
+    adjacency: dict[str, set[str]] = {
+        module_name: set()
+        for module_name in _normalize_module_names(modules)
+    }
+
+    for edge in edges:
+        adjacency.setdefault(edge.source_module, set()).add(edge.target_module)
+
+    return {
+        module_name: tuple(sorted(target_modules))
+        for module_name, target_modules in sorted(adjacency.items())
+    }
+
+
+def build_used_by_adjacency(
+    edges: list[ImportEdge] | tuple[ImportEdge, ...],
+    *,
+    modules: Iterable[str] | None = None,
+) -> dict[str, tuple[str, ...]]:
+    """Build module -> local modules importing it adjacency from import edges."""
+
+    adjacency: dict[str, set[str]] = {
+        module_name: set()
+        for module_name in _normalize_module_names(modules)
+    }
+
+    for edge in edges:
+        adjacency.setdefault(edge.target_module, set()).add(edge.source_module)
+
+    return {
+        module_name: tuple(sorted(source_modules))
+        for module_name, source_modules in sorted(adjacency.items())
+    }
+
+
+def import_graph_depends_on(graph: ImportGraph) -> dict[str, tuple[str, ...]]:
+    """Return depends_on adjacency for all modules in an import graph."""
+
+    return build_depends_on_adjacency(
+        graph.edges,
+        modules=graph.modules.keys(),
+    )
+
+
+def import_graph_used_by(graph: ImportGraph) -> dict[str, tuple[str, ...]]:
+    """Return used_by adjacency for all modules in an import graph."""
+
+    return build_used_by_adjacency(
+        graph.edges,
+        modules=graph.modules.keys(),
+    )
+
 def build_import_graph(
     source_paths: list[str | Path] | tuple[str | Path, ...],
     *,
@@ -610,10 +679,14 @@ __all__ = [
     "ImportGraph",
     "ImportReference",
     "ImportType",
+    "build_depends_on_adjacency",
     "build_import_graph",
     "build_python_module_map",
+    "build_used_by_adjacency",
     "deduplicate_import_edges",
     "import_edge_from_reference",
+    "import_graph_depends_on",
+    "import_graph_used_by",
     "module_name_from_python_path",
     "parse_imports_from_file",
     "parse_imports_from_source",
