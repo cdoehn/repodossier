@@ -42,12 +42,12 @@ Implemented:
 - compact `ai.txt` export
 - documentation-only `docs.txt` export
 - dependency detection from `pyproject.toml` and requirements files
+- database schema extraction from SQLite databases and SQL schema files
 - CLI aliases for full and AI exports
 
 Planned but not complete yet:
 
 - `changed.txt`
-- database schema extraction
 - secret detection
 - advanced important-file ranking
 - configuration via `.repocontext.yml`
@@ -172,10 +172,11 @@ The current `full.txt` export contains:
 3. File Summary
 4. Repository Tree
 5. Dependencies
-6. Complete Source Export
-7. Warnings
-8. Import Graph
-9. Call Graph
+6. Database Schema
+7. Complete Source Export
+8. Warnings
+9. Import Graph
+10. Call Graph
 
 The export is Markdown-oriented and designed to be readable both by humans and AI systems.
 
@@ -187,10 +188,11 @@ The current `ai.txt` export contains:
 2. Architecture Summary
 3. Important Files
 4. Dependencies
-5. Symbol Index
-6. Import Graph
-7. Call Graph
-8. Notes
+5. Database Schema
+6. Symbol Index
+7. Import Graph
+8. Call Graph
+9. Notes
 
 The AI export is intentionally compact and does not include a complete source dump.
 
@@ -388,6 +390,7 @@ Binary files are detected and excluded from the complete source dump.
 │       ├── import_graph.py
 │       ├── call_graph.py
 │       ├── scanner.py
+│       ├── schema.py
 │       ├── symbols.py
 │       └── models.py
 ├── tests
@@ -427,6 +430,7 @@ Main modules:
 | `repocontext.cli` | command-line interface |
 | `repocontext.git` | Git repository discovery and metadata |
 | `repocontext.scanner` | file scanning, text/binary detection, metadata |
+| `repocontext.schema` | Database schema discovery, SQLite metadata extraction, SQL CREATE TABLE parsing, and schema report merging |
 | `repocontext.gitignore` | automatic `.gitignore` management |
 | `repocontext.symbols` | Python symbol extraction |
 | `repocontext.import_graph` | Python import analysis and dependency graph |
