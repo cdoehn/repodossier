@@ -6,6 +6,8 @@ from repocontext.config import (
     ConfigError,
     RepoContextConfig,
     discover_repository_root,
+    filter_file_paths,
+    is_path_included,
     load_config,
     load_config_for_path,
     parse_config,
@@ -188,6 +190,126 @@ def test_limit_null_is_allowed():
 
     assert config.limits.max_file_bytes is None
 
+
+
+def test_path_is_included_when_no_filter_rules_are_configured():
+    config = parse_config({})
+
+    assert is_path_included("src/repocontext/config.py", config) is True
+    assert is_path_included(Path("README.md"), config) is True
+
+
+def test_include_path_selects_files_under_directory():
+    config = parse_config({"include": {"paths": ["src"]}})
+
+    assert is_path_included("src/repocontext/config.py", config) is True
+    assert is_path_included("src", config) is True
+    assert is_path_included("tests/test_config.py", config) is False
+
+
+def test_include_path_can_select_single_file():
+    config = parse_config({"include": {"paths": ["README.md"]}})
+
+    assert is_path_included("README.md", config) is True
+    assert is_path_included("docs/README.md", config) is False
+
+
+def test_include_glob_selects_matching_files():
+    config = parse_config({"include": {"globs": ["src/**/*.py"]}})
+
+    assert is_path_included("src/repocontext/config.py", config) is True
+    assert is_path_included("tests/test_config.py", config) is False
+
+
+def test_include_paths_and_globs_are_additive():
+    config = parse_config(
+        {
+            "include": {
+                "paths": ["src"],
+                "globs": ["*.md"],
+            }
+        }
+    )
+
+    assert is_path_included("src/repocontext/config.py", config) is True
+    assert is_path_included("README.md", config) is True
+    assert is_path_included("tests/test_config.py", config) is False
+
+
+def test_exclude_path_removes_files_under_directory():
+    config = parse_config({"exclude": {"paths": ["build"]}})
+
+    assert is_path_included("src/repocontext/config.py", config) is True
+    assert is_path_included("build/generated.py", config) is False
+    assert is_path_included("build", config) is False
+
+
+def test_exclude_glob_removes_matching_files():
+    config = parse_config({"exclude": {"globs": ["*.log", "**/__pycache__/**"]}})
+
+    assert is_path_included("src/repocontext/config.py", config) is True
+    assert is_path_included("debug.log", config) is False
+    assert is_path_included("src/repocontext/__pycache__/config.pyc", config) is False
+
+
+def test_exclude_wins_over_include():
+    config = parse_config(
+        {
+            "include": {
+                "paths": ["src"],
+                "globs": ["*.md"],
+            },
+            "exclude": {
+                "paths": ["src/repocontext/private"],
+                "globs": ["README.md"],
+            },
+        }
+    )
+
+    assert is_path_included("src/repocontext/config.py", config) is True
+    assert is_path_included("src/repocontext/private/secrets.py", config) is False
+    assert is_path_included("README.md", config) is False
+
+
+def test_filter_file_paths_preserves_order_and_original_values():
+    paths = [
+        Path("src/repocontext/config.py"),
+        Path("src/repocontext/private/secrets.py"),
+        Path("README.md"),
+        Path("tests/test_config.py"),
+    ]
+    config = parse_config(
+        {
+            "include": {
+                "paths": ["src"],
+                "globs": ["README.md"],
+            },
+            "exclude": {
+                "paths": ["src/repocontext/private"],
+            },
+        }
+    )
+
+    assert filter_file_paths(paths, config) == [
+        Path("src/repocontext/config.py"),
+        Path("README.md"),
+    ]
+
+
+def test_filter_matching_normalizes_dot_prefixes_and_trailing_slashes():
+    config = parse_config(
+        {
+            "include": {
+                "paths": ["./src/"],
+            },
+            "exclude": {
+                "paths": ["./src/generated/"],
+            },
+        }
+    )
+
+    assert is_path_included("./src/repocontext/config.py", config) is True
+    assert is_path_included("src/generated/file.py", config) is False
 
 def test_discover_repository_root_falls_back_to_git_directory(tmp_path):
     (tmp_path / ".git").mkdir()

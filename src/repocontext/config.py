@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
+import fnmatch
 import subprocess
 
 
@@ -257,3 +258,69 @@ def _parse_optional_positive_int(raw: Any, field_name: str) -> int | None:
         raise ConfigError(f"{field_name} must be greater than 0.")
 
     return raw
+
+def is_path_included(relative_path: Path | str, config: RepoContextConfig) -> bool:
+    """Return whether a repository-relative path is selected by config filters.
+
+    Include rules are additive. If no include rules are configured, a path is
+    included by default. Exclude rules always win over include rules.
+    """
+
+    candidate = _normalize_filter_path(relative_path)
+
+    include_rules_exist = bool(config.include.paths or config.include.globs)
+    if include_rules_exist and not _matches_any_filter(
+        candidate,
+        config.include.paths,
+        config.include.globs,
+    ):
+        return False
+
+    if _matches_any_filter(candidate, config.exclude.paths, config.exclude.globs):
+        return False
+
+    return True
+
+
+def filter_file_paths(
+    relative_paths: list[Path | str] | tuple[Path | str, ...],
+    config: RepoContextConfig,
+) -> list[Path | str]:
+    """Filter repository-relative file paths while preserving input order."""
+
+    return [path for path in relative_paths if is_path_included(path, config)]
+
+
+def _matches_any_filter(
+    candidate: str,
+    path_rules: tuple[str, ...],
+    glob_rules: tuple[str, ...],
+) -> bool:
+    return any(_matches_path_rule(candidate, rule) for rule in path_rules) or any(
+        _matches_glob_rule(candidate, rule) for rule in glob_rules
+    )
+
+
+def _matches_path_rule(candidate: str, rule: str) -> bool:
+    normalized_rule = _normalize_filter_path(rule).rstrip("/")
+    if not normalized_rule:
+        return False
+
+    return candidate == normalized_rule or candidate.startswith(f"{normalized_rule}/")
+
+
+def _matches_glob_rule(candidate: str, rule: str) -> bool:
+    normalized_rule = _normalize_filter_path(rule)
+    if not normalized_rule:
+        return False
+
+    return fnmatch.fnmatchcase(candidate, normalized_rule)
+
+
+def _normalize_filter_path(path: Path | str) -> str:
+    normalized = str(path).replace("\\", "/").strip()
+    while normalized.startswith("./"):
+        normalized = normalized[2:]
+    normalized = normalized.strip("/")
+    return normalized
+
