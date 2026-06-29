@@ -86,6 +86,36 @@ repocontext --version
 repocontext info
 ```
 
+## Secret Detection
+
+RepoContext masks potential secrets before writing exports. This is a best-effort
+safety feature for sharing repository context with AI tools and documentation
+workflows.
+
+The built-in detector looks for common assignment-style secrets, including:
+
+- `API_KEY`
+- `TOKEN`
+- `SECRET`
+- `PASSWORD`
+
+Detected values are replaced with a masked value that keeps a small prefix and
+suffix for context while removing the sensitive middle part.
+
+Example:
+
+    OPENAI_API_KEY="sk-t***REDACTED***cdef"
+
+Secret masking is enabled for generated exports such as `full.txt`, `ai.txt`,
+`docs.txt`, and `changed.txt`. Export summaries may include secret types, counts,
+and affected export sections, but they must not include the original secret
+values.
+
+This feature is intentionally conservative and is not a full security scanner.
+It cannot guarantee that every possible credential format will be found. Always
+review generated files before publishing or sharing them outside a trusted
+environment.
+
 ## Usage
 
 Run RepoContext inside a Git repository or any subdirectory of a Git repository.

@@ -167,3 +167,22 @@ def test_readme_changed_export_code_fences_are_plain_markdown() -> None:
     assert '```text id="' not in readme
     assert '``` id="' not in readme
 
+
+def test_readme_documents_secret_detection():
+    from pathlib import Path
+
+    readme = Path("README.md").read_text(encoding="utf-8")
+
+    assert "Secret Detection" in readme
+    assert "API_KEY" in readme
+    assert "TOKEN" in readme
+    assert "SECRET" in readme
+    assert "PASSWORD" in readme
+    assert "masked" in readme.lower()
+    assert "best-effort" in readme.lower()
+    assert "full.txt" in readme
+    assert "ai.txt" in readme
+    assert "docs.txt" in readme
+    assert "changed.txt" in readme
+    assert "REDACTED" in readme
+
