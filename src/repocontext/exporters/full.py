@@ -14,7 +14,7 @@ from repocontext.gitignore import ensure_repocontext_gitignore_entries
 from repocontext.models import FileInfo
 from repocontext.scanner import RepositoryScanner
 from repocontext.schema import analyze_database_schemas
-from repocontext.config import apply_config_to_file_infos, apply_export_byte_limit, format_limit_notice, get_active_config, is_file_size_allowed, truncate_text_by_line_limit
+from repocontext.config import apply_config_to_file_infos, apply_export_byte_limit, format_limit_notice, full_config_summary_section, get_active_config, is_file_size_allowed, truncate_text_by_line_limit
 
 FULL_EXPORT_SECTION_ORDER: tuple[str, ...] = (
     "ai_quick_start",
@@ -317,6 +317,7 @@ def write_full_export(
 
     try:
         resolved_output_path.parent.mkdir(parents=True, exist_ok=True)
+        rendered_export = full_config_summary_section(get_active_config()) + "\n" + rendered_export
         rendered_export = apply_export_byte_limit(
             rendered_export,
             get_active_config(),

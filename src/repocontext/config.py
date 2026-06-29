@@ -341,6 +341,12 @@ def filter_file_paths(
 
 
 
+
+def full_config_summary_section(config: RepoContextConfig) -> str:
+    """Return the Full Export configuration summary section."""
+
+    return format_config_summary(config, heading="RepoContext Configuration")
+
 def apply_export_byte_limit(rendered: str, config: RepoContextConfig) -> str:
     """Apply max_export_bytes to a rendered export string."""
 
