@@ -321,6 +321,55 @@ def filter_file_paths(
 
 
 
+
+def add_config_arguments(parser: Any) -> None:
+    """Add standard RepoContext configuration CLI arguments to a parser."""
+
+    if not _parser_has_option(parser, "--config"):
+        parser.add_argument(
+            "--config",
+            dest="config_path",
+            metavar="PATH",
+            help=(
+                "Use a specific RepoContext YAML configuration file instead "
+                "of the repository-root .repocontext.yml."
+            ),
+        )
+
+    if not _parser_has_option(parser, "--no-config"):
+        parser.add_argument(
+            "--no-config",
+            action="store_true",
+            help="Ignore .repocontext.yml and run with built-in defaults.",
+        )
+
+
+def load_config_from_args(args: Any, start_path: Path | str = ".") -> RepoContextConfig:
+    """Load configuration from argparse-style parsed arguments."""
+
+    explicit_config_path = getattr(args, "config_path", None)
+    if explicit_config_path is None:
+        explicit_config_path = getattr(args, "config", None)
+
+    no_config = bool(getattr(args, "no_config", False))
+
+    if no_config and explicit_config_path:
+        raise ConfigError("--config and --no-config cannot be used together.")
+
+    repository_root = discover_repository_root(start_path)
+    return load_config(
+        repository_root,
+        explicit_config_path=explicit_config_path,
+        no_config=no_config,
+    )
+
+
+def _parser_has_option(parser: Any, option: str) -> bool:
+    for action in getattr(parser, "_actions", []):
+        if option in getattr(action, "option_strings", ()):
+            return True
+    return False
+
 def config_summary_lines(config: RepoContextConfig) -> list[str]:
     """Return stable human-readable summary lines for export metadata."""
 

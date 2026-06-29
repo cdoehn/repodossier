@@ -1,10 +1,12 @@
 from pathlib import Path
+import argparse
 
 import pytest
 
 from repocontext.config import (
     ConfigError,
     RepoContextConfig,
+    add_config_arguments,
     apply_config_to_file_infos,
     apply_max_total_files_limit,
     config_summary_lines,
@@ -17,6 +19,7 @@ from repocontext.config import (
     is_path_included,
     load_config,
     load_config_for_path,
+    load_config_from_args,
     parse_config,
     truncate_text_by_line_limit,
     would_exceed_export_byte_limit,
@@ -204,6 +207,103 @@ def test_limit_null_is_allowed():
 
 
 
+
+
+def test_add_config_arguments_registers_standard_options():
+    parser = argparse.ArgumentParser(prog="repocontext-test")
+    add_config_arguments(parser)
+
+    args = parser.parse_args(["--config", "custom.yml", "--no-config"])
+
+    assert args.config_path == "custom.yml"
+    assert args.no_config is True
+
+
+def test_add_config_arguments_is_idempotent():
+    parser = argparse.ArgumentParser(prog="repocontext-test")
+
+    add_config_arguments(parser)
+    add_config_arguments(parser)
+
+    option_strings = [
+        option
+        for action in parser._actions
+        for option in action.option_strings
+    ]
+    assert option_strings.count("--config") == 1
+    assert option_strings.count("--no-config") == 1
+
+
+def test_config_argument_help_mentions_repocontext_yml():
+    parser = argparse.ArgumentParser(prog="repocontext-test")
+    add_config_arguments(parser)
+
+    help_text = parser.format_help()
+
+    assert ".repocontext.yml" in help_text
+    assert "--config" in help_text
+    assert "--no-config" in help_text
+
+
+def test_load_config_from_args_uses_explicit_config_path(tmp_path):
+    custom_config = tmp_path / "custom.yml"
+    custom_config.write_text(
+        """
+include:
+  paths:
+    - src
+""",
+        encoding="utf-8",
+    )
+    args = argparse.Namespace(config_path="custom.yml", no_config=False)
+
+    config = load_config_from_args(args, start_path=tmp_path)
+
+    assert config.enabled is True
+    assert config.path == custom_config.resolve()
+    assert config.include.paths == ("src",)
+
+
+def test_load_config_from_args_supports_legacy_config_attribute(tmp_path):
+    custom_config = tmp_path / "custom.yml"
+    custom_config.write_text(
+        """
+exclude:
+  globs:
+    - "*.log"
+""",
+        encoding="utf-8",
+    )
+    args = argparse.Namespace(config="custom.yml", no_config=False)
+
+    config = load_config_from_args(args, start_path=tmp_path)
+
+    assert config.enabled is True
+    assert config.path == custom_config.resolve()
+    assert config.exclude.globs == ("*.log",)
+
+
+def test_load_config_from_args_supports_no_config(tmp_path):
+    (tmp_path / ".repocontext.yml").write_text(
+        """
+include:
+  paths:
+    - src
+""",
+        encoding="utf-8",
+    )
+    args = argparse.Namespace(config_path=None, no_config=True)
+
+    config = load_config_from_args(args, start_path=tmp_path)
+
+    assert config == RepoContextConfig()
+
+
+def test_load_config_from_args_rejects_config_and_no_config_together(tmp_path):
+    args = argparse.Namespace(config_path="custom.yml", no_config=True)
+
+    with pytest.raises(ConfigError, match="--config and --no-config cannot be used together"):
+        load_config_from_args(args, start_path=tmp_path)
 
 def test_config_summary_lines_describe_inactive_defaults():
     config = parse_config({})
