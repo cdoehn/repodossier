@@ -291,6 +291,61 @@ def filter_file_paths(
     return [path for path in relative_paths if is_path_included(path, config)]
 
 
+
+def filter_file_infos(
+    file_infos: list[Any] | tuple[Any, ...],
+    config: RepoContextConfig,
+    repository_root: Path | str | None = None,
+) -> list[Any]:
+    """Filter scanner-style file entries using repository-relative config rules.
+
+    This helper accepts dataclass/object entries or dictionaries. It prefers a
+    repository-relative path field and can convert absolute paths when a
+    repository root is supplied.
+    """
+
+    return [
+        file_info
+        for file_info in file_infos
+        if is_path_included(
+            _file_info_filter_path(file_info, repository_root),
+            config,
+        )
+    ]
+
+
+def _file_info_filter_path(
+    file_info: Any,
+    repository_root: Path | str | None = None,
+) -> str:
+    raw_path = _extract_file_info_path(file_info)
+
+    path = Path(raw_path)
+    if path.is_absolute() and repository_root is not None:
+        try:
+            return path.resolve().relative_to(Path(repository_root).resolve()).as_posix()
+        except ValueError:
+            return path.as_posix()
+
+    return str(raw_path)
+
+
+def _extract_file_info_path(file_info: Any) -> Path | str:
+    if isinstance(file_info, dict):
+        for key in ("relative_path", "path", "file_path", "filepath"):
+            value = file_info.get(key)
+            if value is not None:
+                return value
+
+    for attribute in ("relative_path", "path", "file_path", "filepath"):
+        value = getattr(file_info, attribute, None)
+        if value is not None:
+            return value
+
+    raise ConfigError(
+        "Cannot apply configuration filters: file entry has no path field."
+    )
+
 def _matches_any_filter(
     candidate: str,
     path_rules: tuple[str, ...],

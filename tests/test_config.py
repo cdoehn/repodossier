@@ -6,11 +6,13 @@ from repocontext.config import (
     ConfigError,
     RepoContextConfig,
     discover_repository_root,
+    filter_file_infos,
     filter_file_paths,
     is_path_included,
     load_config,
     load_config_for_path,
     parse_config,
+
 )
 
 
@@ -191,6 +193,73 @@ def test_limit_null_is_allowed():
     assert config.limits.max_file_bytes is None
 
 
+
+
+class DummyFileInfo:
+    def __init__(self, relative_path):
+        self.relative_path = relative_path
+
+
+class DummyAbsoluteFileInfo:
+    def __init__(self, path):
+        self.path = path
+
+
+def test_filter_file_infos_filters_objects_by_relative_path():
+    config = parse_config(
+        {
+            "include": {"paths": ["src"]},
+            "exclude": {"globs": ["**/private/**"]},
+        }
+    )
+    files = [
+        DummyFileInfo("src/repocontext/config.py"),
+        DummyFileInfo("src/repocontext/private/secrets.py"),
+        DummyFileInfo("tests/test_config.py"),
+    ]
+
+    assert filter_file_infos(files, config) == [files[0]]
+
+
+def test_filter_file_infos_filters_dictionaries_by_relative_path():
+    config = parse_config(
+        {
+            "include": {"globs": ["*.md", "docs/**/*.md"]},
+            "exclude": {"paths": ["docs/private"]},
+        }
+    )
+    files = [
+        {"relative_path": "README.md"},
+        {"path": "docs/usage.md"},
+        {"file_path": "docs/private/internal.md"},
+        {"filepath": "src/repocontext/config.py"},
+    ]
+
+    assert filter_file_infos(files, config) == [files[0], files[1]]
+
+
+def test_filter_file_infos_can_convert_absolute_paths_with_repository_root(tmp_path):
+    src_file = tmp_path / "src" / "repocontext" / "config.py"
+    test_file = tmp_path / "tests" / "test_config.py"
+    src_file.parent.mkdir(parents=True)
+    test_file.parent.mkdir(parents=True)
+    src_file.write_text("", encoding="utf-8")
+    test_file.write_text("", encoding="utf-8")
+
+    config = parse_config({"include": {"paths": ["src"]}})
+    files = [
+        DummyAbsoluteFileInfo(src_file),
+        DummyAbsoluteFileInfo(test_file),
+    ]
+
+    assert filter_file_infos(files, config, repository_root=tmp_path) == [files[0]]
+
+
+def test_filter_file_infos_raises_clear_error_for_unknown_file_shape():
+    config = parse_config({})
+
+    with pytest.raises(ConfigError, match="file entry has no path field"):
+        filter_file_infos([object()], config)
 
 def test_path_is_included_when_no_filter_rules_are_configured():
     config = parse_config({})
