@@ -1,21 +1,52 @@
-"""Secret detection models and masking helpers.
+"""Secret detection models, scanning helpers, and masking utilities.
 
-This module contains the core data structures and low-level masking helpers
-used by later export integrations. It intentionally keeps scanning behavior
-small and testable so exporters can share the same implementation.
+This module contains the shared secret-detection core used by the export
+pipeline. It intentionally focuses on conservative assignment-based detection
+for common variable names and avoids exposing secret values in summaries.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 import re
-from re import Pattern
+from re import Match, Pattern
 from typing import TypeAlias
 
 
 SecretGroup: TypeAlias = str | int | None
 
 _REDACTION_MARKER = "***REDACTED***"
+
+_PLACEHOLDER_VALUES = {
+    "",
+    "changeme",
+    "change-me",
+    "example",
+    "example-token",
+    "your-api-key",
+    "your_api_key",
+    "insert-key-here",
+    "todo",
+    "none",
+    "null",
+    "dummy",
+    "test",
+    "password",
+    "secret",
+}
+
+_NON_SECRET_LITERALS = {
+    "true",
+    "false",
+    "yes",
+    "no",
+    "on",
+    "off",
+    "none",
+    "null",
+}
+
+_NUMERIC_RE = re.compile(r"^[+-]?(?:\d+|\d+\.\d+)$")
 
 
 @dataclass(frozen=True)
@@ -63,22 +94,22 @@ def _assignment_pattern(variable_pattern: str) -> Pattern[str]:
 
     return re.compile(
         rf"""
-        (?ix)
+        ^
         (?P<prefix>
-            ^\s*
+            \s*
             (?:export\s+)?
             (?:
-                os\.environ\[
-                    ['\"](?P<env_name>{variable_pattern})['\"]
-                \]
+                os\.environ\[\s*['"](?P<env_name>{variable_pattern})['"]\s*\]
                 |
                 (?P<name>{variable_pattern})
             )
             \s*(?:=|:)\s*
-            (?P<quote>['\"]?)
         )
-        (?P<value>[^'"\#\n]+?)
-        (?P=quote)
+        (?:
+            (?P<quote>['"])(?P<quoted_value>.*?)(?P=quote)
+            |
+            (?P<unquoted_value>[^\#\n]+?)
+        )
         (?P<suffix>\s*(?:\#.*)?$)
         """,
         re.VERBOSE | re.IGNORECASE,
@@ -98,27 +129,21 @@ def default_secret_patterns() -> list[SecretPattern]:
         ),
         SecretPattern(
             name="token_assignment",
-            regex=_assignment_pattern(
-                r"[A-Z0-9_]*(?:TOKEN|ACCESS_TOKEN|REFRESH_TOKEN|AUTH_TOKEN|BEARER_TOKEN)"
-            ),
+            regex=_assignment_pattern(r"[A-Z0-9_]*TOKEN"),
             secret_type="TOKEN",
             confidence="high",
             value_group="value",
         ),
         SecretPattern(
             name="secret_assignment",
-            regex=_assignment_pattern(
-                r"[A-Z0-9_]*(?:SECRET|CLIENT_SECRET|JWT_SECRET|SIGNING_SECRET|WEBHOOK_SECRET|APP_SECRET)"
-            ),
+            regex=_assignment_pattern(r"[A-Z0-9_]*SECRET"),
             secret_type="SECRET",
             confidence="high",
             value_group="value",
         ),
         SecretPattern(
             name="password_assignment",
-            regex=_assignment_pattern(
-                r"[A-Z0-9_]*(?:PASSWORD|PASSWD|PWD|DB_PASSWORD|DATABASE_PASSWORD)"
-            ),
+            regex=_assignment_pattern(r"[A-Z0-9_]*(?:PASSWORD|PASSWD|PWD)"),
             secret_type="PASSWORD",
             confidence="high",
             value_group="value",
@@ -148,3 +173,94 @@ def mask_secret_in_line(line: str, secret_value: str) -> str:
 
     masked_value = mask_secret_value(secret_value)
     return line.replace(secret_value, masked_value, 1)
+
+
+def is_placeholder_secret(value: str) -> bool:
+    """Return whether value is an obvious placeholder or example secret."""
+
+    normalized = value.strip().strip("'\"").lower()
+    return normalized in _PLACEHOLDER_VALUES
+
+
+def is_probably_secret_value(value: str) -> bool:
+    """Return whether value looks sensitive enough to report as a secret."""
+
+    normalized = value.strip().strip("'\"")
+    lowered = normalized.lower()
+
+    if is_placeholder_secret(normalized):
+        return False
+
+    if lowered in _NON_SECRET_LITERALS:
+        return False
+
+    if _NUMERIC_RE.fullmatch(normalized):
+        return False
+
+    if len(normalized) < 6:
+        return False
+
+    return True
+
+
+def _is_full_line_comment(line: str) -> bool:
+    """Return whether line is a full-line hash comment."""
+
+    return line.lstrip().startswith("#")
+
+
+def _extract_value(match: Match[str]) -> str:
+    """Extract the secret value from a regex match."""
+
+    quoted_value = match.groupdict().get("quoted_value")
+    if quoted_value is not None:
+        return quoted_value
+
+    unquoted_value = match.groupdict().get("unquoted_value") or ""
+    return unquoted_value.strip()
+
+
+def _extract_variable_name(match: Match[str]) -> str | None:
+    """Extract the matched variable name from a regex match."""
+
+    groups = match.groupdict()
+    return groups.get("env_name") or groups.get("name")
+
+
+def detect_secrets_in_text(
+    text: str,
+    file_path: str,
+    patterns: list[SecretPattern] | None = None,
+) -> list[SecretFinding]:
+    """Detect assignment-based potential secrets in text."""
+
+    active_patterns = patterns or default_secret_patterns()
+    findings: list[SecretFinding] = []
+
+    for line_number, line in enumerate(text.splitlines(), start=1):
+        if _is_full_line_comment(line):
+            continue
+
+        for pattern in active_patterns:
+            match = pattern.regex.search(line)
+            if not match:
+                continue
+
+            value = _extract_value(match)
+            if not is_probably_secret_value(value):
+                continue
+
+            findings.append(
+                SecretFinding(
+                    file_path=file_path,
+                    line_number=line_number,
+                    secret_type=pattern.secret_type,
+                    matched_text=value,
+                    masked_text=mask_secret_in_line(line, value),
+                    variable_name=_extract_variable_name(match),
+                    confidence=pattern.confidence,
+                )
+            )
+            break
+
+    return findings
