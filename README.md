@@ -543,6 +543,58 @@ Main modules:
 | `repocontext.exporters.docs` | documentation-only `docs.txt` context creation, rendering, and writing |
 | `repocontext.models` | shared data models |
 
+## Configuration with `.repocontext.yml`
+
+RepoContext can read an optional `.repocontext.yml` file from the repository root. This file lets you keep common export settings in the project instead of repeating the same command-line options.
+
+If no `.repocontext.yml` exists, RepoContext keeps its default behavior.
+
+Example:
+
+```yaml
+include:
+  paths:
+    - src
+    - tests
+  globs:
+    - "*.md"
+
+exclude:
+  paths:
+    - .venv
+    - build
+    - dist
+  globs:
+    - "*.log"
+    - "*.sqlite"
+    - "**/__pycache__/**"
+
+limits:
+  max_file_bytes: 200000
+  max_total_files: 500
+  max_export_bytes: 2000000
+  max_line_count: 2000
+```
+
+Supported sections:
+
+- `include.paths`: repository-relative files or directories to include.
+- `include.globs`: repository-relative glob patterns to include.
+- `exclude.paths`: repository-relative files or directories to exclude.
+- `exclude.globs`: repository-relative glob patterns to exclude.
+- `limits.max_file_bytes`: skip full file content when a single file is larger than this many bytes.
+- `limits.max_total_files`: limit the number of files considered for export after filtering.
+- `limits.max_export_bytes`: limit the generated export size.
+- `limits.max_line_count`: limit the number of exported lines per file.
+
+Include rules are additive. If at least one include rule is configured, a file is selected when it matches any include path or include glob. If no include rule is configured, files are included by default.
+
+Exclude rules always win over include rules. This means you can include a broad directory like `src` and still exclude a sensitive or generated subdirectory.
+
+All paths and globs are interpreted relative to the repository root. This also applies when RepoContext is started from a subdirectory.
+
+A separate `.repocontext.example.yml` file is provided as a starting point. Copy it to `.repocontext.yml` and adjust it for your repository.
+
 ## Development
 
 ### Create a virtual environment

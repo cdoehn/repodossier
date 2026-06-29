@@ -1,0 +1,25 @@
+# Example RepoContext configuration.
+# Copy this file to .repocontext.yml and adjust it for your repository.
+
+include:
+  paths:
+    - src
+    - tests
+  globs:
+    - "*.md"
+
+exclude:
+  paths:
+    - .venv
+    - build
+    - dist
+  globs:
+    - "*.log"
+    - "*.sqlite"
+    - "**/__pycache__/**"
+
+limits:
+  max_file_bytes: 200000
+  max_total_files: 500
+  max_export_bytes: 2000000
+  max_line_count: 2000
