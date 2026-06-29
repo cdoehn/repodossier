@@ -15,6 +15,7 @@ from repocontext.gitignore import ensure_repocontext_gitignore_entries
 from repocontext.schema import analyze_database_schemas
 
 from .full import FullExportContext, build_full_export_context
+from repocontext.config import apply_config_to_file_infos, get_active_config
 
 
 AI_EXPORT_FILENAME = "ai.txt"
@@ -1802,8 +1803,12 @@ def _repocontext_dependency_ai_files_from_call(args, kwargs):
     for value in args:
         files = _repocontext_dependency_ai_files_from_value(value)
         if files is not None:
-            return files
-
+            selection = apply_config_to_file_infos(
+                files,
+                get_active_config(),
+                repository_root=locals().get("repository_root") or locals().get("repo_root") or locals().get("root"),
+            )
+            return list(selection.files)
     return None
 
 

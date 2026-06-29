@@ -13,6 +13,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
 import tomllib
+from repocontext.config import apply_config_to_file_infos, get_active_config
 
 
 GENERATED_EXPORT_FILENAMES: frozenset[str] = frozenset(

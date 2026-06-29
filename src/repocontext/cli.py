@@ -14,7 +14,7 @@ from .git import RepositoryInfo, find_repository_root, get_repository_info
 from .gitignore import GitignoreUpdateError
 from .import_graph import build_import_graph, calculate_import_graph_metrics
 from repocontext.changed_command import add_changed_subparser, run_changed_command
-from repocontext.config import ConfigError, load_config_from_args, with_config_arguments
+from repocontext.config import ConfigError, load_config_from_args, set_active_config, with_config_arguments
 
 
 _FALLBACK_VERSION = "0.1.0.dev0"
@@ -329,6 +329,7 @@ def _load_config_for_cli_args(arguments):
         raise SystemExit(f"Configuration error: {exc}") from exc
 
     setattr(arguments, "repocontext_config", config)
+    set_active_config(config)
     return config
 
 def main(*args: object, **kwargs: object) -> object:

@@ -14,6 +14,7 @@ from repocontext.gitignore import ensure_repocontext_gitignore_entries
 from repocontext.models import FileInfo
 from repocontext.scanner import RepositoryScanner
 from repocontext.schema import analyze_database_schemas
+from repocontext.config import apply_config_to_file_infos, get_active_config
 
 FULL_EXPORT_SECTION_ORDER: tuple[str, ...] = (
     "ai_quick_start",
@@ -148,9 +149,16 @@ def create_full_export_context(
     warnings: Sequence[str] = (),
 ) -> FullExportContext:
     """Create a Full Export context from repository and scanner results."""
+
+    selection = apply_config_to_file_infos(
+        scanned_files,
+        get_active_config(),
+    )
+    filtered_scanned_files = list(selection.files)
+
     return FullExportContext(
         repository_info=repository_info,
-        scanned_files=scanned_files,
+        scanned_files=filtered_scanned_files,
         warnings=warnings,
     )
 

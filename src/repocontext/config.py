@@ -72,6 +72,24 @@ class RepoContextConfig:
     enabled: bool = False
 
 
+
+_ACTIVE_CONFIG: RepoContextConfig | None = None
+
+
+def set_active_config(config: RepoContextConfig) -> None:
+    """Store the active CLI-loaded configuration for downstream scan/export code."""
+
+    global _ACTIVE_CONFIG
+    _ACTIVE_CONFIG = config
+
+
+def get_active_config() -> RepoContextConfig:
+    """Return the active configuration or built-in defaults."""
+
+    if _ACTIVE_CONFIG is None:
+        return RepoContextConfig()
+    return _ACTIVE_CONFIG
+
 def discover_repository_root(start_path: Path | str = ".") -> Path:
     """Discover the repository root from a file or directory path."""
 
