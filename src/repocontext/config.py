@@ -340,6 +340,28 @@ def filter_file_paths(
 
 
 
+
+def apply_export_byte_limit(rendered: str, config: RepoContextConfig) -> str:
+    """Apply max_export_bytes to a rendered export string."""
+
+    limit = config.limits.max_export_bytes
+    if limit is None:
+        return rendered
+
+    rendered_bytes = rendered.encode("utf-8")
+    if len(rendered_bytes) <= limit:
+        return rendered
+
+    notice = "\n\n" + format_limit_notice("limits.max_export_bytes was reached") + "\n"
+    notice_bytes = notice.encode("utf-8")
+
+    if len(notice_bytes) >= limit:
+        return notice_bytes[:limit].decode("utf-8", errors="ignore")
+
+    available_bytes = limit - len(notice_bytes)
+    truncated = rendered_bytes[:available_bytes].decode("utf-8", errors="ignore").rstrip()
+    return truncated + notice
+
 def add_config_arguments(parser: Any) -> None:
     """Add standard RepoContext configuration CLI arguments to a parser."""
 

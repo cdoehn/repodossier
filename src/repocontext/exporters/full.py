@@ -14,7 +14,7 @@ from repocontext.gitignore import ensure_repocontext_gitignore_entries
 from repocontext.models import FileInfo
 from repocontext.scanner import RepositoryScanner
 from repocontext.schema import analyze_database_schemas
-from repocontext.config import apply_config_to_file_infos, format_limit_notice, get_active_config, is_file_size_allowed, truncate_text_by_line_limit
+from repocontext.config import apply_config_to_file_infos, apply_export_byte_limit, format_limit_notice, get_active_config, is_file_size_allowed, truncate_text_by_line_limit
 
 FULL_EXPORT_SECTION_ORDER: tuple[str, ...] = (
     "ai_quick_start",
@@ -317,6 +317,10 @@ def write_full_export(
 
     try:
         resolved_output_path.parent.mkdir(parents=True, exist_ok=True)
+        rendered_export = apply_export_byte_limit(
+            rendered_export,
+            get_active_config(),
+        )
         temporary_output_path.write_text(rendered_export, encoding="utf-8")
         temporary_output_path.replace(resolved_output_path)
     except OSError:
@@ -981,6 +985,28 @@ def _append_create_statements(lines: list[str], create_statements) -> None:
     if remaining_count > 0:
         lines.append(f"- ... {remaining_count} more")
 
+
+def _apply_max_export_bytes_limit(rendered: str) -> str:
+    """Apply the global max_export_bytes limit to a rendered full export."""
+
+    limit = get_active_config().limits.max_export_bytes
+    if limit is None:
+        return rendered
+
+    rendered_bytes = rendered.encode("utf-8")
+    if len(rendered_bytes) <= limit:
+        return rendered
+
+    notice = "\n\n" + format_limit_notice("limits.max_export_bytes was reached") + "\n"
+    notice_bytes = notice.encode("utf-8")
+
+    if len(notice_bytes) >= limit:
+        return notice_bytes[:limit].decode("utf-8", errors="ignore")
+
+    available_bytes = limit - len(notice_bytes)
+    truncated = rendered_bytes[:available_bytes].decode("utf-8", errors="ignore").rstrip()
+    return truncated + notice
+
 def _render_complete_source_export(context: FullExportContext) -> str:
     """Render the complete source dump for all exported text files."""
     parts = [
@@ -1031,7 +1057,7 @@ def _render_complete_source_export(context: FullExportContext) -> str:
         file_block += fence
         parts.append(file_block)
 
-    return "\n\n".join(parts)
+    return _apply_max_export_bytes_limit("\n\n".join(parts))
 
 
 def _choose_code_fence(content: str) -> str:
@@ -1638,8 +1664,7 @@ def render_full_export(*args, **kwargs):
     output = _ORIGINAL_RENDER_FULL_EXPORT_WITHOUT_IMPORT_GRAPH(*args, **kwargs)
 
     if not isinstance(output, str):
-        return output
-
+        return _apply_max_export_bytes_limit(output)
     repo_root = kwargs.get("repo_root")
     files = kwargs.get("files")
 
