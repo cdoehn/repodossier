@@ -344,6 +344,13 @@ def add_config_arguments(parser: Any) -> None:
         )
 
 
+
+def with_config_arguments(parser: Any) -> Any:
+    """Add standard RepoContext configuration CLI arguments and return parser."""
+
+    add_config_arguments(parser)
+    return parser
+
 def load_config_from_args(args: Any, start_path: Path | str = ".") -> RepoContextConfig:
     """Load configuration from argparse-style parsed arguments."""
 

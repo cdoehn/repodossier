@@ -14,6 +14,7 @@ from .git import RepositoryInfo, find_repository_root, get_repository_info
 from .gitignore import GitignoreUpdateError
 from .import_graph import build_import_graph, calculate_import_graph_metrics
 from repocontext.changed_command import add_changed_subparser, run_changed_command
+from repocontext.config import with_config_arguments
 
 
 _FALLBACK_VERSION = "0.1.0.dev0"
@@ -188,16 +189,16 @@ def _build_parser() -> argparse.ArgumentParser:
     info_parser = subparsers.add_parser("info", help="Show repository info")
     info_parser.set_defaults(handler=_handle_info_command)
 
-    full_parser = subparsers.add_parser("full", help="Generate full.txt and ai.txt exports")
+    full_parser = with_config_arguments(subparsers.add_parser("full", help="Generate full.txt and ai.txt exports"))
     full_parser.set_defaults(handler=_handle_full_export_command)
 
     export_parser = subparsers.add_parser("export", help="Generate full.txt and ai.txt exports")
     export_parser.set_defaults(handler=_handle_full_export_command)
 
-    ai_export_parser = subparsers.add_parser("export-ai", help="Generate ai.txt export")
+    ai_export_parser = with_config_arguments(subparsers.add_parser("export-ai", help="Generate ai.txt export"))
     ai_export_parser.set_defaults(handler=_handle_ai_export_command)
 
-    docs_export_parser = subparsers.add_parser("export-docs", help="Generate docs.txt export")
+    docs_export_parser = with_config_arguments(subparsers.add_parser("export-docs", help="Generate docs.txt export"))
     docs_export_parser.set_defaults(handler=_handle_docs_export_command)
 
     parser.set_defaults(handler=_handle_full_export_command)

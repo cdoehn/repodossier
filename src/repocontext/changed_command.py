@@ -7,12 +7,13 @@ from typing import Any
 from repocontext.changed_exporter import write_changed_export
 from repocontext.git import find_repository_root
 from repocontext.gitignore import ensure_repocontext_gitignore_entries
+from repocontext.config import with_config_arguments
 
 
 def add_changed_subparser(subparsers: Any) -> Any:
     """Register the changed export subcommand on an argparse subparsers object."""
 
-    parser = subparsers.add_parser(
+    parser = with_config_arguments(subparsers.add_parser(
         "changed",
         help="Generate changed.txt for git changes.",
         description=(
@@ -27,7 +28,7 @@ def add_changed_subparser(subparsers: Any) -> Any:
             "  repocontext changed --no-diff"
         ),
         formatter_class=RawDescriptionHelpFormatter,
-    )
+    ))
     parser.add_argument(
         "--output",
         default="changed.txt",
