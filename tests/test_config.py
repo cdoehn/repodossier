@@ -158,12 +158,12 @@ def test_exclude_globs_must_be_list():
 
 
 def test_filter_items_must_be_strings():
-    with pytest.raises(ConfigError, match="include.paths\[1\] must be a string"):
+    with pytest.raises(ConfigError, match=r"include\.paths\[1\] must be a string"):
         parse_config({"include": {"paths": ["src", 123]}})
 
 
 def test_empty_filter_items_are_rejected():
-    with pytest.raises(ConfigError, match="exclude.paths\[0\] must not be empty"):
+    with pytest.raises(ConfigError, match=r"exclude\.paths\[0\] must not be empty"):
         parse_config({"exclude": {"paths": ["  "]}})
 
 
