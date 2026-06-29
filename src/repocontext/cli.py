@@ -204,7 +204,7 @@ def _build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def main(argv: Optional[Iterable[str]] = None) -> int:
+def _main_without_export_secret_safety_net(argv: Optional[Iterable[str]] = None) -> int:
     """CLI entrypoint."""
     parser = _build_parser()
     arguments = parser.parse_args(list(argv) if argv is not None else None)
@@ -213,6 +213,119 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
 
 
 
+
+
+
+def _repocontext_cli_repository_root() -> object:
+    """Return the nearest Git repository root or the current directory."""
+
+    from pathlib import Path
+
+    current = Path.cwd()
+    for candidate in (current, *current.parents):
+        if (candidate / ".git").exists():
+            return candidate
+
+    return current
+
+
+def _mask_known_exports_after_cli_command(argv: object = None) -> None:
+    """Mask generated export files after CLI commands complete."""
+
+    import sys
+    from pathlib import Path
+
+    from repocontext.secrets import mask_export_file
+
+    raw_args = list(sys.argv[1:] if argv is None else argv)
+    repo_root = Path(_repocontext_cli_repository_root())
+
+    export_targets = {
+        "full": (
+            "full.txt",
+            "Potential secrets were masked before full export was written.",
+        ),
+        "export-ai": (
+            "ai.txt",
+            "Potential secrets were masked before AI export was written.",
+        ),
+        "export-docs": (
+            "docs.txt",
+            "Potential secrets were masked before documentation export was written.",
+        ),
+        "changed": (
+            "changed.txt",
+            "Potential secrets masked in changed export.",
+        ),
+    }
+
+    for command, target in export_targets.items():
+        if command not in raw_args:
+            continue
+
+        filename, summary = target
+        mask_export_file(repo_root / filename, filename, summary)
+
+
+
+
+
+def _repocontext_export_safety_root() -> object:
+    """Return the nearest Git repository root or current directory."""
+
+    from pathlib import Path
+
+    current = Path.cwd()
+    for candidate in (current, *current.parents):
+        if (candidate / ".git").exists():
+            return candidate
+
+    return current
+
+
+def _repocontext_mask_known_export_files() -> None:
+    """Apply final secret masking to known generated export files."""
+
+    from pathlib import Path
+
+    from repocontext.secrets import mask_export_file
+
+    root = Path(_repocontext_export_safety_root())
+
+    targets = [
+        (
+            "full.txt",
+            "Potential secrets were masked before full export was written.",
+        ),
+        (
+            "ai.txt",
+            "Potential secrets were masked before AI export was written.",
+        ),
+        (
+            "docs.txt",
+            "Potential secrets were masked before documentation export was written.",
+        ),
+        (
+            "changed.txt",
+            "Potential secrets masked in changed export.",
+        ),
+    ]
+
+    for filename, summary in targets:
+        mask_export_file(root / filename, filename, summary)
+def main(*args: object, **kwargs: object) -> object:
+    """Run the CLI and apply final export secret masking."""
+
+    result = _main_without_export_secret_safety_net(*args, **kwargs)
+
+    argv = None
+    if args and isinstance(args[0], list):
+        argv = args[0]
+    elif "argv" in kwargs:
+        argv = kwargs["argv"]
+
+    _mask_known_exports_after_cli_command(argv)
+    return result
 _REPOCONTEXT_DEPENDENCY_FULL_EXPORT_HOOK = True
 
 

@@ -90,11 +90,17 @@ class SecretPattern:
 
 
 def _assignment_pattern(variable_pattern: str) -> Pattern[str]:
-    """Build a conservative assignment pattern for secret-like variables."""
+    """Build a conservative assignment pattern for secret-like variables.
+
+    Exports may add line numbers, markdown text, or diff markers before the
+    original source line. Therefore the pattern allows non-secret context before
+    the assignment while still requiring a clear variable assignment.
+    """
 
     return re.compile(
         rf"""
         ^
+        (?P<context_prefix>.*?)
         (?P<diff_prefix>[+-])?
         (?P<prefix>
             \s*
@@ -115,7 +121,6 @@ def _assignment_pattern(variable_pattern: str) -> Pattern[str]:
         """,
         re.VERBOSE | re.IGNORECASE,
     )
-
 
 def default_secret_patterns() -> list[SecretPattern]:
     """Return the built-in secret pattern registry."""
@@ -188,6 +193,9 @@ def is_probably_secret_value(value: str) -> bool:
 
     normalized = value.strip().strip("'\"")
     lowered = normalized.lower()
+
+    if _REDACTION_MARKER in normalized:
+        return False
 
     if is_placeholder_secret(normalized):
         return False
@@ -335,4 +343,75 @@ def scan_and_mask_text(text: str, file_path: str) -> SecretScanResult:
 
     masked_text, findings = mask_secrets_in_text(text, file_path)
     return SecretScanResult(masked_text=masked_text, findings=findings)
+
+
+def _format_export_secret_detection_section(
+    findings: list[SecretFinding],
+    summary_line: str,
+) -> str:
+    """Format a generic export secret detection section without leaking values."""
+
+    if not findings:
+        return ""
+
+    counts_by_type: dict[str, int] = {}
+    for finding in findings:
+        counts_by_type[finding.secret_type] = counts_by_type.get(finding.secret_type, 0) + 1
+
+    lines = [
+        "# Secret Detection",
+        "",
+        summary_line,
+        f"Potential secrets masked: {len(findings)}",
+        "",
+        "Findings by type:",
+    ]
+
+    for secret_type in sorted(counts_by_type):
+        lines.append(f"- {secret_type}: {counts_by_type[secret_type]}")
+
+    return "\n".join(lines)
+
+
+def mask_export_file(
+    output_path: object,
+    export_label: str | None = None,
+    summary_line: str = "Potential secrets were masked before export.",
+) -> int:
+    """Mask potential secrets in an already generated export file.
+
+    This is a final safety net for CLI paths that write files directly instead
+    of returning rendered export text through a shared renderer.
+    """
+
+    from pathlib import Path
+
+    path = Path(output_path)
+    if not path.exists() or not path.is_file():
+        return 0
+
+    original = path.read_text(encoding="utf-8")
+    masked_text, findings = mask_secrets_in_text(original, export_label or path.name)
+
+    has_existing_redaction = _REDACTION_MARKER in masked_text
+
+    if "# Secret Detection" not in masked_text and (findings or has_existing_redaction):
+        section = _format_export_secret_detection_section(findings, summary_line)
+
+        if not section and has_existing_redaction:
+            section = "\n".join(
+                [
+                    "# Secret Detection",
+                    "",
+                    summary_line,
+                    "Potential secrets masked: already masked before final export check",
+                ]
+            )
+
+        masked_text = f"{masked_text.rstrip()}\n\n{section}\n"
+
+    if masked_text != original:
+        path.write_text(masked_text, encoding="utf-8")
+
+    return len(findings)
 

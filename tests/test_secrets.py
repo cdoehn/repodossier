@@ -432,3 +432,56 @@ def test_mask_secrets_in_text_masks_diff_lines():
     assert "diff --git" in masked_text
     assert " unchanged line" in masked_text
 
+
+def test_detects_export_prefixed_token_assignment():
+    text = 'README.md:12: GITHUB_TOKEN = "ghp_1234567890abcdefDOCSSECRET"\n'
+
+    findings = detect_secrets_in_text(text, "ai.txt")
+
+    assert len(findings) == 1
+    assert findings[0].secret_type == "TOKEN"
+    assert findings[0].variable_name == "GITHUB_TOKEN"
+    assert "ghp_1234567890abcdefDOCSSECRET" not in findings[0].masked_text
+    assert "***REDACTED***" in findings[0].masked_text
+    assert findings[0].masked_text.startswith("README.md:12:")
+
+
+def test_mask_secrets_in_text_masks_export_prefixed_assignment():
+    text = (
+        "# AI Quick Start\n\n"
+        "README.md: GITHUB_TOKEN = \"ghp_1234567890abcdefDOCSSECRET\"\n"
+        "safe line\n"
+    )
+
+    masked_text, findings = mask_secrets_in_text(text, "ai.txt")
+
+    assert len(findings) == 1
+    assert "ghp_1234567890abcdefDOCSSECRET" not in masked_text
+    assert "***REDACTED***" in masked_text
+    assert "# AI Quick Start" in masked_text
+    assert "safe line" in masked_text
+
+
+def test_mask_export_file_adds_summary_for_already_redacted_export(tmp_path):
+    from repocontext.secrets import mask_export_file
+
+    export_path = tmp_path / "ai.txt"
+    export_path.write_text(
+        '# AI CONTEXT\n\nGITHUB_TOKEN = "ghp_***REDACTED***CRET"\n',
+        encoding="utf-8",
+    )
+
+    finding_count = mask_export_file(
+        export_path,
+        "ai.txt",
+        "Potential secrets were masked before AI export was written.",
+    )
+
+    content = export_path.read_text(encoding="utf-8")
+
+    assert finding_count == 0
+    assert "# Secret Detection" in content
+    assert "Potential secrets were masked before AI export was written." in content
+    assert "already masked before final export check" in content
+    assert "***REDACTED***" in content
+

@@ -10,6 +10,52 @@ from repocontext.changed import ChangedFileScan, collect_changed_file_scans
 from repocontext.git import get_diff, get_diff_against_branch
 
 
+
+
+
+def _repocontext_export_safety_root() -> object:
+    """Return the nearest Git repository root or current directory."""
+
+    from pathlib import Path
+
+    current = Path.cwd()
+    for candidate in (current, *current.parents):
+        if (candidate / ".git").exists():
+            return candidate
+
+    return current
+
+
+def _repocontext_mask_known_export_files() -> None:
+    """Apply final secret masking to known generated export files."""
+
+    from pathlib import Path
+
+    from repocontext.secrets import mask_export_file
+
+    root = Path(_repocontext_export_safety_root())
+
+    targets = [
+        (
+            "full.txt",
+            "Potential secrets were masked before full export was written.",
+        ),
+        (
+            "ai.txt",
+            "Potential secrets were masked before AI export was written.",
+        ),
+        (
+            "docs.txt",
+            "Potential secrets were masked before documentation export was written.",
+        ),
+        (
+            "changed.txt",
+            "Potential secrets masked in changed export.",
+        ),
+    ]
+
+    for filename, summary in targets:
+        mask_export_file(root / filename, filename, summary)
 def _metadata_value(file_info: Any | None, names: Sequence[str], default: Any = None) -> Any:
     if file_info is None:
         return default
@@ -293,7 +339,7 @@ def render_changed_export(*args: object, **kwargs: object) -> str:
     masked_text, findings = mask_secrets_in_text(rendered, "changed.txt")
     secret_section = _format_changed_secret_detection_section(findings)
     return _append_changed_secret_detection_section(masked_text, secret_section)
-def write_changed_export(
+def _write_changed_export_without_export_secret_safety_net(
     repo_path: str | Path = ".",
     output_path: str | Path = "changed.txt",
     *,
@@ -316,3 +362,13 @@ def write_changed_export(
         encoding="utf-8",
     )
     return output
+
+
+def write_changed_export(*args: object, **kwargs: object) -> object:
+    """Run write_changed_export and apply final export secret masking."""
+
+    try:
+        return _write_changed_export_without_export_secret_safety_net(*args, **kwargs)
+    finally:
+        _repocontext_mask_known_export_files()
+
