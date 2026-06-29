@@ -5,6 +5,7 @@ import pytest
 from repocontext.config import (
     ConfigError,
     RepoContextConfig,
+    apply_config_to_file_infos,
     apply_max_total_files_limit,
     config_summary_lines,
     discover_repository_root,
@@ -423,6 +424,86 @@ class DummyAbsoluteFileInfo:
     def __init__(self, path):
         self.path = path
 
+
+
+def test_apply_config_to_file_infos_combines_filters_and_total_file_limit():
+    config = parse_config(
+        {
+            "include": {"paths": ["src", "tests"]},
+            "exclude": {"paths": ["src/private"]},
+            "limits": {"max_total_files": 2},
+        }
+    )
+    files = [
+        DummyFileInfo("src/repocontext/config.py"),
+        DummyFileInfo("src/private/secrets.py"),
+        DummyFileInfo("tests/test_config.py"),
+        DummyFileInfo("tests/test_cli.py"),
+        DummyFileInfo("README.md"),
+    ]
+
+    result = apply_config_to_file_infos(files, config)
+
+    assert result.files == (files[0], files[2])
+    assert result.filtered_count == 2
+    assert result.limit_omitted_count == 1
+    assert result.max_total_files_limit == 2
+    assert result.omitted_count == 3
+
+
+def test_apply_config_to_file_infos_is_noop_with_default_config():
+    config = parse_config({})
+    files = [
+        DummyFileInfo("src/repocontext/config.py"),
+        DummyFileInfo("README.md"),
+    ]
+
+    result = apply_config_to_file_infos(files, config)
+
+    assert result.files == tuple(files)
+    assert result.filtered_count == 0
+    assert result.limit_omitted_count == 0
+    assert result.max_total_files_limit is None
+    assert result.omitted_count == 0
+
+
+def test_apply_config_to_file_infos_uses_repository_root_for_absolute_paths(tmp_path):
+    src_file = tmp_path / "src" / "repocontext" / "config.py"
+    docs_file = tmp_path / "docs" / "usage.md"
+    src_file.parent.mkdir(parents=True)
+    docs_file.parent.mkdir(parents=True)
+    src_file.write_text("", encoding="utf-8")
+    docs_file.write_text("", encoding="utf-8")
+
+    config = parse_config({"include": {"paths": ["src"]}})
+    files = [
+        DummyAbsoluteFileInfo(src_file),
+        DummyAbsoluteFileInfo(docs_file),
+    ]
+
+    result = apply_config_to_file_infos(files, config, repository_root=tmp_path)
+
+    assert result.files == (files[0],)
+    assert result.filtered_count == 1
+    assert result.limit_omitted_count == 0
+    assert result.omitted_count == 1
+
+
+def test_apply_config_to_file_infos_reports_only_limit_omissions_without_filters():
+    config = parse_config({"limits": {"max_total_files": 1}})
+    files = [
+        DummyFileInfo("a.py"),
+        DummyFileInfo("b.py"),
+        DummyFileInfo("c.py"),
+    ]
+
+    result = apply_config_to_file_infos(files, config)
+
+    assert result.files == (files[0],)
+    assert result.filtered_count == 0
+    assert result.limit_omitted_count == 2
+    assert result.max_total_files_limit == 1
+    assert result.omitted_count == 2
 
 def test_filter_file_infos_filters_objects_by_relative_path():
     config = parse_config(

@@ -44,6 +44,23 @@ class FileListLimitResult:
     omitted_count: int = 0
     limit: int | None = None
 
+
+
+@dataclass(frozen=True)
+class ConfiguredFileSelection:
+    """Result of applying config filters and file-count limits."""
+
+    files: tuple[Any, ...]
+    filtered_count: int = 0
+    limit_omitted_count: int = 0
+    max_total_files_limit: int | None = None
+
+    @property
+    def omitted_count(self) -> int:
+        """Total number of files omitted by filters and limits."""
+
+        return self.filtered_count + self.limit_omitted_count
+
 @dataclass(frozen=True)
 class RepoContextConfig:
     """Validated RepoContext configuration."""
@@ -433,6 +450,31 @@ def format_limit_notice(reason: str, *, omitted_count: int | None = None) -> str
     if omitted_count is not None:
         suffix = f" Omitted: {omitted_count}."
     return f"[RepoContext: content truncated because {reason}.{suffix}]"
+
+
+def apply_config_to_file_infos(
+    file_infos: list[Any] | tuple[Any, ...],
+    config: RepoContextConfig,
+    repository_root: Path | str | None = None,
+) -> ConfiguredFileSelection:
+    """Apply include/exclude filters and max_total_files in one stable step."""
+
+    original_files = tuple(file_infos)
+    filtered_files = tuple(
+        filter_file_infos(
+            original_files,
+            config,
+            repository_root=repository_root,
+        )
+    )
+    limited = apply_max_total_files_limit(filtered_files, config)
+
+    return ConfiguredFileSelection(
+        files=limited.files,
+        filtered_count=len(original_files) - len(filtered_files),
+        limit_omitted_count=limited.omitted_count,
+        max_total_files_limit=limited.limit,
+    )
 
 def filter_file_infos(
     file_infos: list[Any] | tuple[Any, ...],
