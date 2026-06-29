@@ -3,6 +3,9 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
+dependencies = [
+    "PyYAML>=6.0",
+]
 name = "repocontext"
 version = "0.1.0.dev0"
 description = "AI-friendly exports of Git repositories for large language models."
