@@ -34,6 +34,16 @@ class ExportLimitsConfig:
     max_line_count: int | None = None
 
 
+
+
+@dataclass(frozen=True)
+class FileListLimitResult:
+    """Result of applying a max-total-files limit."""
+
+    files: tuple[Any, ...]
+    omitted_count: int = 0
+    limit: int | None = None
+
 @dataclass(frozen=True)
 class RepoContextConfig:
     """Validated RepoContext configuration."""
@@ -291,6 +301,92 @@ def filter_file_paths(
     return [path for path in relative_paths if is_path_included(path, config)]
 
 
+
+
+def is_file_size_allowed(size_bytes: int | None, config: RepoContextConfig) -> bool:
+    """Return whether a file size is allowed by max_file_bytes."""
+
+    limit = config.limits.max_file_bytes
+    if limit is None or size_bytes is None:
+        return True
+
+    if size_bytes < 0:
+        raise ConfigError("size_bytes must not be negative.")
+
+    return size_bytes <= limit
+
+
+def apply_max_total_files_limit(
+    file_infos: list[Any] | tuple[Any, ...],
+    config: RepoContextConfig,
+) -> FileListLimitResult:
+    """Apply max_total_files deterministically while preserving input order."""
+
+    files = tuple(file_infos)
+    limit = config.limits.max_total_files
+    if limit is None or len(files) <= limit:
+        return FileListLimitResult(files=files, omitted_count=0, limit=limit)
+
+    return FileListLimitResult(
+        files=files[:limit],
+        omitted_count=len(files) - limit,
+        limit=limit,
+    )
+
+
+def truncate_text_by_line_limit(
+    text: str,
+    config: RepoContextConfig,
+) -> tuple[str, bool, int]:
+    """Return text truncated by max_line_count.
+
+    The tuple contains:
+    - resulting text
+    - whether truncation happened
+    - number of omitted lines
+    """
+
+    limit = config.limits.max_line_count
+    if limit is None:
+        return text, False, 0
+
+    lines = text.splitlines(keepends=True)
+    if len(lines) <= limit:
+        return text, False, 0
+
+    omitted_count = len(lines) - limit
+    return "".join(lines[:limit]), True, omitted_count
+
+
+def would_exceed_export_byte_limit(
+    current_size_bytes: int,
+    next_chunk: str | bytes,
+    config: RepoContextConfig,
+) -> bool:
+    """Return whether appending a chunk would exceed max_export_bytes."""
+
+    limit = config.limits.max_export_bytes
+    if limit is None:
+        return False
+
+    if current_size_bytes < 0:
+        raise ConfigError("current_size_bytes must not be negative.")
+
+    if isinstance(next_chunk, str):
+        next_size = len(next_chunk.encode("utf-8"))
+    else:
+        next_size = len(next_chunk)
+
+    return current_size_bytes + next_size > limit
+
+
+def format_limit_notice(reason: str, *, omitted_count: int | None = None) -> str:
+    """Create a stable human-readable export limit notice."""
+
+    suffix = ""
+    if omitted_count is not None:
+        suffix = f" Omitted: {omitted_count}."
+    return f"[RepoContext: content truncated because {reason}.{suffix}]"
 
 def filter_file_infos(
     file_infos: list[Any] | tuple[Any, ...],

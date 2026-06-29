@@ -5,13 +5,18 @@ import pytest
 from repocontext.config import (
     ConfigError,
     RepoContextConfig,
+    apply_max_total_files_limit,
     discover_repository_root,
     filter_file_infos,
     filter_file_paths,
+    format_limit_notice,
+    is_file_size_allowed,
     is_path_included,
     load_config,
     load_config_for_path,
     parse_config,
+    truncate_text_by_line_limit,
+    would_exceed_export_byte_limit,
 
 )
 
@@ -194,6 +199,125 @@ def test_limit_null_is_allowed():
 
 
 
+
+
+def test_is_file_size_allowed_respects_max_file_bytes():
+    config = parse_config({"limits": {"max_file_bytes": 10}})
+
+    assert is_file_size_allowed(10, config) is True
+    assert is_file_size_allowed(11, config) is False
+    assert is_file_size_allowed(None, config) is True
+
+
+def test_is_file_size_allowed_rejects_negative_size():
+    config = parse_config({"limits": {"max_file_bytes": 10}})
+
+    with pytest.raises(ConfigError, match="size_bytes must not be negative"):
+        is_file_size_allowed(-1, config)
+
+
+def test_apply_max_total_files_limit_preserves_order_when_under_limit():
+    config = parse_config({"limits": {"max_total_files": 5}})
+    files = ["a.py", "b.py"]
+
+    result = apply_max_total_files_limit(files, config)
+
+    assert result.files == ("a.py", "b.py")
+    assert result.omitted_count == 0
+    assert result.limit == 5
+
+
+def test_apply_max_total_files_limit_truncates_deterministically():
+    config = parse_config({"limits": {"max_total_files": 2}})
+    files = ["a.py", "b.py", "c.py", "d.py"]
+
+    result = apply_max_total_files_limit(files, config)
+
+    assert result.files == ("a.py", "b.py")
+    assert result.omitted_count == 2
+    assert result.limit == 2
+
+
+def test_apply_max_total_files_limit_is_noop_without_limit():
+    config = parse_config({})
+    files = ["a.py", "b.py", "c.py"]
+
+    result = apply_max_total_files_limit(files, config)
+
+    assert result.files == ("a.py", "b.py", "c.py")
+    assert result.omitted_count == 0
+    assert result.limit is None
+
+
+def test_truncate_text_by_line_limit_keeps_text_when_under_limit():
+    config = parse_config({"limits": {"max_line_count": 3}})
+    content = "one\nTwo\n"
+
+    truncated, changed, omitted = truncate_text_by_line_limit(content, config)
+
+    assert truncated == content
+    assert changed is False
+    assert omitted == 0
+
+
+def test_truncate_text_by_line_limit_truncates_and_counts_omitted_lines():
+    config = parse_config({"limits": {"max_line_count": 2}})
+    content = "one\nTwo\nThree\nFour\n"
+
+    truncated, changed, omitted = truncate_text_by_line_limit(content, config)
+
+    assert truncated == "one\nTwo\n"
+    assert changed is True
+    assert omitted == 2
+
+
+def test_truncate_text_by_line_limit_is_noop_without_limit():
+    config = parse_config({})
+    content = "one\nTwo\nThree\n"
+
+    truncated, changed, omitted = truncate_text_by_line_limit(content, config)
+
+    assert truncated == content
+    assert changed is False
+    assert omitted == 0
+
+
+def test_would_exceed_export_byte_limit_supports_text_chunks():
+    config = parse_config({"limits": {"max_export_bytes": 10}})
+
+    assert would_exceed_export_byte_limit(4, "123456", config) is False
+    assert would_exceed_export_byte_limit(5, "123456", config) is True
+
+
+def test_would_exceed_export_byte_limit_supports_byte_chunks():
+    config = parse_config({"limits": {"max_export_bytes": 3}})
+
+    assert would_exceed_export_byte_limit(1, b"12", config) is False
+    assert would_exceed_export_byte_limit(1, b"123", config) is True
+
+
+def test_would_exceed_export_byte_limit_rejects_negative_current_size():
+    config = parse_config({"limits": {"max_export_bytes": 3}})
+
+    with pytest.raises(ConfigError, match="current_size_bytes must not be negative"):
+        would_exceed_export_byte_limit(-1, "a", config)
+
+
+def test_would_exceed_export_byte_limit_is_noop_without_limit():
+    config = parse_config({})
+
+    assert would_exceed_export_byte_limit(999999, "chunk", config) is False
+
+
+def test_format_limit_notice_is_stable_and_human_readable():
+    assert (
+        format_limit_notice("max_file_bytes was reached", omitted_count=3)
+        == "[RepoContext: content truncated because max_file_bytes was reached. Omitted: 3.]"
+    )
+    assert (
+        format_limit_notice("max_export_bytes was reached")
+        == "[RepoContext: content truncated because max_export_bytes was reached.]"
+    )
 
 class DummyFileInfo:
     def __init__(self, relative_path):
