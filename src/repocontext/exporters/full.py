@@ -14,7 +14,7 @@ from repocontext.gitignore import ensure_repocontext_gitignore_entries
 from repocontext.models import FileInfo
 from repocontext.scanner import RepositoryScanner
 from repocontext.schema import analyze_database_schemas
-from repocontext.config import apply_config_to_file_infos, get_active_config
+from repocontext.config import apply_config_to_file_infos, format_limit_notice, get_active_config, is_file_size_allowed
 
 FULL_EXPORT_SECTION_ORDER: tuple[str, ...] = (
     "ai_quick_start",
@@ -142,6 +142,65 @@ class FullExportContext:
             counter[file_type] += 1
         return tuple(sorted(counter.items()))
 
+
+
+def _file_info_size_bytes(file_info: FileInfo) -> int | None:
+    """Return file size from FileInfo metadata, filesystem, or loaded content."""
+
+    for attribute in ("size_bytes", "size", "byte_count"):
+        value = getattr(file_info, attribute, None)
+        if isinstance(value, int):
+            return value
+
+    content = getattr(file_info, "content", None)
+    if isinstance(content, str):
+        return len(content.encode("utf-8"))
+
+    path = getattr(file_info, "path", None)
+    if path is None:
+        path = getattr(file_info, "absolute_path", None)
+    if path is None:
+        path = getattr(file_info, "file_path", None)
+
+    if path is None:
+        return None
+
+    try:
+        return Path(path).stat().st_size
+    except OSError:
+        return None
+
+
+def _file_info_display_path(file_info: FileInfo) -> str:
+    """Return a stable display path for source-dump notices."""
+
+    for attribute in ("relative_path", "path", "file_path", "filepath"):
+        value = getattr(file_info, attribute, None)
+        if value is not None:
+            if hasattr(value, "as_posix"):
+                return value.as_posix()
+            return str(value).replace("\\", "/")
+
+    return "<unknown file>"
+
+
+def _should_skip_file_content_for_size_limit(file_info: FileInfo) -> bool:
+    """Return whether file content should be skipped by max_file_bytes."""
+
+    return not is_file_size_allowed(_file_info_size_bytes(file_info), get_active_config())
+
+
+def _max_file_bytes_notice(file_info: FileInfo) -> str:
+    size = _file_info_size_bytes(file_info)
+    configured_limit = get_active_config().limits.max_file_bytes
+    if size is None:
+        return format_limit_notice(
+            f"{_file_info_display_path(file_info)} exceeds limits.max_file_bytes"
+        )
+    return format_limit_notice(
+        f"{_file_info_display_path(file_info)} has {size} bytes "
+        f"and exceeds limits.max_file_bytes={configured_limit}"
+    )
 
 def create_full_export_context(
     repository_info: RepositoryInfo,
@@ -934,6 +993,14 @@ def _render_complete_source_export(context: FullExportContext) -> str:
         return "\n".join(parts)
 
     for file_info in context.exported_text_files:
+        if _should_skip_file_content_for_size_limit(file_info):
+            notice_block = (
+                f"## File: {file_info.relative_path.as_posix()}\n\n"
+                f"{_max_file_bytes_notice(file_info)}"
+            )
+            parts.append(notice_block)
+            continue
+
         content = file_info.content or ""
         fence = _choose_code_fence(content)
         language = _code_fence_language(file_info.language)
