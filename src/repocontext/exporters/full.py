@@ -14,7 +14,7 @@ from repocontext.gitignore import ensure_repocontext_gitignore_entries
 from repocontext.models import FileInfo
 from repocontext.scanner import RepositoryScanner
 from repocontext.schema import analyze_database_schemas
-from repocontext.config import apply_config_to_file_infos, format_limit_notice, get_active_config, is_file_size_allowed
+from repocontext.config import apply_config_to_file_infos, format_limit_notice, get_active_config, is_file_size_allowed, truncate_text_by_line_limit
 
 FULL_EXPORT_SECTION_ORDER: tuple[str, ...] = (
     "ai_quick_start",
@@ -1002,6 +1002,19 @@ def _render_complete_source_export(context: FullExportContext) -> str:
             continue
 
         content = file_info.content or ""
+        content, line_truncated, omitted_lines = truncate_text_by_line_limit(
+            content,
+            get_active_config(),
+        )
+        if line_truncated:
+            if content and not content.endswith("\n"):
+                content += "\n"
+            content += format_limit_notice(
+                "limits.max_line_count was reached",
+                omitted_count=omitted_lines,
+            )
+            content += "\n"
+
         fence = _choose_code_fence(content)
         language = _code_fence_language(file_info.language)
         opening_fence = f"{fence}{language}" if language else fence
