@@ -674,3 +674,30 @@ def test_build_docs_export_context_reuses_full_export_pipeline_and_git_tracked_f
         "full.txt",
         "src/app.py",
     ]
+
+
+def test_docs_export_masks_secret_values_and_reports_summary(monkeypatch):
+    from repocontext.exporters import docs as docs_exporter
+
+    clear_secret = "ghp_1234567890abcdefSECRET"
+
+    def fake_render(*args, **kwargs):
+        return (
+            "# Documentation Export\n\n"
+            "## README.md\n\n"
+            f'GITHUB_TOKEN = "{clear_secret}"\n'
+            "This line is safe documentation.\n"
+        )
+
+    monkeypatch.setattr(docs_exporter, "_render_docs_export_unmasked", fake_render)
+
+    rendered = docs_exporter.render_docs_export(object())
+
+    assert clear_secret not in rendered
+    assert "***REDACTED***" in rendered
+    assert "# Secret Detection" in rendered
+    assert "Potential secrets were masked in documentation content." in rendered
+    assert "Potential secrets masked: 1" in rendered
+    assert "- TOKEN: 1" in rendered
+    assert "This line is safe documentation." in rendered
+

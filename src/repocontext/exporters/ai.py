@@ -5,6 +5,7 @@ sections for language models without embedding complete source dumps.
 """
 
 from __future__ import annotations
+from repocontext.secrets import SecretFinding, mask_secrets_in_text
 from repocontext.dependencies import append_dependencies_ai_section
 
 from dataclasses import dataclass, replace
@@ -117,7 +118,7 @@ def build_ai_export_context(repository_root: Path | str) -> AIExportContext:
     return create_ai_export_context(build_full_export_context(repository_root))
 
 
-def render_ai_export(context: AIExportContext) -> str:
+def _render_ai_export_unmasked(context: AIExportContext) -> str:
     """Render the compact AI export text."""
 
     sections = [
@@ -134,6 +135,49 @@ def render_ai_export(context: AIExportContext) -> str:
     return "\n\n".join(section.rstrip() for section in sections).rstrip() + "\n"
 
 
+
+
+
+def _format_ai_secret_detection_section(findings: list[SecretFinding]) -> str:
+    """Format a compact secret detection note without leaking values."""
+
+    if not findings:
+        return ""
+
+    counts_by_type: dict[str, int] = {}
+    for finding in findings:
+        counts_by_type[finding.secret_type] = counts_by_type.get(finding.secret_type, 0) + 1
+
+    lines = [
+        "# Secret Detection",
+        "",
+        "Potential secrets were masked before export.",
+        f"Potential secrets masked: {len(findings)}",
+    ]
+
+    lines.extend(["", "Findings by type:"])
+    for secret_type in sorted(counts_by_type):
+        lines.append(f"- {secret_type}: {counts_by_type[secret_type]}")
+
+    return "\n".join(lines)
+
+
+def _append_ai_secret_detection_section(text: str, section: str) -> str:
+    """Append the secret detection note only when findings exist."""
+
+    if not section:
+        return text
+
+    return f"{text.rstrip()}\n\n{section}\n"
+
+
+def render_ai_export(*args: object, **kwargs: object) -> str:
+    """Render export content with potential secrets masked."""
+
+    rendered = _render_ai_export_unmasked(*args, **kwargs)
+    masked_text, findings = mask_secrets_in_text(rendered, "ai.txt")
+    secret_section = _format_ai_secret_detection_section(findings)
+    return _append_ai_secret_detection_section(masked_text, secret_section)
 def write_ai_export(
     context: AIExportContext,
     output_path: Path | str | None = None,

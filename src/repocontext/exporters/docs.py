@@ -6,6 +6,7 @@ steps.
 """
 
 from __future__ import annotations
+from repocontext.secrets import SecretFinding, mask_secrets_in_text
 
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -246,7 +247,7 @@ def create_docs_export_context(
     )
 
 
-def render_docs_export(context: DocumentationExportContext) -> str:
+def _render_docs_export_unmasked(context: DocumentationExportContext) -> str:
     """Render the complete documentation export text."""
 
     sections = [
@@ -261,6 +262,49 @@ def render_docs_export(context: DocumentationExportContext) -> str:
     return "\n\n".join(section.rstrip() for section in sections).rstrip() + "\n"
 
 
+
+
+
+def _format_docs_secret_detection_section(findings: list[SecretFinding]) -> str:
+    """Format a compact secret detection note without leaking values."""
+
+    if not findings:
+        return ""
+
+    counts_by_type: dict[str, int] = {}
+    for finding in findings:
+        counts_by_type[finding.secret_type] = counts_by_type.get(finding.secret_type, 0) + 1
+
+    lines = [
+        "# Secret Detection",
+        "",
+        "Potential secrets were masked in documentation content.",
+        f"Potential secrets masked: {len(findings)}",
+    ]
+
+    lines.extend(["", "Findings by type:"])
+    for secret_type in sorted(counts_by_type):
+        lines.append(f"- {secret_type}: {counts_by_type[secret_type]}")
+
+    return "\n".join(lines)
+
+
+def _append_docs_secret_detection_section(text: str, section: str) -> str:
+    """Append the secret detection note only when findings exist."""
+
+    if not section:
+        return text
+
+    return f"{text.rstrip()}\n\n{section}\n"
+
+
+def render_docs_export(*args: object, **kwargs: object) -> str:
+    """Render export content with potential secrets masked."""
+
+    rendered = _render_docs_export_unmasked(*args, **kwargs)
+    masked_text, findings = mask_secrets_in_text(rendered, "docs.txt")
+    secret_section = _format_docs_secret_detection_section(findings)
+    return _append_docs_secret_detection_section(masked_text, secret_section)
 def write_docs_export(
     context: DocumentationExportContext,
     output_path: Path | str | None = None,

@@ -864,3 +864,31 @@ def test_generate_ai_export_writes_ai_txt_for_tracked_python_repo(tmp_path: Path
     assert rendered.strip()
     assert "# Complete Source Export" not in rendered
     assert "def main" not in rendered
+
+
+def test_ai_export_masks_secret_values_and_reports_summary(monkeypatch):
+    from repocontext.exporters import ai as ai_exporter
+
+    clear_secret = "sk-live-1234567890abcdefSECRET"
+
+    def fake_render(*args, **kwargs):
+        return (
+            "# AI Export\n\n"
+            "Important file excerpt:\n\n"
+            f'OPENAI_API_KEY = "{clear_secret}"\n'
+            "def safe_function():\n"
+            "    return True\n"
+        )
+
+    monkeypatch.setattr(ai_exporter, "_render_ai_export_unmasked", fake_render)
+
+    rendered = ai_exporter.render_ai_export(object())
+
+    assert clear_secret not in rendered
+    assert "***REDACTED***" in rendered
+    assert "# Secret Detection" in rendered
+    assert "Potential secrets were masked before export." in rendered
+    assert "Potential secrets masked: 1" in rendered
+    assert "- API_KEY: 1" in rendered
+    assert "def safe_function()" in rendered
+
