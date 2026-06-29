@@ -1,6 +1,7 @@
 """Foundational structures and orchestration for the Full Export MVP."""
 
 from __future__ import annotations
+from repocontext.secrets import SecretFinding, mask_secrets_in_text
 
 from collections import Counter
 from dataclasses import dataclass, field
@@ -166,7 +167,7 @@ def build_full_export_context(repository_root: Path | str) -> FullExportContext:
     )
 
 
-def render_full_export(context: FullExportContext) -> str:
+def _render_full_export_unmasked(context: FullExportContext) -> str:
     """Render a minimal Full Export skeleton.
 
     Later Milestone 3 steps expand each section with its final content.
@@ -186,6 +187,58 @@ def render_full_export(context: FullExportContext) -> str:
     return "\n\n".join(section.rstrip() for section in sections).rstrip() + "\n"
 
 
+
+
+def _format_full_secret_detection_section(findings: list[SecretFinding]) -> str:
+    """Format the full export secret detection summary without leaking values."""
+
+    lines = [
+        "# Secret Detection",
+        "",
+        f"Total findings: {len(findings)}",
+    ]
+
+    if not findings:
+        return "\n".join(lines)
+
+    counts_by_type: dict[str, int] = {}
+    for finding in findings:
+        counts_by_type[finding.secret_type] = counts_by_type.get(finding.secret_type, 0) + 1
+
+    lines.extend(["", "Findings by type:"])
+    for secret_type in sorted(counts_by_type):
+        lines.append(f"- {secret_type}: {counts_by_type[secret_type]}")
+
+    return "\n".join(lines)
+
+
+def _insert_full_secret_detection_section(text: str, section: str) -> str:
+    """Insert the secret detection section before the source dump when possible."""
+
+    source_dump_markers = [
+        "\n# Complete Source Dump",
+        "\n# Complete source dump",
+        "\n# Source Dump",
+        "\n# Source dump",
+    ]
+
+    for marker in source_dump_markers:
+        marker_index = text.find(marker)
+        if marker_index != -1:
+            before = text[:marker_index].rstrip()
+            after = text[marker_index:].lstrip("\n")
+            return f"{before}\n\n{section}\n\n{after}"
+
+    return f"{text.rstrip()}\n\n{section}\n"
+
+
+def render_full_export(*args: object, **kwargs: object) -> str:
+    """Render the full export with potential secrets masked."""
+
+    rendered = _render_full_export_unmasked(*args, **kwargs)
+    masked_text, findings = mask_secrets_in_text(rendered, "full.txt")
+    secret_section = _format_full_secret_detection_section(findings)
+    return _insert_full_secret_detection_section(masked_text, secret_section)
 def write_full_export(
     context: FullExportContext,
     output_path: Path | str | None = None,

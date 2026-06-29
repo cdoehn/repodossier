@@ -1021,3 +1021,64 @@ def test_write_full_export_writes_full_txt_to_repository_root(tmp_path: Path) ->
     assert output_path == tmp_path / "full.txt"
     assert output_path.exists()
     assert "# AI Quick Start" in output_path.read_text(encoding="utf-8")
+
+
+def test_full_command_masks_secret_values_and_reports_summary(tmp_path):
+    import os
+    import subprocess
+    import sys
+    from pathlib import Path
+
+    repo = tmp_path / "repo"
+    repo.mkdir()
+
+    subprocess.run(["git", "init"], cwd=repo, check=True, capture_output=True, text=True)
+
+    clear_secret = "sk-live-1234567890abcdefSECRET"
+    (repo / "config.py").write_text(
+        f'OPENAI_API_KEY = "{clear_secret}"\nprint("safe")\n',
+        encoding="utf-8",
+    )
+
+    subprocess.run(["git", "add", "config.py"], cwd=repo, check=True, capture_output=True, text=True)
+    subprocess.run(
+        [
+            "git",
+            "-c",
+            "user.name=RepoContext Test",
+            "-c",
+            "user.email=repocontext@example.invalid",
+            "commit",
+            "-m",
+            "init",
+        ],
+        cwd=repo,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    project_root = Path(__file__).resolve().parents[1]
+    env = os.environ.copy()
+    src_path = str(project_root / "src")
+    env["PYTHONPATH"] = src_path + os.pathsep + env.get("PYTHONPATH", "")
+
+    result = subprocess.run(
+        [sys.executable, "-m", "repocontext", "full"],
+        cwd=repo,
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stderr + result.stdout
+
+    full_export = (repo / "full.txt").read_text(encoding="utf-8")
+
+    assert clear_secret not in full_export
+    assert "***REDACTED***" in full_export
+    assert "# Secret Detection" in full_export
+    assert "Total findings: 1" in full_export
+    assert "- API_KEY: 1" in full_export
+    assert 'print("safe")' in full_export
+

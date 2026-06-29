@@ -264,3 +264,74 @@ def detect_secrets_in_text(
             break
 
     return findings
+
+
+@dataclass(frozen=True)
+class SecretScanResult:
+    """Result of scanning and masking one text payload."""
+
+    masked_text: str
+    findings: list[SecretFinding]
+
+    @property
+    def total_findings(self) -> int:
+        """Return the number of findings."""
+
+        return len(self.findings)
+
+    @property
+    def findings_by_type(self) -> dict[str, int]:
+        """Return finding counts grouped by secret type."""
+
+        counts: dict[str, int] = {}
+        for finding in self.findings:
+            counts[finding.secret_type] = counts.get(finding.secret_type, 0) + 1
+        return counts
+
+
+def _split_line_ending(line: str) -> tuple[str, str]:
+    """Split line content from its original line ending."""
+
+    if line.endswith("\r\n"):
+        return line[:-2], "\r\n"
+    if line.endswith("\n"):
+        return line[:-1], "\n"
+    return line, ""
+
+
+def mask_secrets_in_text(text: str, file_path: str) -> tuple[str, list[SecretFinding]]:
+    """Mask potential secrets in text and return the masked text and findings."""
+
+    masked_lines: list[str] = []
+    findings: list[SecretFinding] = []
+
+    for line_number, raw_line in enumerate(text.splitlines(keepends=True), start=1):
+        line_body, line_ending = _split_line_ending(raw_line)
+        line_findings = detect_secrets_in_text(line_body, file_path)
+
+        if not line_findings:
+            masked_lines.append(raw_line)
+            continue
+
+        finding = line_findings[0]
+        adjusted_finding = SecretFinding(
+            file_path=finding.file_path,
+            line_number=line_number,
+            secret_type=finding.secret_type,
+            matched_text=finding.matched_text,
+            masked_text=finding.masked_text,
+            variable_name=finding.variable_name,
+            confidence=finding.confidence,
+        )
+        findings.append(adjusted_finding)
+        masked_lines.append(finding.masked_text + line_ending)
+
+    return "".join(masked_lines), findings
+
+
+def scan_and_mask_text(text: str, file_path: str) -> SecretScanResult:
+    """Scan and mask text, returning a structured scan result."""
+
+    masked_text, findings = mask_secrets_in_text(text, file_path)
+    return SecretScanResult(masked_text=masked_text, findings=findings)
+
