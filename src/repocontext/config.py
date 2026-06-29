@@ -303,6 +303,52 @@ def filter_file_paths(
 
 
 
+
+def config_summary_lines(config: RepoContextConfig) -> list[str]:
+    """Return stable human-readable summary lines for export metadata."""
+
+    lines = [
+        f"Config active: {'yes' if config.enabled else 'no'}",
+    ]
+
+    if config.path is not None:
+        lines.append(f"Config path: {config.path}")
+
+    lines.extend(
+        [
+            f"Include paths: {_format_summary_values(config.include.paths)}",
+            f"Include globs: {_format_summary_values(config.include.globs)}",
+            f"Exclude paths: {_format_summary_values(config.exclude.paths)}",
+            f"Exclude globs: {_format_summary_values(config.exclude.globs)}",
+            f"Limit max_file_bytes: {_format_summary_limit(config.limits.max_file_bytes)}",
+            f"Limit max_total_files: {_format_summary_limit(config.limits.max_total_files)}",
+            f"Limit max_export_bytes: {_format_summary_limit(config.limits.max_export_bytes)}",
+            f"Limit max_line_count: {_format_summary_limit(config.limits.max_line_count)}",
+        ]
+    )
+
+    return lines
+
+
+def format_config_summary(config: RepoContextConfig, heading: str = "Configuration") -> str:
+    """Format configuration metadata for text exports."""
+
+    lines = [f"## {heading}", ""]
+    lines.extend(f"- {line}" for line in config_summary_lines(config))
+    return "\n".join(lines) + "\n"
+
+
+def _format_summary_values(values: tuple[str, ...]) -> str:
+    if not values:
+        return "none"
+    return ", ".join(values)
+
+
+def _format_summary_limit(value: int | None) -> str:
+    if value is None:
+        return "none"
+    return str(value)
+
 def is_file_size_allowed(size_bytes: int | None, config: RepoContextConfig) -> bool:
     """Return whether a file size is allowed by max_file_bytes."""
 

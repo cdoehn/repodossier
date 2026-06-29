@@ -6,9 +6,11 @@ from repocontext.config import (
     ConfigError,
     RepoContextConfig,
     apply_max_total_files_limit,
+    config_summary_lines,
     discover_repository_root,
     filter_file_infos,
     filter_file_paths,
+    format_config_summary,
     format_limit_notice,
     is_file_size_allowed,
     is_path_included,
@@ -200,6 +202,99 @@ def test_limit_null_is_allowed():
 
 
 
+
+
+def test_config_summary_lines_describe_inactive_defaults():
+    config = parse_config({})
+
+    assert config_summary_lines(config) == [
+        "Config active: no",
+        "Include paths: none",
+        "Include globs: none",
+        "Exclude paths: none",
+        "Exclude globs: none",
+        "Limit max_file_bytes: none",
+        "Limit max_total_files: none",
+        "Limit max_export_bytes: none",
+        "Limit max_line_count: none",
+    ]
+
+
+def test_config_summary_lines_describe_active_loaded_config(tmp_path):
+    config_file = tmp_path / ".repocontext.yml"
+    config_file.write_text(
+        """
+include:
+  paths:
+    - src
+  globs:
+    - "*.md"
+exclude:
+  paths:
+    - build
+  globs:
+    - "*.log"
+limits:
+  max_file_bytes: 100
+  max_total_files: 20
+  max_export_bytes: 300
+  max_line_count: 40
+""",
+        encoding="utf-8",
+    )
+
+    config = load_config(tmp_path)
+    lines = config_summary_lines(config)
+
+    assert lines[0] == "Config active: yes"
+    assert lines[1] == f"Config path: {config_file.resolve()}"
+    assert "Include paths: src" in lines
+    assert "Include globs: *.md" in lines
+    assert "Exclude paths: build" in lines
+    assert "Exclude globs: *.log" in lines
+    assert "Limit max_file_bytes: 100" in lines
+    assert "Limit max_total_files: 20" in lines
+    assert "Limit max_export_bytes: 300" in lines
+    assert "Limit max_line_count: 40" in lines
+
+
+def test_config_summary_lines_join_multiple_values_stably():
+    config = parse_config(
+        {
+            "include": {
+                "paths": ["src", "tests"],
+                "globs": ["*.md", "docs/**/*.md"],
+            },
+            "exclude": {
+                "paths": ["build", "dist"],
+                "globs": ["*.log", "*.sqlite"],
+            },
+        }
+    )
+
+    lines = config_summary_lines(config)
+
+    assert "Include paths: src, tests" in lines
+    assert "Include globs: *.md, docs/**/*.md" in lines
+    assert "Exclude paths: build, dist" in lines
+    assert "Exclude globs: *.log, *.sqlite" in lines
+
+
+def test_format_config_summary_creates_export_ready_section():
+    config = parse_config(
+        {
+            "include": {"paths": ["src"]},
+            "limits": {"max_total_files": 5},
+        }
+    )
+
+    summary = format_config_summary(config, heading="RepoContext Configuration")
+
+    assert summary.startswith("## RepoContext Configuration\n\n")
+    assert "- Config active: no\n" in summary
+    assert "- Include paths: src\n" in summary
+    assert "- Limit max_total_files: 5\n" in summary
+    assert summary.endswith("\n")
 
 def test_is_file_size_allowed_respects_max_file_bytes():
     config = parse_config({"limits": {"max_file_bytes": 10}})
