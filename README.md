@@ -49,7 +49,6 @@ Implemented:
 
 Planned but not complete yet:
 
-- secret detection
 - configuration via `.repocontext.yml`
 - split exports for very large repositories
 - Bash symbol and call graph support

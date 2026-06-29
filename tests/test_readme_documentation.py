@@ -186,3 +186,13 @@ def test_readme_documents_secret_detection():
     assert "changed.txt" in readme
     assert "REDACTED" in readme
 
+
+def test_readme_lists_secret_detection_as_implemented_not_planned():
+    from pathlib import Path
+
+    readme = Path("README.md").read_text(encoding="utf-8")
+
+    assert "## Secret Detection" in readme
+    assert "- secret detection" not in readme
+    assert "Planned but not complete yet:" in readme
+
