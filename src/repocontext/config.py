@@ -342,6 +342,12 @@ def filter_file_paths(
 
 
 
+
+def ai_config_summary_section(config: RepoContextConfig) -> str:
+    """Return the AI Export configuration summary section."""
+
+    return format_config_summary(config, heading="RepoContext Configuration")
+
 def full_config_summary_section(config: RepoContextConfig) -> str:
     """Return the Full Export configuration summary section."""
 

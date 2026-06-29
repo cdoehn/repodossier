@@ -15,7 +15,7 @@ from repocontext.gitignore import ensure_repocontext_gitignore_entries
 from repocontext.schema import analyze_database_schemas
 
 from .full import FullExportContext, build_full_export_context
-from repocontext.config import apply_config_to_file_infos, get_active_config
+from repocontext.config import ai_config_summary_section, apply_config_to_file_infos, get_active_config
 
 
 AI_EXPORT_FILENAME = "ai.txt"
@@ -133,7 +133,8 @@ def _render_ai_export_unmasked(context: AIExportContext) -> str:
         _render_notes_section(),
     ]
 
-    return "\n\n".join(section.rstrip() for section in sections).rstrip() + "\n"
+    rendered = "\n\n".join(section.rstrip() for section in sections).rstrip() + "\n"
+    return ai_config_summary_section(get_active_config()) + "\n" + rendered
 
 
 
