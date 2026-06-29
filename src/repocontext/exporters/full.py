@@ -216,7 +216,7 @@ def _insert_full_secret_detection_section(text: str, section: str) -> str:
     """Insert the secret detection section before the source dump when possible."""
 
     source_dump_markers = [
-        "\n# Complete Source Dump",
+        "\n# Complete Source Export",
         "\n# Complete source dump",
         "\n# Source Dump",
         "\n# Source dump",

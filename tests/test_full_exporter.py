@@ -1082,3 +1082,45 @@ def test_full_command_masks_secret_values_and_reports_summary(tmp_path):
     assert "- API_KEY: 1" in full_export
     assert 'print("safe")' in full_export
 
+
+def test_full_secret_detection_section_is_inserted_before_complete_source_export():
+    from repocontext.exporters.full import (
+        _format_full_secret_detection_section,
+        _insert_full_secret_detection_section,
+    )
+    from repocontext.secrets import SecretFinding
+
+    finding = SecretFinding(
+        file_path="config.py",
+        line_number=1,
+        secret_type="API_KEY",
+        matched_text='OPENAI_API_KEY = "sk-live-1234567890abcdefSECRET"',
+        masked_text='OPENAI_API_KEY = "sk-l***REDACTED***CRET"',
+        variable_name="OPENAI_API_KEY",
+        confidence="high",
+    )
+
+    rendered = "\n".join(
+        [
+            "# AI Quick Start",
+            "",
+            "# Repository Statistics",
+            "",
+            "# Complete Source Export",
+            "",
+            "## File: config.py",
+            "",
+            'OPENAI_API_KEY = "sk-l***REDACTED***CRET"',
+            "",
+        ]
+    )
+
+    secret_section = _format_full_secret_detection_section([finding])
+    output = _insert_full_secret_detection_section(rendered, secret_section)
+
+    assert "# Secret Detection" in output
+    assert output.index("# Secret Detection") < output.index("# Complete Source Export")
+    assert "Total findings: 1" in output
+    assert "API_KEY: 1" in output
+    assert "sk-live-1234567890abcdefSECRET" not in output
+
