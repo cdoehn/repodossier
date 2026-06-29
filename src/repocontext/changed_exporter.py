@@ -1,4 +1,5 @@
 from __future__ import annotations
+from repocontext.secrets import SecretFinding, mask_secrets_in_text
 
 from collections import Counter
 from collections.abc import Sequence
@@ -209,7 +210,7 @@ def _append_binary_or_skipped_files(lines: list[str], scans: Sequence[ChangedFil
     lines.append("")
 
 
-def render_changed_export(
+def _render_changed_export_unmasked(
     repo_path: str | Path = ".",
     *,
     scans: Sequence[ChangedFileScan] | None = None,
@@ -249,6 +250,49 @@ def render_changed_export(
     return "\n".join(lines).rstrip() + "\n"
 
 
+
+
+
+def _format_changed_secret_detection_section(findings: list[SecretFinding]) -> str:
+    """Format a compact changed export secret detection summary."""
+
+    if not findings:
+        return ""
+
+    counts_by_type: dict[str, int] = {}
+    for finding in findings:
+        counts_by_type[finding.secret_type] = counts_by_type.get(finding.secret_type, 0) + 1
+
+    lines = [
+        "# Secret Detection",
+        "",
+        f"Potential secrets masked in changed export: {len(findings)}",
+        "",
+        "Findings by type:",
+    ]
+
+    for secret_type in sorted(counts_by_type):
+        lines.append(f"- {secret_type}: {counts_by_type[secret_type]}")
+
+    return "\n".join(lines)
+
+
+def _append_changed_secret_detection_section(text: str, section: str) -> str:
+    """Append the changed export secret detection section when needed."""
+
+    if not section:
+        return text
+
+    return f"{text.rstrip()}\n\n{section}\n"
+
+
+def render_changed_export(*args: object, **kwargs: object) -> str:
+    """Render changed export content with potential secrets masked."""
+
+    rendered = _render_changed_export_unmasked(*args, **kwargs)
+    masked_text, findings = mask_secrets_in_text(rendered, "changed.txt")
+    secret_section = _format_changed_secret_detection_section(findings)
+    return _append_changed_secret_detection_section(masked_text, secret_section)
 def write_changed_export(
     repo_path: str | Path = ".",
     output_path: str | Path = "changed.txt",

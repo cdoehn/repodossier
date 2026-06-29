@@ -95,6 +95,7 @@ def _assignment_pattern(variable_pattern: str) -> Pattern[str]:
     return re.compile(
         rf"""
         ^
+        (?P<diff_prefix>[+-])?
         (?P<prefix>
             \s*
             (?:export\s+)?

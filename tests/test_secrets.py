@@ -8,6 +8,7 @@ from repocontext.secrets import (
     is_placeholder_secret,
     is_probably_secret_value,
     mask_secret_in_line,
+    mask_secrets_in_text,
     mask_secret_value,
 )
 
@@ -385,3 +386,49 @@ def test_detects_multiple_secret_types_in_file_order():
         "PASSWORD",
     ]
     assert [finding.line_number for finding in findings] == [1, 2, 3, 4]
+
+
+def test_detects_added_diff_api_key_assignment():
+    text = '+OPENAI_API_KEY = "sk-live-1234567890abcdef"\n'
+
+    findings = detect_secrets_in_text(text, "changed.txt")
+
+    assert len(findings) == 1
+    assert findings[0].secret_type == "API_KEY"
+    assert findings[0].variable_name == "OPENAI_API_KEY"
+    assert findings[0].line_number == 1
+    assert "sk-live-1234567890abcdef" not in findings[0].masked_text
+    assert findings[0].masked_text.startswith("+OPENAI_API_KEY")
+
+
+def test_detects_removed_diff_token_assignment():
+    text = "-ACCESS_TOKEN='ghp_1234567890abcdef'\n"
+
+    findings = detect_secrets_in_text(text, "changed.txt")
+
+    assert len(findings) == 1
+    assert findings[0].secret_type == "TOKEN"
+    assert findings[0].variable_name == "ACCESS_TOKEN"
+    assert "ghp_1234567890abcdef" not in findings[0].masked_text
+    assert findings[0].masked_text.startswith("-ACCESS_TOKEN")
+
+
+def test_mask_secrets_in_text_masks_diff_lines():
+    text = "\n".join(
+        [
+            'diff --git a/config.py b/config.py',
+            '+OPENAI_API_KEY = "sk-live-1234567890abcdef"',
+            "-ACCESS_TOKEN='ghp_1234567890abcdef'",
+            ' unchanged line',
+        ]
+    )
+
+    masked_text, findings = mask_secrets_in_text(text, "changed.txt")
+
+    assert len(findings) == 2
+    assert "sk-live-1234567890abcdef" not in masked_text
+    assert "ghp_1234567890abcdef" not in masked_text
+    assert "***REDACTED***" in masked_text
+    assert "diff --git" in masked_text
+    assert " unchanged line" in masked_text
+
