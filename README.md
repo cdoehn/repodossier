@@ -1079,6 +1079,14 @@ Before cutting or validating a release, run:
     repocontext export-docs --help
     repocontext changed --help
 
+<!-- repocontext-pipx-validation-note -->
+
+For a full isolated pipx release validation, run:
+
+    scripts/validate_pipx_release.sh
+
+The script installs RepoContext into a temporary pipx home, runs CLI help checks, creates a temporary Git repository, validates full, AI, docs, and changed exports, and verifies that reinstalling through pipx still exposes the CLI.
+
 For pipx validation from a local checkout:
 
     pipx uninstall repocontext || true
@@ -1086,4 +1094,3 @@ For pipx validation from a local checkout:
     repocontext --help
 
 <!-- repocontext-release-usage:end -->
-
