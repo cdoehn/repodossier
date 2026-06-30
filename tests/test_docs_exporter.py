@@ -119,11 +119,11 @@ def test_documentation_file_detection_accepts_tasks_roadmap_and_planning_files()
     assert is_documentation_file("TASKS.md")
     assert is_documentation_file("ROADMAP.md")
     assert is_documentation_file("REPOCONTEXT_ROADMAP.md")
-    assert is_documentation_file("planning/REPOCONTEXT_ROADMAP.md")
-    assert is_documentation_file("planning/MILESTONE9.md")
+    assert is_documentation_file("planning/archive/1.0.0/roadmap.md")
+    assert is_documentation_file("planning/archive/1.0.0/milestone9.md")
 
     assert categorize_documentation_file("TASKS.md") == TASKS_AND_ROADMAP_CATEGORY
-    assert categorize_documentation_file("planning/REPOCONTEXT_ROADMAP.md") == TASKS_AND_ROADMAP_CATEGORY
+    assert categorize_documentation_file("planning/archive/1.0.0/roadmap.md") == TASKS_AND_ROADMAP_CATEGORY
 
 
 def test_documentation_file_detection_accepts_docs_directory_text_files():
@@ -221,7 +221,7 @@ def test_render_docs_export_quick_start_summarizes_repository_docs(tmp_path: Pat
             make_file(tmp_path, "README.md", line_count=2, estimated_tokens=1200),
             make_file(
                 tmp_path,
-                "planning/REPOCONTEXT_ROADMAP.md",
+                "planning/archive/1.0.0/roadmap.md",
                 line_count=3,
                 estimated_tokens=2400,
             ),
@@ -358,7 +358,7 @@ def test_render_docs_export_handles_no_documentation_files(tmp_path: Path):
 def test_documentation_file_detection_is_case_insensitive():
     assert is_documentation_file("readme.MD")
     assert is_documentation_file("Docs/Usage.MD")
-    assert is_documentation_file("planning/milestone9.MD")
+    assert is_documentation_file("planning/archive/1.0.0/milestone9.MD")
     assert categorize_documentation_file("readme.MD") == PRIMARY_DOCUMENTATION_CATEGORY
 
 
@@ -411,14 +411,14 @@ def test_create_docs_export_context_filters_to_exportable_documentation_files(tm
 
 def test_create_docs_export_context_keeps_category_order_deterministic(tmp_path: Path):
     usage = make_file(tmp_path, "docs/usage.md")
-    roadmap = make_file(tmp_path, "planning/REPOCONTEXT_ROADMAP.md")
+    roadmap = make_file(tmp_path, "planning/archive/1.0.0/roadmap.md")
     readme = make_file(tmp_path, "README.md")
 
     context = make_docs_context(tmp_path, [usage, roadmap, readme])
 
     assert [document.relative_path.as_posix() for document in context.documentation_files] == [
         "README.md",
-        "planning/REPOCONTEXT_ROADMAP.md",
+        "planning/archive/1.0.0/roadmap.md",
         "docs/usage.md",
     ]
 
@@ -700,4 +700,3 @@ def test_docs_export_masks_secret_values_and_reports_summary(monkeypatch):
     assert "Potential secrets masked: 1" in rendered
     assert "- TOKEN: 1" in rendered
     assert "This line is safe documentation." in rendered
-

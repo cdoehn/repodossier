@@ -133,7 +133,7 @@ Testfälle:
 - README.md wird erkannt.
 - REPOCONTEXT_ARCHITECTURE.md wird erkannt.
 - REPOCONTEXT_SPEC_v1.3.txt wird erkannt.
-- planning/REPOCONTEXT_ROADMAP.md wird erkannt.
+- planning/archive/1.0.0/roadmap.md wird erkannt.
 - docs/usage.md wird erkannt.
 - src/repocontext/cli.py wird nicht erkannt.
 - full.txt, ai.txt, docs.txt, changed.txt werden nicht erkannt.
