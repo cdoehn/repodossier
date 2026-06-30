@@ -21,7 +21,7 @@ def test_repodossier_help_uses_repodossier_branding():
 
     assert "RepoDossier" in combined
     assert "repodossier" in combined
-    assert "RepoContext" not in combined
+    assert "RepoDossier" not in combined
 
 
 def test_repodossier_module_help_uses_current_command_examples():
@@ -31,23 +31,23 @@ def test_repodossier_module_help_uses_current_command_examples():
     combined = result.stdout + result.stderr
 
     assert "repodossier" in combined
-    assert "repocontext full" not in combined
-    assert "repocontext export-ai" not in combined
-    assert "repocontext export-docs" not in combined
+    assert "repodossier full" not in combined
+    assert "repodossier export-ai" not in combined
+    assert "repodossier export-docs" not in combined
 
 
-def test_legacy_repocontext_console_script_is_still_declared():
+def test_legacy_repodossier_console_script_is_still_declared():
     data = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))
 
     scripts = data["project"]["scripts"]
 
     assert scripts["repodossier"] == "repodossier.cli:main"
-    assert scripts["repocontext"] == "repodossier.cli:main"
+    assert scripts["repodossier"] == "repodossier.cli:main"
 
 
-def test_legacy_repocontext_module_help_still_runs():
+def test_legacy_repodossier_module_help_still_runs():
     result = subprocess.run(
-        [sys.executable, "-m", "repocontext", "--help"],
+        [sys.executable, "-m", "repodossier", "--help"],
         check=False,
         capture_output=True,
         text=True,
@@ -57,4 +57,4 @@ def test_legacy_repocontext_module_help_still_runs():
     combined = result.stdout + result.stderr
 
     assert "RepoDossier" in combined
-    assert "RepoContext" not in combined
+    assert "RepoDossier" not in combined
