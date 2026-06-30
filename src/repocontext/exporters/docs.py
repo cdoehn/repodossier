@@ -14,7 +14,7 @@ from typing import Sequence
 
 from repocontext.gitignore import ensure_repocontext_gitignore_entries
 from repocontext.models import FileInfo
-from repocontext.config import format_limit_notice, get_active_config, is_file_size_allowed, truncate_text_by_line_limit
+from repocontext.config import ai_config_summary_section, format_limit_notice, get_active_config, is_file_size_allowed, truncate_text_by_line_limit
 
 from .full import FullExportContext, build_full_export_context
 
@@ -767,6 +767,25 @@ __all__ = [
 ]
 
 
+
+
+def _insert_docs_config_summary_after_heading(rendered: str) -> str:
+    """Insert the RepoContext config summary without replacing the docs title."""
+
+    summary = ai_config_summary_section(get_active_config()).rstrip()
+    if not summary:
+        return rendered
+
+    if rendered.startswith("# Documentation Context\n\n## RepoContext Configuration\n"):
+        return rendered
+
+    heading = "# Documentation Context\n"
+    if rendered.startswith(heading):
+        remainder = rendered[len(heading):].lstrip("\n")
+        return f"{heading}\n{summary}\n\n{remainder}"
+
+    return f"{summary}\n\n{rendered}"
+
 _REPOCONTEXT_DOCS_EXPORT_LIMITS_WRAPPER = True
 
 
@@ -873,5 +892,6 @@ def render_docs_export(context: DocumentationExportContext) -> str:
 
     limited_context = _apply_docs_document_limits(context)
     rendered = _REPOCONTEXT_ORIGINAL_RENDER_DOCS_EXPORT_FOR_LIMITS(limited_context)
+    rendered = _insert_docs_config_summary_after_heading(rendered)
     return _apply_docs_max_export_bytes_limit(rendered)
 
