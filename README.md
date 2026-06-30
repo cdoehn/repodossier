@@ -1098,3 +1098,37 @@ For pipx validation from a local checkout:
     repodossier --help
 
 <!-- repodossier-release-usage:end -->
+
+## Legacy RepoContext compatibility
+
+RepoDossier keeps a temporary compatibility layer for projects that still use
+the old RepoContext names.
+
+Prefer the current command for new projects:
+
+```bash
+repodossier full
+repodossier export-ai
+repodossier export-docs
+```
+
+Current config names:
+
+```text
+.repodossier.yml
+.repodossier.yaml
+.repodossier.toml
+[tool.repodossier]
+```
+
+Legacy config names are still accepted as fallbacks:
+
+```text
+.repocontext.yml
+.repocontext.yaml
+.repocontext.toml
+[tool.repocontext]
+```
+
+If both current and legacy config values are present, the RepoDossier config
+takes precedence.

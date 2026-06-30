@@ -9,6 +9,35 @@ from typing import Any
 import fnmatch
 import subprocess
 
+CURRENT_CONFIG_BASENAME = "repodossier"
+LEGACY_CONFIG_BASENAME = "repocontext"
+
+CURRENT_CONFIG_FILENAMES = (
+    ".repodossier.yml",
+    ".repodossier.yaml",
+    ".repodossier.toml",
+)
+
+LEGACY_CONFIG_FILENAMES = (
+    ".repocontext.yml",
+    ".repocontext.yaml",
+    ".repocontext.toml",
+)
+
+
+def _get_current_or_legacy_tool_section(tool_table):
+    """Return [tool.repodossier], falling back to legacy [tool.repocontext]."""
+
+    if not isinstance(tool_table, dict):
+        return {}
+
+    current = tool_table.get(CURRENT_CONFIG_BASENAME)
+    if current is not None:
+        return current
+
+    return tool_table.get(LEGACY_CONFIG_BASENAME, {})
+
+
 
 CONFIG_FILENAME = ".repodossier.yml"
 
