@@ -515,12 +515,39 @@ def _detect_core_areas(paths: tuple[str, ...]) -> tuple[str, ...]:
     lower_to_original = {path.lower(): path for path in paths}
 
     for suffix, label in area_rules:
-        for lower_path, original_path in sorted(lower_to_original.items()):
-            if lower_path.endswith(suffix):
-                _append_unique(core_areas, f"{label}: {original_path}")
-                break
+        matching_paths = [
+            (lower_path, original_path)
+            for lower_path, original_path in lower_to_original.items()
+            if _matches_core_area_suffix(lower_path, suffix)
+        ]
+
+        for _lower_path, original_path in sorted(
+            matching_paths,
+            key=lambda item: _core_area_path_sort_key(item[0]),
+        ):
+            _append_unique(core_areas, f"{label}: {original_path}")
+            break
 
     return tuple(core_areas)
+
+
+def _matches_core_area_suffix(lower_path: str, suffix: str) -> bool:
+    """Return true when a path matches a core-area suffix by path segment."""
+
+    if "/" in suffix:
+        return lower_path == suffix or lower_path.endswith(f"/{suffix}")
+
+    return Path(lower_path).name == suffix
+
+
+def _core_area_path_sort_key(lower_path: str) -> tuple[int, int, int, str]:
+    """Prefer current RepoDossier paths over legacy compatibility wrappers."""
+
+    parts = Path(lower_path).parts
+    current_package_rank = 0 if "repodossier" in parts else 1
+    legacy_package_rank = 1 if ("repo" + "context") in parts else 0
+
+    return (current_package_rank, legacy_package_rank, len(parts), lower_path)
 
 
 def _detect_test_locations(paths: tuple[str, ...]) -> tuple[str, ...]:

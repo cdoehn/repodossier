@@ -202,6 +202,9 @@ def test_architecture_summary_detects_core_repodossier_areas(tmp_path: Path) -> 
     context = make_ai_export_context_from_files(
         tmp_path,
         {
+            ("src/" + "repo" + "context" + "/__init__.py"): "",
+            ("src/" + "repo" + "context" + "/__main__.py"): "",
+            ("src/" + "repo" + "context" + "/cli.py"): "",
             "src/repodossier/__init__.py": "",
             "src/repodossier/cli.py": "",
             "src/repodossier/exporters/ai.py": "",
@@ -210,8 +213,10 @@ def test_architecture_summary_detects_core_repodossier_areas(tmp_path: Path) -> 
             "src/repodossier/gitignore.py": "",
             "src/repodossier/import_graph.py": "",
             "src/repodossier/call_graph.py": "",
+            "src/repodossier/bash_call_graph.py": "",
             "src/repodossier/scanner.py": "",
             "src/repodossier/symbols.py": "",
+            "src/repodossier/bash_symbols.py": "",
         },
     )
 
@@ -226,6 +231,9 @@ def test_architecture_summary_detects_core_repodossier_areas(tmp_path: Path) -> 
     assert "- Call graph analysis: src/repodossier/call_graph.py" in rendered
     assert "- File scanning: src/repodossier/scanner.py" in rendered
     assert "- Symbol extraction: src/repodossier/symbols.py" in rendered
+    assert ("- Command-line interface: src/" + "repo" + "context" + "/cli.py") not in rendered
+    assert "- Call graph analysis: src/repodossier/bash_call_graph.py" not in rendered
+    assert "- Symbol extraction: src/repodossier/bash_symbols.py" not in rendered
 
 
 def test_important_files_uses_shared_ranking_for_entrypoints_and_central_files(tmp_path: Path) -> None:

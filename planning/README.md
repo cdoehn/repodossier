@@ -2,7 +2,7 @@
 
 This directory contains current planning notes and archived implementation history.
 
-RepoContext 1.0.0 is complete. Its original roadmap and milestone implementation notes are preserved in:
+RepoDossier 1.0.0 is complete. Its original roadmap and milestone implementation notes are preserved in:
 
     planning/archive/1.0.0/
 
