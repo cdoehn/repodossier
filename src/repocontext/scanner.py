@@ -12,6 +12,48 @@ from typing import Iterable, Optional
 from .git import list_tracked_files
 from .models import FileInfo
 
+
+BASH_SOURCE_EXTENSIONS = (".sh", ".bash")
+
+
+def is_bash_source_file(path: object, content: str | bytes | None = None) -> bool:
+    """Return True when a path or shebang identifies a Bash or POSIX shell script."""
+
+    path_text = str(path).lower()
+    if path_text.endswith(BASH_SOURCE_EXTENSIONS):
+        return True
+
+    if isinstance(content, bytes):
+        content = content.decode("utf-8", errors="ignore")
+
+    if not content:
+        return False
+
+    lines = content.splitlines()
+    if not lines:
+        return False
+
+    first_line = lines[0].strip()
+    if not first_line.startswith("#!"):
+        return False
+
+    parts = first_line[2:].strip().lower().replace("\t", " ").split()
+    if not parts:
+        return False
+
+    executable = parts[0].rsplit("/", 1)[-1]
+    if executable in {"bash", "sh"}:
+        return True
+
+    if executable == "env":
+        for part in parts[1:]:
+            if part.startswith("-"):
+                continue
+            if part.rsplit("/", 1)[-1] in {"bash", "sh"}:
+                return True
+
+    return False
+
 _EXTENSION_LANGUAGE_MAP: dict[str, str] = {
     ".py": "python",
     ".sh": "bash",
@@ -53,6 +95,9 @@ def detect_language_from_extension(path: Path | str) -> Optional[str]:
         The detected language name in lowercase if the extension is known,
         otherwise ``None``.
     """
+    if is_bash_source_file(path, None):
+        return "bash"
+
     suffix = Path(path).suffix.lower()
     if not suffix:
         return None
