@@ -18,6 +18,7 @@ from repocontext.changed_command import add_changed_subparser, run_changed_comma
 from repocontext.config import ConfigError, load_config_from_args, set_active_config, with_config_arguments
 
 
+from repocontext._version import get_version
 _FALLBACK_VERSION = "0.1.0.dev0"
 
 
@@ -181,7 +182,11 @@ def _handle_info_command(_args: argparse.Namespace) -> int:
 def _build_parser() -> argparse.ArgumentParser:
     """Create the top-level argument parser."""
     parser = argparse.ArgumentParser(prog="repocontext")
-    parser.add_argument("--version", action="version", version=_determine_version())
+    parser.add_argument(
+        "--version",
+        action="version",
+        version=f"repocontext {get_version()}",
+    )
 
     subparsers = parser.add_subparsers(dest="command")
 

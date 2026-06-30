@@ -7,7 +7,7 @@ dependencies = [
     "PyYAML>=6.0",
 ]
 name = "repocontext"
-version = "0.1.0.dev0"
+version = "1.0.0"
 description = "AI-friendly exports of Git repositories for large language models."
 authors = [{ name = "RepoContext Authors", email = "team@example.com" }]
 license = { file = "LICENSE" }
