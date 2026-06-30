@@ -15,7 +15,7 @@ from repocontext.gitignore import ensure_repocontext_gitignore_entries
 from repocontext.schema import analyze_database_schemas
 
 from .full import FullExportContext, build_full_export_context
-from repocontext.config import ai_config_summary_section, apply_config_to_file_infos, get_active_config
+from repocontext.config import ai_config_summary_section, apply_config_to_file_infos, get_active_config, is_file_size_allowed
 
 
 AI_EXPORT_FILENAME = "ai.txt"
@@ -87,9 +87,9 @@ def iter_ai_export_headings() -> tuple[str, ...]:
 def create_ai_export_context(full_context: FullExportContext) -> AIExportContext:
     """Create an AI export context from an already-built full export context."""
 
-    return AIExportContext(
-        full_context=_filter_ai_export_input_context(full_context)
-    )
+    filtered_context = _filter_ai_export_input_context(full_context)
+    limited_context = _apply_ai_export_file_content_limits(filtered_context)
+    return AIExportContext(full_context=limited_context)
 
 
 def _filter_ai_export_input_context(full_context: FullExportContext) -> FullExportContext:
@@ -106,6 +106,38 @@ def _filter_ai_export_input_context(full_context: FullExportContext) -> FullExpo
 
     return replace(full_context, scanned_files=filtered_scanned_files)
 
+
+
+def _apply_ai_export_file_content_limits(full_context: FullExportContext) -> FullExportContext:
+    """Strip large file contents from AI-only analysis inputs when configured."""
+
+    config = get_active_config()
+    limited_scanned_files = tuple(
+        _strip_ai_file_content_for_size_limit(file_info, config)
+        for file_info in full_context.scanned_files
+    )
+
+    if limited_scanned_files == full_context.scanned_files:
+        return full_context
+
+    return replace(full_context, scanned_files=limited_scanned_files)
+
+
+def _strip_ai_file_content_for_size_limit(file_info: object, config: object) -> object:
+    """Return file info with content removed when max_file_bytes excludes it."""
+
+    size_bytes = getattr(file_info, "size_bytes", None)
+    if size_bytes is None:
+        return file_info
+
+    if is_file_size_allowed(size_bytes, config):
+        return file_info
+
+    content = getattr(file_info, "content", None)
+    if content in (None, ""):
+        return file_info
+
+    return replace(file_info, content="")
 
 def _is_generated_export_file_path(relative_path: object) -> bool:
     """Return True when a repository-root path is a generated RepoContext export."""
@@ -1003,12 +1035,26 @@ def _render_symbol_index_section(context: AIExportContext) -> str:
     return "\n".join(lines)
 
 
+
+def _ai_symbol_source_path_is_allowed(file_info: object, config: object) -> bool:
+    """Return whether a file may be used as AI symbol analysis input."""
+
+    size_bytes = getattr(file_info, "size_bytes", None)
+    if size_bytes is None:
+        return True
+
+    return is_file_size_allowed(size_bytes, config)
+
 def _symbol_index_source_paths(context: AIExportContext) -> tuple[Path, ...]:
     """Return Python source paths from scanned export data."""
 
     source_paths: list[Path] = []
+    config = get_active_config()
 
     for file_info in context.full_context.exported_text_files:
+        if not _ai_symbol_source_path_is_allowed(file_info, config):
+            continue
+
         relative_path = getattr(file_info, "relative_path", None)
         if relative_path is None:
             continue
