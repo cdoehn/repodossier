@@ -894,3 +894,196 @@ SQL files are parsed as text. RepoContext does not execute migrations, does not 
 The SQL parser is intentionally best-effort. It is designed to extract useful structure from common `CREATE TABLE` statements, not to fully implement every SQL dialect.
 
 Generated RepoContext exports such as `full.txt`, `ai.txt`, `docs.txt`, and `changed.txt` are excluded from schema discovery.
+
+<!-- repocontext-release-usage:start -->
+
+## Release 1.0 usage guide
+
+RepoContext creates repository exports that are designed to be pasted into or attached to AI assistants. It summarizes source files, documentation, symbols, imports, call relationships, dependency metadata, database schemas, changed files, and shell scripts where supported.
+
+The 1.0 release focuses on stable local CLI usage:
+
+- full.txt for a complete repository context export.
+- ai.txt for a compact AI-oriented architecture and code context export.
+- docs.txt for documentation-focused context.
+- changed.txt for reviewing current Git changes.
+- .repocontext.yml for project-specific include, exclude, and limit settings.
+- secret masking to reduce the risk of exporting credentials.
+- split exports when configured limits require multi-part output.
+- Python and Bash-aware symbol and call analysis where supported.
+
+### Installation
+
+For normal CLI usage from a local checkout, pipx is the recommended installation method:
+
+    pipx install .
+    repocontext --help
+
+For a regular local Python installation:
+
+    python3 -m pip install .
+    repocontext --help
+
+For development work:
+
+    python3 -m venv .venv
+    source .venv/bin/activate
+    python3 -m pip install -e ".[dev]"
+    python3 -m pytest
+
+### Quick start
+
+Run RepoContext from the root of a Git repository:
+
+    repocontext full
+    repocontext export-ai
+    repocontext export-docs
+    repocontext changed
+
+The generated export files are intended as local artifacts. They should normally stay uncommitted.
+
+### Command reference
+
+#### repocontext full
+
+Creates full.txt, the broadest repository export. Use it when an AI assistant needs maximum project context.
+
+Typical content includes:
+
+- repository overview
+- AI quick-start information
+- file summaries
+- repository tree
+- dependency information
+- symbol information
+- source file contents
+- database schema information where available
+- Bash script information where available
+
+Example:
+
+    repocontext full
+
+#### repocontext export-ai
+
+Creates ai.txt, a more focused export for AI coding sessions.
+
+Typical content includes:
+
+- architecture summary
+- important files
+- symbol index
+- import graph
+- call graph
+- dependency information
+- selected source context
+
+Example:
+
+    repocontext export-ai
+
+#### repocontext export-docs
+
+Creates docs.txt, a documentation-focused export.
+
+Typical content includes recognized project documentation such as:
+
+- README
+- ARCHITECTURE
+- TASKS
+- SPEC
+- other supported documentation files
+
+Example:
+
+    repocontext export-docs
+
+#### repocontext changed
+
+Creates changed.txt, a Git-change-focused export for review work.
+
+Typical content includes:
+
+- changed files
+- relevant diff context
+- changed source snippets where supported
+- comparison information for the selected Git base where supported
+
+Example:
+
+    repocontext changed
+
+### Configuration
+
+RepoContext can be configured with .repocontext.yml when project-specific filtering or limits are needed.
+
+Example:
+
+    include:
+      - "src/**"
+      - "tests/**"
+      - "README.md"
+
+    exclude:
+      - ".venv/**"
+      - "__pycache__/**"
+      - ".git/**"
+      - "full.txt"
+      - "ai.txt"
+      - "docs.txt"
+      - "changed.txt"
+
+    limits:
+      max_file_bytes: 200000
+      max_total_bytes: 2000000
+
+Only use options that are supported by the installed RepoContext version. If an option is not supported, prefer removing it rather than relying on undefined behavior.
+
+### Export files
+
+RepoContext commonly creates these local files:
+
+| File | Purpose |
+| --- | --- |
+| full.txt | complete repository context |
+| ai.txt | compact AI coding context |
+| docs.txt | documentation-only context |
+| changed.txt | Git change review context |
+
+When split exports are enabled or required by configured limits, RepoContext may create multiple numbered output parts instead of one large file.
+
+### Secret masking
+
+RepoContext includes secret detection and masking for common credential-like values such as API keys, tokens, secrets, and passwords. This reduces accidental exposure, but it is not a substitute for manual review.
+
+Before sharing an export externally, inspect the generated file and confirm that no private credentials, personal data, or proprietary material are included unintentionally.
+
+### Bash support
+
+RepoContext 1.0 includes Bash-aware analysis where supported by the current implementation. Bash files may contribute function information, symbol index entries, and call graph information.
+
+### Release limitations
+
+RepoContext uses static analysis. Some relationships may be incomplete when code depends on dynamic imports, reflection, runtime-generated calls, shell indirection, external tools, or framework magic.
+
+The generated exports are designed to be useful AI context, not a formal compiler, security scanner, or complete program analysis database.
+
+### Release checklist
+
+Before cutting or validating a release, run:
+
+    python3 -m pytest --color=yes
+    repocontext --help
+    repocontext full --help
+    repocontext export-ai --help
+    repocontext export-docs --help
+    repocontext changed --help
+
+For pipx validation from a local checkout:
+
+    pipx uninstall repocontext || true
+    pipx install .
+    repocontext --help
+
+<!-- repocontext-release-usage:end -->
+
