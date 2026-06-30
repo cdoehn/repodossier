@@ -63,7 +63,7 @@ def build_part_header(source_name: str, part_number: int, total_parts: int) -> s
         raise ValueError("part_number must not be greater than total_parts")
 
     return (
-        f"# RepoContext Export Part {part_number}/{total_parts}\n\n"
+        f"# RepoDossier Export Part {part_number}/{total_parts}\n\n"
         f"Source export: {source_name}\n"
         f"Part: {part_number} of {total_parts}\n\n"
     )

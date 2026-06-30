@@ -3,7 +3,7 @@ from __future__ import annotations
 import inspect
 from pathlib import Path
 
-from repocontext import symbols
+from repodossier import symbols
 
 
 EXTRACTOR_NAME = "extract_symbols_from_file"

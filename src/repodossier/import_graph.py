@@ -198,8 +198,8 @@ def module_name_from_python_path(
     """Convert a Python file path into its canonical dotted module name.
 
     Examples:
-    - src/repocontext/scanner.py -> repocontext.scanner
-    - src/repocontext/__init__.py -> repocontext
+    - src/repodossier/scanner.py -> repodossier.scanner
+    - src/repodossier/__init__.py -> repodossier
     - tests/test_scanner.py -> tests.test_scanner
     """
 

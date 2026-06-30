@@ -6,7 +6,7 @@ from pathlib import Path
 
 def run_command(repo: Path, args: list[str], env: dict[str, str]) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
-        [sys.executable, "-m", "repocontext", *args],
+        [sys.executable, "-m", "repodossier", *args],
         cwd=repo,
         env=env,
         capture_output=True,
@@ -52,9 +52,9 @@ def test_secret_detection_masks_generated_exports_end_to_end(tmp_path):
         [
             "git",
             "-c",
-            "user.name=RepoContext Test",
+            "user.name=RepoDossier Test",
             "-c",
-            "user.email=repocontext@example.invalid",
+            "user.email=repodossier@example.invalid",
             "commit",
             "-m",
             "initial",

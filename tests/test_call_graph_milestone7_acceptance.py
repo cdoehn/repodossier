@@ -4,16 +4,16 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from repocontext.call_graph import CallEdge, CallGraph, parse_calls_from_source
-from repocontext.exporters.full import (
+from repodossier.call_graph import CallEdge, CallGraph, parse_calls_from_source
+from repodossier.exporters.full import (
     _format_call_graph_section,
     create_full_export_context,
     render_full_export,
 )
-from repocontext.git import RepositoryInfo, TrackedFile
-from repocontext.import_graph import build_import_graph
-from repocontext.models import FileInfo
-from repocontext.symbols import build_symbol_index
+from repodossier.git import RepositoryInfo, TrackedFile
+from repodossier.import_graph import build_import_graph
+from repodossier.models import FileInfo
+from repodossier.symbols import build_symbol_index
 
 
 def test_milestone7_acceptance_direct_function_call_is_resolved_locally() -> None:

@@ -7,8 +7,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from repocontext.cli_split import enable_split_write_interceptor_for_args
-from repocontext.split_config import SplitExportConfig
+from repodossier.cli_split import enable_split_write_interceptor_for_args
+from repodossier.split_config import SplitExportConfig
 
 
 @pytest.mark.parametrize(

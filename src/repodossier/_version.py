@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-PACKAGE_NAME = "repocontext"
+PACKAGE_NAME = "repodossier"
 __version__ = "1.0.0"
 
 

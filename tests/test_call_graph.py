@@ -1,6 +1,6 @@
 import ast
 
-from repocontext.call_graph import (
+from repodossier.call_graph import (
     CallEdge,
     CallGraph,
     ImportAlias,
@@ -9,30 +9,30 @@ from repocontext.call_graph import (
     parse_calls_from_source,
     resolve_import_aliases_with_import_graph,
 )
-from repocontext.import_graph import build_import_graph
-from repocontext.symbols import FileSymbolIndex, SymbolInfo
+from repodossier.import_graph import build_import_graph
+from repodossier.symbols import FileSymbolIndex, SymbolInfo
 
 
 def test_call_edge_exposes_stable_caller_and_callee_keys():
     edge = CallEdge(
-        caller_file="repocontext/exporter.py",
+        caller_file="repodossier/exporter.py",
         caller_name="export",
-        caller_qualified_name="repocontext.exporter.export",
+        caller_qualified_name="repodossier.exporter.export",
         callee_name="render",
-        callee_qualified_name="repocontext.exporter.render",
+        callee_qualified_name="repodossier.exporter.render",
         line_number=12,
         call_type="function",
         confidence="local",
     )
 
-    assert edge.caller_key == "repocontext.exporter.export"
-    assert edge.callee_key == "repocontext.exporter.render"
+    assert edge.caller_key == "repodossier.exporter.export"
+    assert edge.callee_key == "repodossier.exporter.render"
     assert edge.to_dict() == {
-        "caller_file": "repocontext/exporter.py",
+        "caller_file": "repodossier/exporter.py",
         "caller_name": "export",
-        "caller_qualified_name": "repocontext.exporter.export",
+        "caller_qualified_name": "repodossier.exporter.export",
         "callee_name": "render",
-        "callee_qualified_name": "repocontext.exporter.render",
+        "callee_qualified_name": "repodossier.exporter.render",
         "line_number": 12,
         "call_type": "function",
         "confidence": "local",
@@ -41,11 +41,11 @@ def test_call_edge_exposes_stable_caller_and_callee_keys():
 
 def test_call_graph_deduplicates_identical_edges():
     edge = CallEdge(
-        caller_file="repocontext/cli.py",
+        caller_file="repodossier/cli.py",
         caller_name="main",
-        caller_qualified_name="repocontext.cli.main",
+        caller_qualified_name="repodossier.cli.main",
         callee_name="run",
-        callee_qualified_name="repocontext.cli.run",
+        callee_qualified_name="repodossier.cli.run",
         line_number=20,
         call_type="function",
         confidence="local",
@@ -96,52 +96,52 @@ def test_call_graph_returns_edges_in_deterministic_order():
 
 def test_call_graph_groups_outgoing_and_incoming_edges():
     first = CallEdge(
-        caller_file="repocontext/cli.py",
+        caller_file="repodossier/cli.py",
         caller_name="main",
-        caller_qualified_name="repocontext.cli.main",
+        caller_qualified_name="repodossier.cli.main",
         callee_name="parse_args",
-        callee_qualified_name="repocontext.cli.parse_args",
+        callee_qualified_name="repodossier.cli.parse_args",
         line_number=12,
         call_type="function",
         confidence="local",
     )
     second = CallEdge(
-        caller_file="repocontext/cli.py",
+        caller_file="repodossier/cli.py",
         caller_name="main",
-        caller_qualified_name="repocontext.cli.main",
+        caller_qualified_name="repodossier.cli.main",
         callee_name="run_export",
-        callee_qualified_name="repocontext.exporter.run_export",
+        callee_qualified_name="repodossier.exporter.run_export",
         line_number=18,
         call_type="function",
         confidence="imported_local",
     )
     graph = CallGraph([second, first])
 
-    assert graph.get_calls_from("repocontext.cli.main") == (first, second)
-    assert graph.get_callers_of("repocontext.cli.parse_args") == (first,)
-    assert graph.callees_by_symbol["repocontext.cli.main"] == (first, second)
-    assert graph.callers_by_symbol["repocontext.exporter.run_export"] == (second,)
+    assert graph.get_calls_from("repodossier.cli.main") == (first, second)
+    assert graph.get_callers_of("repodossier.cli.parse_args") == (first,)
+    assert graph.callees_by_symbol["repodossier.cli.main"] == (first, second)
+    assert graph.callers_by_symbol["repodossier.exporter.run_export"] == (second,)
 
 
 def test_call_graph_text_output_is_grouped_and_stable():
     graph = CallGraph(
         [
             CallEdge(
-                caller_file="repocontext/cli.py",
+                caller_file="repodossier/cli.py",
                 caller_name="main",
-                caller_qualified_name="repocontext.cli.main",
+                caller_qualified_name="repodossier.cli.main",
                 callee_name="run",
-                callee_qualified_name="repocontext.cli.run",
+                callee_qualified_name="repodossier.cli.run",
                 line_number=22,
                 call_type="function",
                 confidence="local",
             ),
             CallEdge(
-                caller_file="repocontext/cli.py",
+                caller_file="repodossier/cli.py",
                 caller_name="main",
-                caller_qualified_name="repocontext.cli.main",
+                caller_qualified_name="repodossier.cli.main",
                 callee_name="parse_args",
-                callee_qualified_name="repocontext.cli.parse_args",
+                callee_qualified_name="repodossier.cli.parse_args",
                 line_number=10,
                 call_type="function",
                 confidence="local",
@@ -150,9 +150,9 @@ def test_call_graph_text_output_is_grouped_and_stable():
     )
 
     assert graph.to_text() == (
-        "repocontext.cli.main (repocontext/cli.py)\n"
-        "  - line 10: calls repocontext.cli.parse_args [function, local]\n"
-        "  - line 22: calls repocontext.cli.run [function, local]"
+        "repodossier.cli.main (repodossier/cli.py)\n"
+        "  - line 10: calls repodossier.cli.parse_args [function, local]\n"
+        "  - line 22: calls repodossier.cli.run [function, local]"
     )
 
 
@@ -1102,15 +1102,15 @@ def test_collect_import_aliases_from_source_collects_import_as_alias():
 
 def test_collect_import_aliases_from_source_collects_from_import_name():
     aliases = collect_import_aliases_from_source(
-        "from repocontext.scanner import scan_single_file\n",
+        "from repodossier.scanner import scan_single_file\n",
         source_path="src/app.py",
     )
 
     assert aliases == {
         "scan_single_file": ImportAlias(
             local_name="scan_single_file",
-            qualified_name="repocontext.scanner.scan_single_file",
-            module_name="repocontext.scanner",
+            qualified_name="repodossier.scanner.scan_single_file",
+            module_name="repodossier.scanner",
             imported_name="scan_single_file",
             alias=None,
             import_type="from",
@@ -1123,15 +1123,15 @@ def test_collect_import_aliases_from_source_collects_from_import_name():
 
 def test_collect_import_aliases_from_source_collects_from_import_as_alias():
     aliases = collect_import_aliases_from_source(
-        "from repocontext.scanner import scan_single_file as scan\n",
+        "from repodossier.scanner import scan_single_file as scan\n",
         source_path="src/app.py",
     )
 
     assert aliases == {
         "scan": ImportAlias(
             local_name="scan",
-            qualified_name="repocontext.scanner.scan_single_file",
-            module_name="repocontext.scanner",
+            qualified_name="repodossier.scanner.scan_single_file",
+            module_name="repodossier.scanner",
             imported_name="scan_single_file",
             alias="scan",
             import_type="from",
@@ -1165,7 +1165,7 @@ def test_collect_import_aliases_from_source_collects_relative_from_import():
 
 def test_collect_import_aliases_from_source_ignores_wildcard_imports():
     aliases = collect_import_aliases_from_source(
-        "from repocontext.scanner import *\n",
+        "from repodossier.scanner import *\n",
         source_path="src/app.py",
     )
 
@@ -1201,14 +1201,14 @@ def test_parse_calls_from_source_keeps_import_aliases_available_on_visitor():
     ]
 
 def test_resolve_import_aliases_with_import_graph_marks_from_import_as_local(tmp_path):
-    source_root = tmp_path / "src" / "repocontext"
+    source_root = tmp_path / "src" / "repodossier"
     source_root.mkdir(parents=True)
     scanner_path = source_root / "scanner.py"
     app_path = source_root / "app.py"
 
     scanner_path.write_text("def scan_single_file():\n    return None\n", encoding="utf-8")
     app_path.write_text(
-        "from repocontext.scanner import scan_single_file\n"
+        "from repodossier.scanner import scan_single_file\n"
         "\n"
         "def main():\n"
         "    return scan_single_file()\n",
@@ -1227,15 +1227,15 @@ def test_resolve_import_aliases_with_import_graph_marks_from_import_as_local(tmp
     resolved_aliases = resolve_import_aliases_with_import_graph(
         aliases,
         import_graph,
-        source_module="repocontext.app",
+        source_module="repodossier.app",
         source_path=app_path,
     )
 
     assert resolved_aliases == {
         "scan_single_file": ImportAlias(
             local_name="scan_single_file",
-            qualified_name="repocontext.scanner.scan_single_file",
-            module_name="repocontext.scanner",
+            qualified_name="repodossier.scanner.scan_single_file",
+            module_name="repodossier.scanner",
             imported_name="scan_single_file",
             alias=None,
             import_type="from",
@@ -1243,21 +1243,21 @@ def test_resolve_import_aliases_with_import_graph_marks_from_import_as_local(tmp
             line_number=1,
             is_relative=False,
             is_local=True,
-            resolved_module="repocontext.scanner",
+            resolved_module="repodossier.scanner",
             resolved_path=scanner_path.as_posix(),
         )
     }
 
 
 def test_resolve_import_aliases_with_import_graph_marks_plain_import_alias_as_local(tmp_path):
-    source_root = tmp_path / "src" / "repocontext"
+    source_root = tmp_path / "src" / "repodossier"
     source_root.mkdir(parents=True)
     scanner_path = source_root / "scanner.py"
     app_path = source_root / "app.py"
 
     scanner_path.write_text("def scan_single_file():\n    return None\n", encoding="utf-8")
     app_path.write_text(
-        "import repocontext.scanner as scanner\n"
+        "import repodossier.scanner as scanner\n"
         "\n"
         "def main():\n"
         "    return scanner.scan_single_file()\n",
@@ -1276,15 +1276,15 @@ def test_resolve_import_aliases_with_import_graph_marks_plain_import_alias_as_lo
     resolved_aliases = resolve_import_aliases_with_import_graph(
         aliases,
         import_graph,
-        source_module="repocontext.app",
+        source_module="repodossier.app",
         source_path=app_path,
     )
 
     assert resolved_aliases == {
         "scanner": ImportAlias(
             local_name="scanner",
-            qualified_name="repocontext.scanner",
-            module_name="repocontext.scanner",
+            qualified_name="repodossier.scanner",
+            module_name="repodossier.scanner",
             imported_name=None,
             alias="scanner",
             import_type="import",
@@ -1292,7 +1292,7 @@ def test_resolve_import_aliases_with_import_graph_marks_plain_import_alias_as_lo
             line_number=1,
             is_relative=False,
             is_local=True,
-            resolved_module="repocontext.scanner",
+            resolved_module="repodossier.scanner",
             resolved_path=scanner_path.as_posix(),
         )
     }
@@ -1330,14 +1330,14 @@ def test_resolve_import_aliases_with_import_graph_marks_external_alias_as_not_lo
 
 
 def test_build_call_graph_from_ast_accepts_import_graph_for_alias_resolution(tmp_path):
-    source_root = tmp_path / "src" / "repocontext"
+    source_root = tmp_path / "src" / "repodossier"
     source_root.mkdir(parents=True)
     scanner_path = source_root / "scanner.py"
     app_path = source_root / "app.py"
 
     scanner_path.write_text("def scan_single_file():\n    return None\n", encoding="utf-8")
     app_source = (
-        "from repocontext.scanner import scan_single_file\n"
+        "from repodossier.scanner import scan_single_file\n"
         "\n"
         "def main():\n"
         "    return scan_single_file()\n"
@@ -1352,7 +1352,7 @@ def test_build_call_graph_from_ast_accepts_import_graph_for_alias_resolution(tmp
     graph = build_call_graph_from_ast(
         ast.parse(app_source, filename=app_path.as_posix()),
         source_path=app_path,
-        module_name="repocontext.app",
+        module_name="repodossier.app",
         import_graph=import_graph,
     )
 
@@ -1362,7 +1362,7 @@ def test_build_call_graph_from_ast_accepts_import_graph_for_alias_resolution(tmp
         CallEdge(
             caller_file=app_path.as_posix(),
             caller_name="main",
-            caller_qualified_name="repocontext.app.main",
+            caller_qualified_name="repodossier.app.main",
             callee_name="scan_single_file",
             callee_qualified_name=None,
             line_number=4,
@@ -1372,7 +1372,7 @@ def test_build_call_graph_from_ast_accepts_import_graph_for_alias_resolution(tmp
     ]
 
 def test_parse_calls_from_source_resolves_imported_local_function_call(tmp_path):
-    source_root = tmp_path / "src" / "repocontext"
+    source_root = tmp_path / "src" / "repodossier"
     source_root.mkdir(parents=True)
     scanner_path = source_root / "scanner.py"
     app_path = source_root / "app.py"
@@ -1383,7 +1383,7 @@ def test_parse_calls_from_source_resolves_imported_local_function_call(tmp_path)
         encoding="utf-8",
     )
     app_source = (
-        "from repocontext.scanner import scan_single_file\n"
+        "from repodossier.scanner import scan_single_file\n"
         "\n"
         "def main():\n"
         "    return scan_single_file()\n"
@@ -1411,7 +1411,7 @@ def test_parse_calls_from_source_resolves_imported_local_function_call(tmp_path)
     graph = parse_calls_from_source(
         app_source,
         source_path=app_path,
-        module_name="repocontext.app",
+        module_name="repodossier.app",
         symbol_index=symbol_index,
         import_graph=import_graph,
     )
@@ -1420,9 +1420,9 @@ def test_parse_calls_from_source_resolves_imported_local_function_call(tmp_path)
         CallEdge(
             caller_file=app_path.as_posix(),
             caller_name="main",
-            caller_qualified_name="repocontext.app.main",
+            caller_qualified_name="repodossier.app.main",
             callee_name="scan_single_file",
-            callee_qualified_name="repocontext.scanner.scan_single_file",
+            callee_qualified_name="repodossier.scanner.scan_single_file",
             line_number=4,
             call_type="function",
             confidence="imported_local",
@@ -1431,7 +1431,7 @@ def test_parse_calls_from_source_resolves_imported_local_function_call(tmp_path)
 
 
 def test_parse_calls_from_source_resolves_imported_local_function_alias_call(tmp_path):
-    source_root = tmp_path / "src" / "repocontext"
+    source_root = tmp_path / "src" / "repodossier"
     source_root.mkdir(parents=True)
     scanner_path = source_root / "scanner.py"
     app_path = source_root / "app.py"
@@ -1442,7 +1442,7 @@ def test_parse_calls_from_source_resolves_imported_local_function_alias_call(tmp
         encoding="utf-8",
     )
     app_source = (
-        "from repocontext.scanner import scan_single_file as scan\n"
+        "from repodossier.scanner import scan_single_file as scan\n"
         "\n"
         "def main():\n"
         "    return scan()\n"
@@ -1470,7 +1470,7 @@ def test_parse_calls_from_source_resolves_imported_local_function_alias_call(tmp
     graph = parse_calls_from_source(
         app_source,
         source_path=app_path,
-        module_name="repocontext.app",
+        module_name="repodossier.app",
         symbol_index=symbol_index,
         import_graph=import_graph,
     )
@@ -1479,9 +1479,9 @@ def test_parse_calls_from_source_resolves_imported_local_function_alias_call(tmp
         CallEdge(
             caller_file=app_path.as_posix(),
             caller_name="main",
-            caller_qualified_name="repocontext.app.main",
+            caller_qualified_name="repodossier.app.main",
             callee_name="scan",
-            callee_qualified_name="repocontext.scanner.scan_single_file",
+            callee_qualified_name="repodossier.scanner.scan_single_file",
             line_number=4,
             call_type="function",
             confidence="imported_local",
@@ -1490,7 +1490,7 @@ def test_parse_calls_from_source_resolves_imported_local_function_alias_call(tmp
 
 
 def test_parse_calls_from_source_keeps_imported_call_unresolved_when_symbol_is_missing(tmp_path):
-    source_root = tmp_path / "src" / "repocontext"
+    source_root = tmp_path / "src" / "repodossier"
     source_root.mkdir(parents=True)
     scanner_path = source_root / "scanner.py"
     app_path = source_root / "app.py"
@@ -1501,7 +1501,7 @@ def test_parse_calls_from_source_keeps_imported_call_unresolved_when_symbol_is_m
         encoding="utf-8",
     )
     app_source = (
-        "from repocontext.scanner import scan_single_file\n"
+        "from repodossier.scanner import scan_single_file\n"
         "\n"
         "def main():\n"
         "    return scan_single_file()\n"
@@ -1529,7 +1529,7 @@ def test_parse_calls_from_source_keeps_imported_call_unresolved_when_symbol_is_m
     graph = parse_calls_from_source(
         app_source,
         source_path=app_path,
-        module_name="repocontext.app",
+        module_name="repodossier.app",
         symbol_index=symbol_index,
         import_graph=import_graph,
     )
@@ -1538,7 +1538,7 @@ def test_parse_calls_from_source_keeps_imported_call_unresolved_when_symbol_is_m
         CallEdge(
             caller_file=app_path.as_posix(),
             caller_name="main",
-            caller_qualified_name="repocontext.app.main",
+            caller_qualified_name="repodossier.app.main",
             callee_name="scan_single_file",
             callee_qualified_name=None,
             line_number=4,
@@ -1549,7 +1549,7 @@ def test_parse_calls_from_source_keeps_imported_call_unresolved_when_symbol_is_m
 
 
 def test_parse_calls_from_source_marks_local_and_imported_same_name_ambiguous(tmp_path):
-    source_root = tmp_path / "src" / "repocontext"
+    source_root = tmp_path / "src" / "repodossier"
     source_root.mkdir(parents=True)
     scanner_path = source_root / "scanner.py"
     app_path = source_root / "app.py"
@@ -1560,7 +1560,7 @@ def test_parse_calls_from_source_marks_local_and_imported_same_name_ambiguous(tm
         encoding="utf-8",
     )
     app_source = (
-        "from repocontext.scanner import helper\n"
+        "from repodossier.scanner import helper\n"
         "\n"
         "def helper():\n"
         "    return 1\n"
@@ -1591,7 +1591,7 @@ def test_parse_calls_from_source_marks_local_and_imported_same_name_ambiguous(tm
     graph = parse_calls_from_source(
         app_source,
         source_path=app_path,
-        module_name="repocontext.app",
+        module_name="repodossier.app",
         symbol_index=symbol_index,
         import_graph=import_graph,
     )
@@ -1600,7 +1600,7 @@ def test_parse_calls_from_source_marks_local_and_imported_same_name_ambiguous(tm
         CallEdge(
             caller_file=app_path.as_posix(),
             caller_name="main",
-            caller_qualified_name="repocontext.app.main",
+            caller_qualified_name="repodossier.app.main",
             callee_name="helper",
             callee_qualified_name=None,
             line_number=7,
@@ -1697,7 +1697,7 @@ def test_parse_calls_from_source_marks_plain_import_attribute_call_as_external()
 
 
 def test_parse_calls_from_source_keeps_local_import_alias_attribute_call_unresolved_not_external(tmp_path):
-    source_root = tmp_path / "src" / "repocontext"
+    source_root = tmp_path / "src" / "repodossier"
     source_root.mkdir(parents=True)
     scanner_path = source_root / "scanner.py"
     app_path = source_root / "app.py"
@@ -1708,7 +1708,7 @@ def test_parse_calls_from_source_keeps_local_import_alias_attribute_call_unresol
         encoding="utf-8",
     )
     app_source = (
-        "import repocontext.scanner as scanner\n"
+        "import repodossier.scanner as scanner\n"
         "\n"
         "def main():\n"
         "    return scanner.scan_single_file()\n"
@@ -1723,7 +1723,7 @@ def test_parse_calls_from_source_keeps_local_import_alias_attribute_call_unresol
     graph = parse_calls_from_source(
         app_source,
         source_path=app_path,
-        module_name="repocontext.app",
+        module_name="repodossier.app",
         import_graph=import_graph,
     )
 
@@ -1731,7 +1731,7 @@ def test_parse_calls_from_source_keeps_local_import_alias_attribute_call_unresol
         CallEdge(
             caller_file=app_path.as_posix(),
             caller_name="main",
-            caller_qualified_name="repocontext.app.main",
+            caller_qualified_name="repodossier.app.main",
             callee_name="scan_single_file",
             callee_qualified_name=None,
             line_number=4,
@@ -1780,8 +1780,8 @@ def test_parse_calls_from_source_marks_external_alias_and_chain_conservatively()
     ]
 
 def test_symbol_index_does_not_make_same_file_local_calls_ambiguous(tmp_path):
-    from repocontext.call_graph import parse_calls_from_source
-    from repocontext.symbols import build_symbol_index
+    from repodossier.call_graph import parse_calls_from_source
+    from repodossier.symbols import build_symbol_index
 
     source_path = tmp_path / "src" / "example" / "app.py"
     source_path.parent.mkdir(parents=True)

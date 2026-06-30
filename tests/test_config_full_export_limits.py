@@ -12,7 +12,7 @@ def test_full_export_respects_max_total_files_limit_deterministically(tmp_path):
     (tmp_path / "b_keep.py").write_text("B_KEEP = True\n", encoding="utf-8")
     (tmp_path / "c_drop.py").write_text("C_DROP = True\n", encoding="utf-8")
 
-    (tmp_path / ".repocontext.yml").write_text(
+    (tmp_path / ".repodossier.yml").write_text(
         """
 limits:
   max_total_files: 2
@@ -29,7 +29,7 @@ limits:
     )
 
     result = subprocess.run(
-        ["repocontext", "full"],
+        ["repodossier", "full"],
         cwd=tmp_path,
         capture_output=True,
         text=True,
@@ -54,7 +54,7 @@ def test_full_export_no_config_ignores_max_total_files_limit(tmp_path):
     (tmp_path / "b_keep.py").write_text("B_KEEP = True\n", encoding="utf-8")
     (tmp_path / "c_drop.py").write_text("C_DROP = True\n", encoding="utf-8")
 
-    (tmp_path / ".repocontext.yml").write_text(
+    (tmp_path / ".repodossier.yml").write_text(
         """
 limits:
   max_total_files: 2
@@ -71,7 +71,7 @@ limits:
     )
 
     result = subprocess.run(
-        ["repocontext", "full", "--no-config"],
+        ["repodossier", "full", "--no-config"],
         cwd=tmp_path,
         capture_output=True,
         text=True,

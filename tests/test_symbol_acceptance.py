@@ -3,7 +3,7 @@
 from pathlib import Path
 import tomllib
 
-from repocontext.symbols import (
+from repodossier.symbols import (
     build_symbol_index,
     extract_symbols_from_file,
     format_symbol_index,
@@ -11,7 +11,7 @@ from repocontext.symbols import (
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-PACKAGE_ROOT = PROJECT_ROOT / "src" / "repocontext"
+PACKAGE_ROOT = PROJECT_ROOT / "src" / "repodossier"
 
 
 def _package_source_files():
@@ -265,6 +265,6 @@ def test_milestone_5_acceptance_symbol_module_is_only_wired_where_expected():
             build_symbol_index_users.append(path.relative_to(PROJECT_ROOT).as_posix())
 
     assert build_symbol_index_users == [
-        "src/repocontext/exporters/ai.py",
-        "src/repocontext/exporters/full.py",
+        "src/repodossier/exporters/ai.py",
+        "src/repodossier/exporters/full.py",
     ]

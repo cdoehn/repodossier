@@ -1,5 +1,5 @@
 """
-Foundational structures for repository scanning within RepoContext.
+Foundational structures for repository scanning within RepoDossier.
 
 This module currently provides placeholders so that future tasks can
 incrementally add file inspection, classification, and repository-wide

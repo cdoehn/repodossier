@@ -1,12 +1,12 @@
 from pathlib import Path
 
-from repocontext.exporters.full import (
+from repodossier.exporters.full import (
     _build_import_graph_for_export,
     _format_import_graph_section,
     _import_graph_export_source_path,
 )
-from repocontext.import_graph import build_import_graph
-from repocontext.models import FileInfo
+from repodossier.import_graph import build_import_graph
+from repodossier.models import FileInfo
 
 
 def _write_file(repo_root: Path, relative_path: str, content: str) -> Path:
@@ -191,7 +191,7 @@ def test_export_adapter_ignores_binary_errored_and_non_text_python_files(tmp_pat
 
 
 def test_import_graph_module_does_not_require_external_graph_packages() -> None:
-    source = Path("src/repocontext/import_graph.py").read_text(encoding="utf-8")
+    source = Path("src/repodossier/import_graph.py").read_text(encoding="utf-8")
 
     assert "networkx" not in source
     assert "igraph" not in source

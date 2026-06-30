@@ -5,7 +5,7 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
-from repocontext.cli import main
+from repodossier.cli import main
 
 
 def run_git_command(repository_root: Path, *arguments: str) -> None:
@@ -70,7 +70,7 @@ def test_cli_export_docs_command_updates_gitignore_for_docs_txt(
 
     assert exit_code == 0
     gitignore_content = (repository_root / ".gitignore").read_text(encoding="utf-8")
-    assert "# RepoContext exports" in gitignore_content
+    assert "# RepoDossier exports" in gitignore_content
     assert gitignore_content.count("full.txt") == 1
     assert gitignore_content.count("ai.txt") == 1
     assert gitignore_content.count("docs.txt") == 1

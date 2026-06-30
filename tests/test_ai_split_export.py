@@ -1,7 +1,7 @@
 from types import SimpleNamespace
 
-from repocontext.cli_split import enable_split_write_interceptor_for_args
-from repocontext.split_config import SplitExportConfig
+from repodossier.cli_split import enable_split_write_interceptor_for_args
+from repodossier.split_config import SplitExportConfig
 
 
 def test_ai_command_split_interceptor_writes_ai_part_files(tmp_path):

@@ -2,8 +2,8 @@ import argparse
 
 import pytest
 
-from repocontext.cli_split import add_split_export_options, resolve_split_export_config
-from repocontext.split_config import DEFAULT_SPLIT_MAX_CHARS, SplitExportConfig
+from repodossier.cli_split import add_split_export_options, resolve_split_export_config
+from repodossier.split_config import DEFAULT_SPLIT_MAX_CHARS, SplitExportConfig
 
 
 def _parse_args(*args):
@@ -96,7 +96,7 @@ def test_resolve_split_export_config_cli_overrides_base_config():
     ],
 )
 def test_existing_export_commands_have_split_option_hooks(parser_hook):
-    import repocontext.cli as cli
+    import repodossier.cli as cli
 
     assert cli.__file__ is not None
     source = open(cli.__file__, encoding="utf-8").read()
@@ -106,7 +106,7 @@ def test_existing_export_commands_have_split_option_hooks(parser_hook):
 
 
 def test_changed_command_hook_is_only_required_when_changed_parser_exists():
-    import repocontext.cli as cli
+    import repodossier.cli as cli
 
     assert cli.__file__ is not None
     source = open(cli.__file__, encoding="utf-8").read()
@@ -114,10 +114,10 @@ def test_changed_command_hook_is_only_required_when_changed_parser_exists():
     if "changed_parser =" in source:
         assert "add_split_export_options(changed_parser)" in source
 
-def test_resolve_split_export_config_uses_loaded_repocontext_config():
-    from repocontext.config import RepoContextConfig
+def test_resolve_split_export_config_uses_loaded_repodossier_config():
+    from repodossier.config import RepoDossierConfig
 
-    loaded_config = RepoContextConfig(
+    loaded_config = RepoDossierConfig(
         split=SplitExportConfig(enabled=True, max_chars=888, strategy="plain")
     )
 
@@ -127,7 +127,7 @@ def test_resolve_split_export_config_uses_loaded_repocontext_config():
 
 
 def test_cli_loads_config_before_enabling_split_interceptor():
-    import repocontext.cli as cli
+    import repodossier.cli as cli
 
     assert cli.__file__ is not None
     source = open(cli.__file__, encoding="utf-8").read()

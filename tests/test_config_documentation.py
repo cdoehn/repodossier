@@ -1,10 +1,10 @@
 from pathlib import Path
 
 
-def test_readme_documents_repocontext_yml():
+def test_readme_documents_repodossier_yml():
     readme = Path("README.md").read_text(encoding="utf-8")
 
-    assert ".repocontext.yml" in readme
+    assert ".repodossier.yml" in readme
     assert "include.paths" in readme
     assert "include.globs" in readme
     assert "exclude.paths" in readme
@@ -21,8 +21,8 @@ def test_readme_documents_exclude_wins_over_include():
     assert "exclude rules always win over include rules" in readme
 
 
-def test_example_repocontext_config_exists_and_documents_supported_keys():
-    example = Path(".repocontext.example.yml")
+def test_example_repodossier_config_exists_and_documents_supported_keys():
+    example = Path(".repodossier.example.yml")
 
     assert example.exists()
 

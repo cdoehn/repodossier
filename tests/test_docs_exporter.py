@@ -1,12 +1,12 @@
 import subprocess
 from pathlib import Path
 
-from repocontext.exporters import (
+from repodossier.exporters import (
     DOCS_EXPORT_FILENAME as PUBLIC_DOCS_EXPORT_FILENAME,
     generate_docs_export as public_generate_docs_export,
     write_docs_export as public_write_docs_export,
 )
-from repocontext.exporters.docs import (
+from repodossier.exporters.docs import (
     ARCHITECTURE_DOCUMENTATION_CATEGORY,
     CHANGELOG_AND_CONTRIBUTION_CATEGORY,
     DOCUMENTATION_CATEGORY_ORDER,
@@ -22,7 +22,7 @@ from repocontext.exporters.docs import (
     create_docs_export_context,
     is_documentation_file,
 )
-from repocontext.exporters.docs import (
+from repodossier.exporters.docs import (
     DOCS_EXPORT_DOCUMENT_HEADING,
     DOCS_EXPORT_SECTION_HEADINGS,
     DOCS_EXPORT_SECTION_ORDER,
@@ -31,9 +31,9 @@ from repocontext.exporters.docs import (
     write_docs_export,
     generate_docs_export,
 )
-from repocontext.exporters.full import create_full_export_context
-from repocontext.git import RepositoryInfo, TrackedFile
-from repocontext.models import FileInfo
+from repodossier.exporters.full import create_full_export_context
+from repodossier.git import RepositoryInfo, TrackedFile
+from repodossier.models import FileInfo
 
 
 def run_git_command(repository_root: Path, *arguments: str) -> None:
@@ -118,7 +118,7 @@ def test_documentation_file_detection_accepts_architecture_and_spec_files():
 def test_documentation_file_detection_accepts_tasks_roadmap_and_planning_files():
     assert is_documentation_file("TASKS.md")
     assert is_documentation_file("ROADMAP.md")
-    assert is_documentation_file("REPOCONTEXT_ROADMAP.md")
+    assert is_documentation_file("REPODOSSIER_ROADMAP.md")
     assert is_documentation_file("planning/archive/1.0.0/roadmap.md")
     assert is_documentation_file("planning/archive/1.0.0/milestone9.md")
 
@@ -146,7 +146,7 @@ def test_documentation_file_detection_accepts_changelog_contributing_and_license
 
 
 def test_documentation_file_detection_rejects_code_tests_and_generated_exports():
-    assert not is_documentation_file("src/repocontext/cli.py")
+    assert not is_documentation_file("src/repodossier/cli.py")
     assert not is_documentation_file("tests/test_cli.py")
     assert not is_documentation_file("pyproject.toml")
 
@@ -404,7 +404,7 @@ def test_create_docs_export_context_filters_to_exportable_documentation_files(tm
     ]
     assert context.skipped_files == (binary_doc, generated)
     assert "Skipped binary documentation file: docs/manual.pdf" in context.warnings
-    assert "Skipped generated RepoContext export file: full.txt" in context.warnings
+    assert "Skipped generated RepoDossier export file: full.txt" in context.warnings
     assert context.total_line_count == 5
     assert context.estimated_token_count == 20
 
@@ -574,8 +574,8 @@ def test_create_docs_export_context_warns_for_tracked_generated_exports(tmp_path
         "ai.txt",
         "docs.txt",
     ]
-    assert "Skipped generated RepoContext export file: ai.txt" in context.warnings
-    assert "Skipped generated RepoContext export file: docs.txt" in context.warnings
+    assert "Skipped generated RepoDossier export file: ai.txt" in context.warnings
+    assert "Skipped generated RepoDossier export file: docs.txt" in context.warnings
     assert "SHOULD_NOT_APPEAR" not in rendered
     assert "### File: docs.txt" not in rendered
     assert "### File: ai.txt" not in rendered
@@ -607,7 +607,7 @@ def test_generate_docs_export_is_stable_when_docs_txt_is_already_tracked(
     assert first_content == second_content
     assert "SELF_REFERENCE_SHOULD_NOT_APPEAR" not in second_content
     assert "### File: docs.txt" not in second_content
-    assert "Skipped generated RepoContext export file: docs.txt" in second_content
+    assert "Skipped generated RepoDossier export file: docs.txt" in second_content
 
 
 def test_build_docs_export_context_ignores_untracked_documentation_files(
@@ -677,7 +677,7 @@ def test_build_docs_export_context_reuses_full_export_pipeline_and_git_tracked_f
 
 
 def test_docs_export_masks_secret_values_and_reports_summary(monkeypatch):
-    from repocontext.exporters import docs as docs_exporter
+    from repodossier.exporters import docs as docs_exporter
 
     clear_secret = "ghp_1234567890abcdefSECRET"
 

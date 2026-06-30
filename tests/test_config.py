@@ -3,9 +3,9 @@ import argparse
 
 import pytest
 
-from repocontext.config import (
+from repodossier.config import (
     ConfigError,
-    RepoContextConfig,
+    RepoDossierConfig,
     add_config_arguments,
     apply_config_to_file_infos,
     apply_max_total_files_limit,
@@ -30,13 +30,13 @@ from repocontext.config import (
 def test_load_config_returns_defaults_when_file_is_missing(tmp_path):
     config = load_config(tmp_path)
 
-    assert config == RepoContextConfig()
+    assert config == RepoDossierConfig()
     assert config.enabled is False
     assert config.path is None
 
 
 def test_load_config_reads_root_config(tmp_path):
-    config_file = tmp_path / ".repocontext.yml"
+    config_file = tmp_path / ".repodossier.yml"
     config_file.write_text(
         """
 include:
@@ -74,7 +74,7 @@ limits:
 
 def test_load_config_for_path_discovers_repository_root_from_subdirectory(tmp_path):
     (tmp_path / ".git").mkdir()
-    (tmp_path / ".repocontext.yml").write_text(
+    (tmp_path / ".repodossier.yml").write_text(
         """
 include:
   paths:
@@ -82,13 +82,13 @@ include:
 """,
         encoding="utf-8",
     )
-    subdir = tmp_path / "src" / "repocontext"
+    subdir = tmp_path / "src" / "repodossier"
     subdir.mkdir(parents=True)
 
     config = load_config_for_path(subdir)
 
     assert config.enabled is True
-    assert config.path == (tmp_path / ".repocontext.yml").resolve()
+    assert config.path == (tmp_path / ".repodossier.yml").resolve()
     assert config.include.paths == ("src",)
 
 
@@ -112,7 +112,7 @@ exclude:
 
 
 def test_no_config_ignores_existing_config_file(tmp_path):
-    (tmp_path / ".repocontext.yml").write_text(
+    (tmp_path / ".repodossier.yml").write_text(
         """
 include:
   paths:
@@ -123,11 +123,11 @@ include:
 
     config = load_config(tmp_path, no_config=True)
 
-    assert config == RepoContextConfig()
+    assert config == RepoDossierConfig()
 
 
 def test_empty_config_file_uses_defaults(tmp_path):
-    (tmp_path / ".repocontext.yml").write_text("", encoding="utf-8")
+    (tmp_path / ".repodossier.yml").write_text("", encoding="utf-8")
 
     config = load_config(tmp_path)
 
@@ -138,7 +138,7 @@ def test_empty_config_file_uses_defaults(tmp_path):
 
 
 def test_invalid_yaml_raises_clear_config_error(tmp_path):
-    (tmp_path / ".repocontext.yml").write_text(
+    (tmp_path / ".repodossier.yml").write_text(
         "include: [unterminated",
         encoding="utf-8",
     )
@@ -210,7 +210,7 @@ def test_limit_null_is_allowed():
 
 
 def test_add_config_arguments_registers_standard_options():
-    parser = argparse.ArgumentParser(prog="repocontext-test")
+    parser = argparse.ArgumentParser(prog="repodossier-test")
     add_config_arguments(parser)
 
     args = parser.parse_args(["--config", "custom.yml", "--no-config"])
@@ -220,7 +220,7 @@ def test_add_config_arguments_registers_standard_options():
 
 
 def test_add_config_arguments_is_idempotent():
-    parser = argparse.ArgumentParser(prog="repocontext-test")
+    parser = argparse.ArgumentParser(prog="repodossier-test")
 
     add_config_arguments(parser)
     add_config_arguments(parser)
@@ -234,13 +234,13 @@ def test_add_config_arguments_is_idempotent():
     assert option_strings.count("--no-config") == 1
 
 
-def test_config_argument_help_mentions_repocontext_yml():
-    parser = argparse.ArgumentParser(prog="repocontext-test")
+def test_config_argument_help_mentions_repodossier_yml():
+    parser = argparse.ArgumentParser(prog="repodossier-test")
     add_config_arguments(parser)
 
     help_text = parser.format_help()
 
-    assert ".repocontext.yml" in help_text
+    assert ".repodossier.yml" in help_text
     assert "--config" in help_text
     assert "--no-config" in help_text
 
@@ -284,7 +284,7 @@ exclude:
 
 
 def test_load_config_from_args_supports_no_config(tmp_path):
-    (tmp_path / ".repocontext.yml").write_text(
+    (tmp_path / ".repodossier.yml").write_text(
         """
 include:
   paths:
@@ -296,7 +296,7 @@ include:
 
     config = load_config_from_args(args, start_path=tmp_path)
 
-    assert config == RepoContextConfig()
+    assert config == RepoDossierConfig()
 
 
 def test_load_config_from_args_rejects_config_and_no_config_together(tmp_path):
@@ -322,7 +322,7 @@ def test_config_summary_lines_describe_inactive_defaults():
 
 
 def test_config_summary_lines_describe_active_loaded_config(tmp_path):
-    config_file = tmp_path / ".repocontext.yml"
+    config_file = tmp_path / ".repodossier.yml"
     config_file.write_text(
         """
 include:
@@ -389,9 +389,9 @@ def test_format_config_summary_creates_export_ready_section():
         }
     )
 
-    summary = format_config_summary(config, heading="RepoContext Configuration")
+    summary = format_config_summary(config, heading="RepoDossier Configuration")
 
-    assert summary.startswith("## RepoContext Configuration\n\n")
+    assert summary.startswith("## RepoDossier Configuration\n\n")
     assert "- Config active: no\n" in summary
     assert "- Include paths: src\n" in summary
     assert "- Limit max_total_files: 5\n" in summary
@@ -508,11 +508,11 @@ def test_would_exceed_export_byte_limit_is_noop_without_limit():
 def test_format_limit_notice_is_stable_and_human_readable():
     assert (
         format_limit_notice("max_file_bytes was reached", omitted_count=3)
-        == "[RepoContext: content truncated because max_file_bytes was reached. Omitted: 3.]"
+        == "[RepoDossier: content truncated because max_file_bytes was reached. Omitted: 3.]"
     )
     assert (
         format_limit_notice("max_export_bytes was reached")
-        == "[RepoContext: content truncated because max_export_bytes was reached.]"
+        == "[RepoDossier: content truncated because max_export_bytes was reached.]"
     )
 
 class DummyFileInfo:
@@ -535,7 +535,7 @@ def test_apply_config_to_file_infos_combines_filters_and_total_file_limit():
         }
     )
     files = [
-        DummyFileInfo("src/repocontext/config.py"),
+        DummyFileInfo("src/repodossier/config.py"),
         DummyFileInfo("src/private/secrets.py"),
         DummyFileInfo("tests/test_config.py"),
         DummyFileInfo("tests/test_cli.py"),
@@ -554,7 +554,7 @@ def test_apply_config_to_file_infos_combines_filters_and_total_file_limit():
 def test_apply_config_to_file_infos_is_noop_with_default_config():
     config = parse_config({})
     files = [
-        DummyFileInfo("src/repocontext/config.py"),
+        DummyFileInfo("src/repodossier/config.py"),
         DummyFileInfo("README.md"),
     ]
 
@@ -568,7 +568,7 @@ def test_apply_config_to_file_infos_is_noop_with_default_config():
 
 
 def test_apply_config_to_file_infos_uses_repository_root_for_absolute_paths(tmp_path):
-    src_file = tmp_path / "src" / "repocontext" / "config.py"
+    src_file = tmp_path / "src" / "repodossier" / "config.py"
     docs_file = tmp_path / "docs" / "usage.md"
     src_file.parent.mkdir(parents=True)
     docs_file.parent.mkdir(parents=True)
@@ -613,8 +613,8 @@ def test_filter_file_infos_filters_objects_by_relative_path():
         }
     )
     files = [
-        DummyFileInfo("src/repocontext/config.py"),
-        DummyFileInfo("src/repocontext/private/secrets.py"),
+        DummyFileInfo("src/repodossier/config.py"),
+        DummyFileInfo("src/repodossier/private/secrets.py"),
         DummyFileInfo("tests/test_config.py"),
     ]
 
@@ -632,14 +632,14 @@ def test_filter_file_infos_filters_dictionaries_by_relative_path():
         {"relative_path": "README.md"},
         {"path": "docs/usage.md"},
         {"file_path": "docs/private/internal.md"},
-        {"filepath": "src/repocontext/config.py"},
+        {"filepath": "src/repodossier/config.py"},
     ]
 
     assert filter_file_infos(files, config) == [files[0], files[1]]
 
 
 def test_filter_file_infos_can_convert_absolute_paths_with_repository_root(tmp_path):
-    src_file = tmp_path / "src" / "repocontext" / "config.py"
+    src_file = tmp_path / "src" / "repodossier" / "config.py"
     test_file = tmp_path / "tests" / "test_config.py"
     src_file.parent.mkdir(parents=True)
     test_file.parent.mkdir(parents=True)
@@ -664,14 +664,14 @@ def test_filter_file_infos_raises_clear_error_for_unknown_file_shape():
 def test_path_is_included_when_no_filter_rules_are_configured():
     config = parse_config({})
 
-    assert is_path_included("src/repocontext/config.py", config) is True
+    assert is_path_included("src/repodossier/config.py", config) is True
     assert is_path_included(Path("README.md"), config) is True
 
 
 def test_include_path_selects_files_under_directory():
     config = parse_config({"include": {"paths": ["src"]}})
 
-    assert is_path_included("src/repocontext/config.py", config) is True
+    assert is_path_included("src/repodossier/config.py", config) is True
     assert is_path_included("src", config) is True
     assert is_path_included("tests/test_config.py", config) is False
 
@@ -686,7 +686,7 @@ def test_include_path_can_select_single_file():
 def test_include_glob_selects_matching_files():
     config = parse_config({"include": {"globs": ["src/**/*.py"]}})
 
-    assert is_path_included("src/repocontext/config.py", config) is True
+    assert is_path_included("src/repodossier/config.py", config) is True
     assert is_path_included("tests/test_config.py", config) is False
 
 
@@ -700,7 +700,7 @@ def test_include_paths_and_globs_are_additive():
         }
     )
 
-    assert is_path_included("src/repocontext/config.py", config) is True
+    assert is_path_included("src/repodossier/config.py", config) is True
     assert is_path_included("README.md", config) is True
     assert is_path_included("tests/test_config.py", config) is False
 
@@ -708,7 +708,7 @@ def test_include_paths_and_globs_are_additive():
 def test_exclude_path_removes_files_under_directory():
     config = parse_config({"exclude": {"paths": ["build"]}})
 
-    assert is_path_included("src/repocontext/config.py", config) is True
+    assert is_path_included("src/repodossier/config.py", config) is True
     assert is_path_included("build/generated.py", config) is False
     assert is_path_included("build", config) is False
 
@@ -716,9 +716,9 @@ def test_exclude_path_removes_files_under_directory():
 def test_exclude_glob_removes_matching_files():
     config = parse_config({"exclude": {"globs": ["*.log", "**/__pycache__/**"]}})
 
-    assert is_path_included("src/repocontext/config.py", config) is True
+    assert is_path_included("src/repodossier/config.py", config) is True
     assert is_path_included("debug.log", config) is False
-    assert is_path_included("src/repocontext/__pycache__/config.pyc", config) is False
+    assert is_path_included("src/repodossier/__pycache__/config.pyc", config) is False
 
 
 def test_exclude_wins_over_include():
@@ -729,21 +729,21 @@ def test_exclude_wins_over_include():
                 "globs": ["*.md"],
             },
             "exclude": {
-                "paths": ["src/repocontext/private"],
+                "paths": ["src/repodossier/private"],
                 "globs": ["README.md"],
             },
         }
     )
 
-    assert is_path_included("src/repocontext/config.py", config) is True
-    assert is_path_included("src/repocontext/private/secrets.py", config) is False
+    assert is_path_included("src/repodossier/config.py", config) is True
+    assert is_path_included("src/repodossier/private/secrets.py", config) is False
     assert is_path_included("README.md", config) is False
 
 
 def test_filter_file_paths_preserves_order_and_original_values():
     paths = [
-        Path("src/repocontext/config.py"),
-        Path("src/repocontext/private/secrets.py"),
+        Path("src/repodossier/config.py"),
+        Path("src/repodossier/private/secrets.py"),
         Path("README.md"),
         Path("tests/test_config.py"),
     ]
@@ -754,13 +754,13 @@ def test_filter_file_paths_preserves_order_and_original_values():
                 "globs": ["README.md"],
             },
             "exclude": {
-                "paths": ["src/repocontext/private"],
+                "paths": ["src/repodossier/private"],
             },
         }
     )
 
     assert filter_file_paths(paths, config) == [
-        Path("src/repocontext/config.py"),
+        Path("src/repodossier/config.py"),
         Path("README.md"),
     ]
 
@@ -777,7 +777,7 @@ def test_filter_matching_normalizes_dot_prefixes_and_trailing_slashes():
         }
     )
 
-    assert is_path_included("./src/repocontext/config.py", config) is True
+    assert is_path_included("./src/repodossier/config.py", config) is True
     assert is_path_included("src/generated/file.py", config) is False
 
 def test_discover_repository_root_falls_back_to_git_directory(tmp_path):

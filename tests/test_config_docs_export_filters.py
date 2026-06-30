@@ -20,7 +20,7 @@ def test_docs_export_respects_include_and_exclude_filters(tmp_path):
         encoding="utf-8",
     )
 
-    (tmp_path / ".repocontext.yml").write_text(
+    (tmp_path / ".repodossier.yml").write_text(
         """
 include:
   paths:
@@ -41,7 +41,7 @@ exclude:
     )
 
     result = subprocess.run(
-        ["repocontext", "export-docs"],
+        ["repodossier", "export-docs"],
         cwd=tmp_path,
         capture_output=True,
         text=True,
@@ -70,7 +70,7 @@ def test_docs_export_no_config_ignores_include_and_exclude_filters_inside_docs_t
         encoding="utf-8",
     )
 
-    (tmp_path / ".repocontext.yml").write_text(
+    (tmp_path / ".repodossier.yml").write_text(
         """
 include:
   paths:
@@ -91,7 +91,7 @@ exclude:
     )
 
     result = subprocess.run(
-        ["repocontext", "export-docs", "--no-config"],
+        ["repodossier", "export-docs", "--no-config"],
         cwd=tmp_path,
         capture_output=True,
         text=True,

@@ -2,7 +2,7 @@ import subprocess
 import sqlite3
 from pathlib import Path
 
-from repocontext.exporters.ai import (
+from repodossier.exporters.ai import (
     AI_EXPORT_FILENAME,
     AI_EXPORT_SECTION_HEADINGS,
     AI_EXPORT_SECTION_ORDER,
@@ -13,9 +13,9 @@ from repocontext.exporters.ai import (
     render_ai_export,
     write_ai_export,
 )
-from repocontext.exporters.full import create_full_export_context
-from repocontext.git import RepositoryInfo, TrackedFile
-from repocontext.models import FileInfo
+from repodossier.exporters.full import create_full_export_context
+from repodossier.git import RepositoryInfo, TrackedFile
+from repodossier.models import FileInfo
 
 
 def make_repository_info(tmp_path: Path) -> RepositoryInfo:
@@ -198,34 +198,34 @@ def test_architecture_summary_detects_python_project_without_pyproject(tmp_path:
     assert "- none detected" in rendered
 
 
-def test_architecture_summary_detects_core_repocontext_areas(tmp_path: Path) -> None:
+def test_architecture_summary_detects_core_repodossier_areas(tmp_path: Path) -> None:
     context = make_ai_export_context_from_files(
         tmp_path,
         {
-            "src/repocontext/__init__.py": "",
-            "src/repocontext/cli.py": "",
-            "src/repocontext/exporters/ai.py": "",
-            "src/repocontext/exporters/full.py": "",
-            "src/repocontext/git.py": "",
-            "src/repocontext/gitignore.py": "",
-            "src/repocontext/import_graph.py": "",
-            "src/repocontext/call_graph.py": "",
-            "src/repocontext/scanner.py": "",
-            "src/repocontext/symbols.py": "",
+            "src/repodossier/__init__.py": "",
+            "src/repodossier/cli.py": "",
+            "src/repodossier/exporters/ai.py": "",
+            "src/repodossier/exporters/full.py": "",
+            "src/repodossier/git.py": "",
+            "src/repodossier/gitignore.py": "",
+            "src/repodossier/import_graph.py": "",
+            "src/repodossier/call_graph.py": "",
+            "src/repodossier/scanner.py": "",
+            "src/repodossier/symbols.py": "",
         },
     )
 
     rendered = render_ai_export(context)
 
-    assert "- Command-line interface: src/repocontext/cli.py" in rendered
-    assert "- AI export generation: src/repocontext/exporters/ai.py" in rendered
-    assert "- Full export generation: src/repocontext/exporters/full.py" in rendered
-    assert "- Git repository discovery: src/repocontext/git.py" in rendered
-    assert "- .gitignore management: src/repocontext/gitignore.py" in rendered
-    assert "- Import graph analysis: src/repocontext/import_graph.py" in rendered
-    assert "- Call graph analysis: src/repocontext/call_graph.py" in rendered
-    assert "- File scanning: src/repocontext/scanner.py" in rendered
-    assert "- Symbol extraction: src/repocontext/symbols.py" in rendered
+    assert "- Command-line interface: src/repodossier/cli.py" in rendered
+    assert "- AI export generation: src/repodossier/exporters/ai.py" in rendered
+    assert "- Full export generation: src/repodossier/exporters/full.py" in rendered
+    assert "- Git repository discovery: src/repodossier/git.py" in rendered
+    assert "- .gitignore management: src/repodossier/gitignore.py" in rendered
+    assert "- Import graph analysis: src/repodossier/import_graph.py" in rendered
+    assert "- Call graph analysis: src/repodossier/call_graph.py" in rendered
+    assert "- File scanning: src/repodossier/scanner.py" in rendered
+    assert "- Symbol extraction: src/repodossier/symbols.py" in rendered
 
 
 def test_important_files_uses_shared_ranking_for_entrypoints_and_central_files(tmp_path: Path) -> None:
@@ -867,7 +867,7 @@ def test_generate_ai_export_writes_ai_txt_for_tracked_python_repo(tmp_path: Path
 
 
 def test_ai_export_masks_secret_values_and_reports_summary(monkeypatch):
-    from repocontext.exporters import ai as ai_exporter
+    from repodossier.exporters import ai as ai_exporter
 
     clear_secret = "sk-live-1234567890abcdefSECRET"
 

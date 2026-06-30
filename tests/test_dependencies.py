@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from repocontext.dependencies import (
+from repodossier.dependencies import (
     Dependency,
     DependencyReport,
     analyze_dependencies,
@@ -411,7 +411,7 @@ def test_analyze_dependencies_uses_passed_file_list_for_requirements_discovery(
 
 
 def test_render_dependency_full_section_includes_summary_and_dependency_groups() -> None:
-    from repocontext.dependencies import render_dependency_full_section
+    from repodossier.dependencies import render_dependency_full_section
 
     report = DependencyReport(
         dependencies=(
@@ -457,7 +457,7 @@ def test_render_dependency_full_section_includes_summary_and_dependency_groups()
 
 
 def test_insert_dependency_full_section_before_complete_source_dump() -> None:
-    from repocontext.dependencies import insert_dependency_full_section
+    from repodossier.dependencies import insert_dependency_full_section
 
     report = DependencyReport(
         dependencies=(
@@ -472,7 +472,7 @@ def test_insert_dependency_full_section_before_complete_source_dump() -> None:
         dependency_files=("pyproject.toml",),
     )
 
-    full_text = "# RepoContext Full Export\n\n# Complete Source Dump\n\ncontent\n"
+    full_text = "# RepoDossier Full Export\n\n# Complete Source Dump\n\ncontent\n"
     rendered = insert_dependency_full_section(full_text, report)
 
     assert rendered.index("# Dependencies") < rendered.index("# Complete Source Dump")
@@ -481,16 +481,16 @@ def test_insert_dependency_full_section_before_complete_source_dump() -> None:
 
 
 def test_insert_dependency_full_section_is_idempotent() -> None:
-    from repocontext.dependencies import insert_dependency_full_section
+    from repodossier.dependencies import insert_dependency_full_section
 
     report = DependencyReport()
-    full_text = "# RepoContext Full Export\n\n# Dependencies\n\nalready here\n"
+    full_text = "# RepoDossier Full Export\n\n# Dependencies\n\nalready here\n"
 
     assert insert_dependency_full_section(full_text, report) == full_text
 
 
 def test_render_dependency_ai_section_is_compact_and_sorted() -> None:
-    from repocontext.dependencies import render_dependency_ai_section
+    from repodossier.dependencies import render_dependency_ai_section
 
     report = DependencyReport(
         dependencies=(
@@ -527,7 +527,7 @@ def test_render_dependency_ai_section_is_compact_and_sorted() -> None:
 
 
 def test_insert_dependency_ai_section_before_graph_sections() -> None:
-    from repocontext.dependencies import insert_dependency_ai_section
+    from repodossier.dependencies import insert_dependency_ai_section
 
     report = DependencyReport(
         dependencies=(
@@ -541,7 +541,7 @@ def test_insert_dependency_ai_section_before_graph_sections() -> None:
         dependency_files=("pyproject.toml",),
     )
 
-    ai_text = "# RepoContext AI Export\n\n## Symbol Index\n\ncontent\n"
+    ai_text = "# RepoDossier AI Export\n\n## Symbol Index\n\ncontent\n"
     rendered = insert_dependency_ai_section(ai_text, report)
 
     assert rendered.index("## Dependencies") < rendered.index("## Symbol Index")
@@ -549,10 +549,10 @@ def test_insert_dependency_ai_section_before_graph_sections() -> None:
 
 
 def test_insert_dependency_ai_section_is_idempotent() -> None:
-    from repocontext.dependencies import insert_dependency_ai_section
+    from repodossier.dependencies import insert_dependency_ai_section
 
     report = DependencyReport()
-    ai_text = "# RepoContext AI Export\n\n## Dependencies\n\nalready here\n"
+    ai_text = "# RepoDossier AI Export\n\n## Dependencies\n\nalready here\n"
 
     assert insert_dependency_ai_section(ai_text, report) == ai_text
 

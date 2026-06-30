@@ -1,13 +1,13 @@
 from pathlib import Path
 from types import SimpleNamespace
 
-from repocontext.call_graph import CallEdge, CallGraph
-from repocontext.import_graph import ImportEdge, ImportGraph
-from repocontext.ranking import (
+from repodossier.call_graph import CallEdge, CallGraph
+from repodossier.import_graph import ImportEdge, ImportGraph
+from repodossier.ranking import (
     ImportantFileScore,
     rank_important_files,
 )
-from repocontext.symbols import FileSymbolIndex, SymbolInfo
+from repodossier.symbols import FileSymbolIndex, SymbolInfo
 
 
 def make_file(

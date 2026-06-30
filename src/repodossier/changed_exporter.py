@@ -1,20 +1,20 @@
 from __future__ import annotations
-from repocontext.secrets import SecretFinding, mask_secrets_in_text
+from repodossier.secrets import SecretFinding, mask_secrets_in_text
 
 from collections import Counter
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
-from repocontext.changed import ChangedFileScan, collect_changed_file_scans
-from repocontext.git import get_diff, get_diff_against_branch
-from repocontext.config import apply_config_to_file_infos, filter_changed_export_sections, format_limit_notice, get_active_config, is_file_size_allowed, truncate_text_by_line_limit
+from repodossier.changed import ChangedFileScan, collect_changed_file_scans
+from repodossier.git import get_diff, get_diff_against_branch
+from repodossier.config import apply_config_to_file_infos, filter_changed_export_sections, format_limit_notice, get_active_config, is_file_size_allowed, truncate_text_by_line_limit
 
 
 
 
 
-def _repocontext_export_safety_root() -> object:
+def _repodossier_export_safety_root() -> object:
     """Return the nearest Git repository root or current directory."""
 
     from pathlib import Path
@@ -27,14 +27,14 @@ def _repocontext_export_safety_root() -> object:
     return current
 
 
-def _repocontext_mask_known_export_files() -> None:
+def _repodossier_mask_known_export_files() -> None:
     """Apply final secret masking to known generated export files."""
 
     from pathlib import Path
 
-    from repocontext.secrets import mask_export_file
+    from repodossier.secrets import mask_export_file
 
-    root = Path(_repocontext_export_safety_root())
+    root = Path(_repodossier_export_safety_root())
 
     targets = [
         (
@@ -376,10 +376,10 @@ def write_changed_export(*args: object, **kwargs: object) -> object:
     try:
         return _write_changed_export_without_export_secret_safety_net(*args, **kwargs)
     finally:
-        _repocontext_mask_known_export_files()
+        _repodossier_mask_known_export_files()
 
 
-_REPOCONTEXT_CHANGED_EXPORT_LIMITS_WRAPPER = True
+_REPODOSSIER_CHANGED_EXPORT_LIMITS_WRAPPER = True
 
 
 def _apply_changed_scan_selection_limits(
@@ -392,13 +392,13 @@ def _apply_changed_scan_selection_limits(
     return tuple(selection.files)
 
 
-_REPOCONTEXT_ORIGINAL_COLLECT_CHANGED_FILE_SCANS_FOR_LIMITS = collect_changed_file_scans
+_REPODOSSIER_ORIGINAL_COLLECT_CHANGED_FILE_SCANS_FOR_LIMITS = collect_changed_file_scans
 
 
 def collect_changed_file_scans(*args: object, **kwargs: object) -> list[ChangedFileScan]:
     """Collect changed scans and apply configured file-selection limits."""
 
-    scans = _REPOCONTEXT_ORIGINAL_COLLECT_CHANGED_FILE_SCANS_FOR_LIMITS(
+    scans = _REPODOSSIER_ORIGINAL_COLLECT_CHANGED_FILE_SCANS_FOR_LIMITS(
         *args,
         **kwargs,
     )
@@ -447,13 +447,13 @@ def _apply_changed_content_limits(content: str, scan: object | None) -> str:
     )
 
 
-_REPOCONTEXT_ORIGINAL_READ_CHANGED_FILE_CONTENT_FOR_LIMITS = _read_changed_file_content
+_REPODOSSIER_ORIGINAL_READ_CHANGED_FILE_CONTENT_FOR_LIMITS = _read_changed_file_content
 
 
 def _read_changed_file_content(*args: object, **kwargs: object) -> str:
     """Read changed file content and apply configured per-file limits."""
 
-    content = _REPOCONTEXT_ORIGINAL_READ_CHANGED_FILE_CONTENT_FOR_LIMITS(
+    content = _REPODOSSIER_ORIGINAL_READ_CHANGED_FILE_CONTENT_FOR_LIMITS(
         *args,
         **kwargs,
     )
@@ -487,7 +487,7 @@ def _apply_changed_max_export_bytes_limit(rendered: str) -> str:
     return truncated + notice
 
 
-_REPOCONTEXT_ORIGINAL_RENDER_CHANGED_EXPORT_FOR_LIMITS = render_changed_export
+_REPODOSSIER_ORIGINAL_RENDER_CHANGED_EXPORT_FOR_LIMITS = render_changed_export
 
 
 def render_changed_export(*args: object, **kwargs: object) -> str:
@@ -497,7 +497,7 @@ def render_changed_export(*args: object, **kwargs: object) -> str:
         kwargs = dict(kwargs)
         kwargs["scans"] = _apply_changed_scan_selection_limits(kwargs["scans"])
 
-    rendered = _REPOCONTEXT_ORIGINAL_RENDER_CHANGED_EXPORT_FOR_LIMITS(
+    rendered = _REPODOSSIER_ORIGINAL_RENDER_CHANGED_EXPORT_FOR_LIMITS(
         *args,
         **kwargs,
     )

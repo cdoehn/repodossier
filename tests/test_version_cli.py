@@ -16,7 +16,7 @@ def test_project_version_is_1_0_0() -> None:
 
 
 def test_version_module_reports_1_0_0() -> None:
-    from repocontext._version import __version__, get_version
+    from repodossier._version import __version__, get_version
 
     assert __version__ == "1.0.0"
     assert get_version() == "1.0.0"
@@ -34,7 +34,7 @@ def test_cli_version_reports_1_0_0() -> None:
         [
             sys.executable,
             "-c",
-            "from repocontext.cli import main; raise SystemExit(main())",
+            "from repodossier.cli import main; raise SystemExit(main())",
             "--version",
         ],
         cwd=REPO_ROOT,
@@ -46,4 +46,4 @@ def test_cli_version_reports_1_0_0() -> None:
     )
 
     assert result.returncode == 0, result.stdout
-    assert result.stdout.strip() == "repocontext 1.0.0"
+    assert result.stdout.strip() == "repodossier 1.0.0"

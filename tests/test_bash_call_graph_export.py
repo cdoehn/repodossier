@@ -4,7 +4,7 @@ from importlib import import_module
 from pathlib import Path
 
 
-exporter = import_module("repocontext.changed_exporter")
+exporter = import_module("repodossier.changed_exporter")
 
 
 def test_append_bash_call_graph_section_to_export_with_shell_file():

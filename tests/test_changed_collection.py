@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from repocontext.changed import collect_changed_file_scans, scan_changed_file
-from repocontext.git import ChangedFile
+from repodossier.changed import collect_changed_file_scans, scan_changed_file
+from repodossier.git import ChangedFile
 
 
 class DummyFileInfo:
@@ -151,7 +151,7 @@ def test_collect_changed_file_scans_uses_branch_comparison_when_branch_is_given(
         return [ChangedFile(path="feature.py", status="modified")]
 
     monkeypatch.setattr(
-        "repocontext.changed.get_changed_files_against_branch",
+        "repodossier.changed.get_changed_files_against_branch",
         fake_get_changed_files_against_branch,
     )
 

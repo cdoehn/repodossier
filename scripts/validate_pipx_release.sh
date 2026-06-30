@@ -38,10 +38,10 @@ echo
 echo "== Install package with isolated pipx home =="
 "${PIPX_RUNNER[@]}" install "$ROOT_DIR"
 
-CLI="$PIPX_BIN_DIR/repocontext"
+CLI="$PIPX_BIN_DIR/repodossier"
 if [ ! -x "$CLI" ]; then
-  echo "Fehler: repocontext wurde nicht im temporären pipx bin dir gefunden."
-  find "$WORK_DIR" -maxdepth 4 -type f -name "repocontext" -print || true
+  echo "Fehler: repodossier wurde nicht im temporären pipx bin dir gefunden."
+  find "$WORK_DIR" -maxdepth 4 -type f -name "repodossier" -print || true
   exit 1
 fi
 
@@ -58,7 +58,7 @@ echo "== Optional version check =="
 if "$CLI" --version >/dev/null 2>&1; then
   "$CLI" --version
 else
-  echo "Hinweis: repocontext --version ist noch nicht verfügbar. Das wird im Release-Version-Schritt geprüft."
+  echo "Hinweis: repodossier --version ist noch nicht verfügbar. Das wird im Release-Version-Schritt geprüft."
 fi
 
 SMOKE_REPO="$WORK_DIR/smoke-repo"
@@ -67,7 +67,7 @@ mkdir -p "$SMOKE_REPO/src" "$SMOKE_REPO/scripts" "$SMOKE_REPO/docs"
 cat > "$SMOKE_REPO/README.md" <<'EOF'
 # pipx smoke repo
 
-This repository validates RepoContext from a pipx-installed command.
+This repository validates RepoDossier from a pipx-installed command.
 EOF
 
 cat > "$SMOKE_REPO/pyproject.toml" <<'EOF'
@@ -111,7 +111,7 @@ cd "$SMOKE_REPO" || exit 1
 
 git init
 git config user.email "pipx-smoke@example.invalid"
-git config user.name "RepoContext pipx Smoke"
+git config user.name "RepoDossier pipx Smoke"
 git add .
 git commit -m "Initial pipx smoke repo"
 
@@ -138,7 +138,7 @@ grep -q "changed_by_pipx_validation" changed.txt
 
 echo
 echo "== Reinstall check =="
-"${PIPX_RUNNER[@]}" uninstall repocontext
+"${PIPX_RUNNER[@]}" uninstall repodossier
 "${PIPX_RUNNER[@]}" install "$ROOT_DIR"
 "$CLI" --help
 

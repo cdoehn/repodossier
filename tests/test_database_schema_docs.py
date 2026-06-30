@@ -21,7 +21,7 @@ def test_readme_documents_database_schema_safety_boundaries() -> None:
         "opened read-only",
         "does not execute migrations",
         "best-effort",
-        "Generated RepoContext exports",
+        "Generated RepoDossier exports",
     ]
 
     for phrase in required_phrases:
@@ -71,7 +71,7 @@ def test_readme_documents_database_schema_in_full_and_ai_section_order() -> None
 def test_readme_mentions_schema_module_in_architecture_overview() -> None:
     readme = Path("README.md").read_text(encoding="utf-8")
 
-    assert "`repocontext.schema`" in readme
+    assert "`repodossier.schema`" in readme
     assert "SQLite metadata extraction" in readme
     assert "SQL CREATE TABLE parsing" in readme
 

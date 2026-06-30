@@ -8,7 +8,7 @@ from pathlib import Path
 def test_readme_documents_call_graph_static_analysis_and_limitations() -> None:
     readme = Path("README.md").read_text(encoding="utf-8")
 
-    assert "RepoContext statically analyzes Python function and method calls" in readme
+    assert "RepoDossier statically analyzes Python function and method calls" in readme
     assert "Python source is parsed statically with `ast`" in readme
     assert "project code is not imported or executed" in readme
     assert "Dynamic calls" in readme
@@ -37,7 +37,7 @@ def test_readme_documents_ai_export_usage_and_completed_status() -> None:
     readme = Path("README.md").read_text(encoding="utf-8")
 
     assert "compact `ai.txt` export" in readme
-    assert "repocontext export-ai" in readme
+    assert "repodossier export-ai" in readme
     assert "full.txt\nai.txt" in readme
     assert "## Output: ai.txt" in readme
     assert "The AI export is intentionally compact" in readme
@@ -48,7 +48,7 @@ def test_readme_documents_ai_export_usage_and_completed_status() -> None:
 def test_readme_documents_docs_export_usage_and_completed_status():
     readme = Path("README.md").read_text(encoding="utf-8")
 
-    assert "repocontext export-docs" in readme
+    assert "repodossier export-docs" in readme
     assert "## Output: docs.txt" in readme
     assert "documentation-only `docs.txt` export" in readme
     assert "`full.txt`, `ai.txt`, `docs.txt`, and `changed.txt`" in readme
@@ -60,7 +60,7 @@ def test_readme_documents_docs_export_usage_and_completed_status():
 def test_readme_documents_docs_exporter_module():
     readme = Path("README.md").read_text(encoding="utf-8")
 
-    assert "repocontext.exporters.docs" in readme
+    assert "repodossier.exporters.docs" in readme
     assert "documentation-only `docs.txt` context creation, rendering, and writing" in readme
 
 
@@ -101,7 +101,7 @@ def test_readme_documents_multi_signal_important_file_ranking() -> None:
     assert "multi-signal important-file ranking for AI exports" in readme
     assert "## Output: ai.txt" in readme
     assert "### Important file ranking" in readme
-    assert "The `Important Files` section is produced by RepoContext's shared important-file ranking." in readme
+    assert "The `Important Files` section is produced by RepoDossier's shared important-file ranking." in readme
 
     assert "CLI and Python entrypoints from `pyproject.toml`" in readme
     assert "import graph centrality" in readme
@@ -126,10 +126,10 @@ def test_readme_documents_changed_export_usage() -> None:
     readme = Path("README.md").read_text(encoding="utf-8")
 
     assert "### Changed-files export" in readme
-    assert "repocontext changed" in readme
-    assert "repocontext changed --branch main" in readme
-    assert "repocontext changed --output review-changes.txt" in readme
-    assert "repocontext changed --no-diff" in readme
+    assert "repodossier changed" in readme
+    assert "repodossier changed --branch main" in readme
+    assert "repodossier changed --output review-changes.txt" in readme
+    assert "repodossier changed --no-diff" in readme
 
 
 def test_readme_documents_changed_txt_output() -> None:

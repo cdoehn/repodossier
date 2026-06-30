@@ -1,4 +1,4 @@
-"""Symbol extraction helpers for RepoContext.
+"""Symbol extraction helpers for RepoDossier.
 
 This module provides static symbol extraction for Python source files.
 It intentionally does not execute project code.

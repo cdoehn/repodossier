@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from repocontext.git import ChangedFile, get_changed_files, get_changed_files_against_branch
+from repodossier.git import ChangedFile, get_changed_files, get_changed_files_against_branch
 
 
 ScannerFunction = Callable[[Path], Any]
@@ -42,12 +42,12 @@ class ChangedFileScan:
 def _default_scan_file(repository_root: Path, relative_path: str) -> Any:
     """Scan a changed file by reusing the existing scanner module.
 
-    RepoContext has used two scanner entrypoints over time. Prefer the newer
+    RepoDossier has used two scanner entrypoints over time. Prefer the newer
     scan_file(path) function when available, but support the existing
     scan_single_file(repo_root, relative_path) API used by the repository
     scanner.
     """
-    from repocontext import scanner
+    from repodossier import scanner
 
     absolute_path = repository_root / relative_path
 
@@ -60,8 +60,8 @@ def _default_scan_file(repository_root: Path, relative_path: str) -> Any:
         return scan_single_file(repository_root, relative_path)
 
     raise RuntimeError(
-        "Neither repocontext.scanner.scan_file nor "
-        "repocontext.scanner.scan_single_file is available"
+        "Neither repodossier.scanner.scan_file nor "
+        "repodossier.scanner.scan_single_file is available"
     )
 
 

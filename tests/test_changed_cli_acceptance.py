@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 import subprocess
 
-from repocontext.cli import main
+from repodossier.cli import main
 
 
 def run_git(repo: Path, *args: str) -> str:

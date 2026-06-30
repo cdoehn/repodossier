@@ -13,7 +13,7 @@ import re
 import sqlite3
 from typing import Iterable, Sequence
 
-from .gitignore import REPOCONTEXT_EXPORT_FILES
+from .gitignore import REPODOSSIER_EXPORT_FILES
 
 
 SQLITE_SCHEMA_EXTENSIONS: tuple[str, ...] = (
@@ -264,9 +264,9 @@ class DatabaseSchemaReport:
 
 
 def is_generated_export_file(path: str | Path) -> bool:
-    """Return True when path is a generated RepoContext export file."""
+    """Return True when path is a generated RepoDossier export file."""
 
-    return Path(path).name in REPOCONTEXT_EXPORT_FILES
+    return Path(path).name in REPODOSSIER_EXPORT_FILES
 
 
 def is_sqlite_candidate_path(path: str | Path) -> bool:
@@ -316,7 +316,7 @@ def discover_database_schema_files(
     scanner results.
 
     When ``files`` is omitted, discovery does not scan the filesystem by
-    default. This protects RepoContext's Git-tracked-only contract. Tests or
+    default. This protects RepoDossier's Git-tracked-only contract. Tests or
     diagnostic callers may opt into a raw filesystem scan with
     ``allow_filesystem_scan=True``.
     """
@@ -541,7 +541,7 @@ def _extract_sqlite_schema_from_connection(
 
 
 def _sqlite_table_type(schema_type: object, create_sql: str) -> str:
-    """Return RepoContext's normalized table type for a SQLite schema object."""
+    """Return RepoDossier's normalized table type for a SQLite schema object."""
 
     schema_type_text = str(schema_type or "").strip().lower()
 
@@ -1260,7 +1260,7 @@ def analyze_database_schemas(
 
     This is the central Milestone 11 analyzer API. It intentionally uses the
     provided file scope, usually Git-tracked scanner results, instead of doing
-    an unscoped filesystem scan. That keeps RepoContext's Git-tracked-only
+    an unscoped filesystem scan. That keeps RepoDossier's Git-tracked-only
     contract intact.
 
     The analyzer combines:

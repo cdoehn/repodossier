@@ -1,4 +1,4 @@
-"""Configuration loading and validation for RepoContext."""
+"""Configuration loading and validation for RepoDossier."""
 
 from __future__ import annotations
 
@@ -10,11 +10,11 @@ import fnmatch
 import subprocess
 
 
-CONFIG_FILENAME = ".repocontext.yml"
+CONFIG_FILENAME = ".repodossier.yml"
 
 
 class ConfigError(ValueError):
-    """Raised when a RepoContext configuration file is invalid."""
+    """Raised when a RepoDossier configuration file is invalid."""
 
 
 @dataclass(frozen=True)
@@ -63,8 +63,8 @@ class ConfiguredFileSelection:
         return self.filtered_count + self.limit_omitted_count
 
 @dataclass(frozen=True)
-class RepoContextConfig:
-    """Validated RepoContext configuration."""
+class RepoDossierConfig:
+    """Validated RepoDossier configuration."""
 
     include: IncludeExcludeConfig = field(default_factory=IncludeExcludeConfig)
     exclude: IncludeExcludeConfig = field(default_factory=IncludeExcludeConfig)
@@ -75,21 +75,21 @@ class RepoContextConfig:
 
 
 
-_ACTIVE_CONFIG: RepoContextConfig | None = None
+_ACTIVE_CONFIG: RepoDossierConfig | None = None
 
 
-def set_active_config(config: RepoContextConfig) -> None:
+def set_active_config(config: RepoDossierConfig) -> None:
     """Store the active CLI-loaded configuration for downstream scan/export code."""
 
     global _ACTIVE_CONFIG
     _ACTIVE_CONFIG = config
 
 
-def get_active_config() -> RepoContextConfig:
+def get_active_config() -> RepoDossierConfig:
     """Return the active configuration or built-in defaults."""
 
     if _ACTIVE_CONFIG is None:
-        return RepoContextConfig()
+        return RepoDossierConfig()
     return _ACTIVE_CONFIG
 
 def discover_repository_root(start_path: Path | str = ".") -> Path:
@@ -146,20 +146,20 @@ def load_config(
     explicit_config_path: Path | str | None = None,
     *,
     no_config: bool = False,
-) -> RepoContextConfig:
-    """Load and validate RepoContext configuration for a repository root."""
+) -> RepoDossierConfig:
+    """Load and validate RepoDossier configuration for a repository root."""
 
     if no_config:
-        return RepoContextConfig()
+        return RepoDossierConfig()
 
     root = Path(repository_root).resolve()
     config_path = find_config_path(root, explicit_config_path)
     if config_path is None:
-        return RepoContextConfig()
+        return RepoDossierConfig()
 
     data = _read_yaml_mapping(config_path)
     config = parse_config(data)
-    return RepoContextConfig(
+    return RepoDossierConfig(
         include=config.include,
         exclude=config.exclude,
         limits=config.limits,
@@ -174,15 +174,15 @@ def load_config_for_path(
     explicit_config_path: Path | str | None = None,
     *,
     no_config: bool = False,
-) -> RepoContextConfig:
-    """Discover the repository root and load its RepoContext configuration."""
+) -> RepoDossierConfig:
+    """Discover the repository root and load its RepoDossier configuration."""
 
     root = discover_repository_root(start_path)
     return load_config(root, explicit_config_path, no_config=no_config)
 
 
-def parse_config(data: Any) -> RepoContextConfig:
-    """Validate raw YAML data and return a RepoContextConfig."""
+def parse_config(data: Any) -> RepoDossierConfig:
+    """Validate raw YAML data and return a RepoDossierConfig."""
 
     if data is None:
         data = {}
@@ -196,7 +196,7 @@ def parse_config(data: Any) -> RepoContextConfig:
         keys = ", ".join(sorted(str(key) for key in unknown_keys))
         raise ConfigError(f"Unknown configuration key(s): {keys}")
 
-    return RepoContextConfig(
+    return RepoDossierConfig(
         include=_parse_filter_config(data.get("include"), "include"),
         exclude=_parse_filter_config(data.get("exclude"), "exclude"),
         limits=_parse_limits_config(data.get("limits")),
@@ -218,8 +218,8 @@ def _read_yaml_mapping(path: Path) -> Any:
         import yaml
     except ModuleNotFoundError as exc:
         raise ConfigError(
-            "PyYAML is required to read .repocontext.yml. "
-            "Install RepoContext with its project dependencies."
+            "PyYAML is required to read .repodossier.yml. "
+            "Install RepoDossier with its project dependencies."
         ) from exc
 
     try:
@@ -317,7 +317,7 @@ def _parse_optional_positive_int(raw: Any, field_name: str) -> int | None:
 
     return raw
 
-def is_path_included(relative_path: Path | str, config: RepoContextConfig) -> bool:
+def is_path_included(relative_path: Path | str, config: RepoDossierConfig) -> bool:
     """Return whether a repository-relative path is selected by config filters.
 
     Include rules are additive. If no include rules are configured, a path is
@@ -342,7 +342,7 @@ def is_path_included(relative_path: Path | str, config: RepoContextConfig) -> bo
 
 def filter_file_paths(
     relative_paths: list[Path | str] | tuple[Path | str, ...],
-    config: RepoContextConfig,
+    config: RepoDossierConfig,
 ) -> list[Path | str]:
     """Filter repository-relative file paths while preserving input order."""
 
@@ -356,15 +356,15 @@ def filter_file_paths(
 
 
 
-def ai_config_summary_section(config: RepoContextConfig) -> str:
+def ai_config_summary_section(config: RepoDossierConfig) -> str:
     """Return the AI Export configuration summary section."""
 
-    return format_config_summary(config, heading="RepoContext Configuration")
+    return format_config_summary(config, heading="RepoDossier Configuration")
 
-def full_config_summary_section(config: RepoContextConfig) -> str:
+def full_config_summary_section(config: RepoDossierConfig) -> str:
     """Return the Full Export configuration summary section."""
 
-    return format_config_summary(config, heading="RepoContext Configuration")
+    return format_config_summary(config, heading="RepoDossier Configuration")
 
 
 _CHANGED_EXPORT_NON_FILE_HEADINGS = {
@@ -401,8 +401,8 @@ def _changed_export_heading_path(line: str) -> str | None:
     return candidate
 
 
-def filter_changed_export_sections(rendered: str, config: RepoContextConfig) -> str:
-    """Filter per-file changed export sections according to RepoContext config."""
+def filter_changed_export_sections(rendered: str, config: RepoDossierConfig) -> str:
+    """Filter per-file changed export sections according to RepoDossier config."""
 
     lines = rendered.splitlines(keepends=True)
     kept_lines: list[str] = []
@@ -426,7 +426,7 @@ def filter_changed_export_sections(rendered: str, config: RepoContextConfig) -> 
     flush_current_section()
     return "".join(kept_lines)
 
-def apply_export_byte_limit(rendered: str, config: RepoContextConfig) -> str:
+def apply_export_byte_limit(rendered: str, config: RepoDossierConfig) -> str:
     """Apply max_export_bytes to a rendered export string."""
 
     limit = config.limits.max_export_bytes
@@ -448,7 +448,7 @@ def apply_export_byte_limit(rendered: str, config: RepoContextConfig) -> str:
     return truncated + notice
 
 def add_config_arguments(parser: Any) -> None:
-    """Add standard RepoContext configuration CLI arguments to a parser."""
+    """Add standard RepoDossier configuration CLI arguments to a parser."""
 
     if not _parser_has_option(parser, "--config"):
         parser.add_argument(
@@ -456,8 +456,8 @@ def add_config_arguments(parser: Any) -> None:
             dest="config_path",
             metavar="PATH",
             help=(
-                "Use a specific RepoContext YAML configuration file instead "
-                "of the repository-root .repocontext.yml."
+                "Use a specific RepoDossier YAML configuration file instead "
+                "of the repository-root .repodossier.yml."
             ),
         )
 
@@ -465,18 +465,18 @@ def add_config_arguments(parser: Any) -> None:
         parser.add_argument(
             "--no-config",
             action="store_true",
-            help="Ignore .repocontext.yml and run with built-in defaults.",
+            help="Ignore .repodossier.yml and run with built-in defaults.",
         )
 
 
 
 def with_config_arguments(parser: Any) -> Any:
-    """Add standard RepoContext configuration CLI arguments and return parser."""
+    """Add standard RepoDossier configuration CLI arguments and return parser."""
 
     add_config_arguments(parser)
     return parser
 
-def load_config_from_args(args: Any, start_path: Path | str = ".") -> RepoContextConfig:
+def load_config_from_args(args: Any, start_path: Path | str = ".") -> RepoDossierConfig:
     """Load configuration from argparse-style parsed arguments."""
 
     explicit_config_path = getattr(args, "config_path", None)
@@ -502,7 +502,7 @@ def _parser_has_option(parser: Any, option: str) -> bool:
             return True
     return False
 
-def config_summary_lines(config: RepoContextConfig) -> list[str]:
+def config_summary_lines(config: RepoDossierConfig) -> list[str]:
     """Return stable human-readable summary lines for export metadata."""
 
     lines = [
@@ -528,7 +528,7 @@ def config_summary_lines(config: RepoContextConfig) -> list[str]:
     return lines
 
 
-def format_config_summary(config: RepoContextConfig, heading: str = "Configuration") -> str:
+def format_config_summary(config: RepoDossierConfig, heading: str = "Configuration") -> str:
     """Format configuration metadata for text exports."""
 
     lines = [f"## {heading}", ""]
@@ -547,7 +547,7 @@ def _format_summary_limit(value: int | None) -> str:
         return "none"
     return str(value)
 
-def is_file_size_allowed(size_bytes: int | None, config: RepoContextConfig) -> bool:
+def is_file_size_allowed(size_bytes: int | None, config: RepoDossierConfig) -> bool:
     """Return whether a file size is allowed by max_file_bytes."""
 
     limit = config.limits.max_file_bytes
@@ -562,7 +562,7 @@ def is_file_size_allowed(size_bytes: int | None, config: RepoContextConfig) -> b
 
 def apply_max_total_files_limit(
     file_infos: list[Any] | tuple[Any, ...],
-    config: RepoContextConfig,
+    config: RepoDossierConfig,
 ) -> FileListLimitResult:
     """Apply max_total_files deterministically while preserving input order."""
 
@@ -580,7 +580,7 @@ def apply_max_total_files_limit(
 
 def truncate_text_by_line_limit(
     text: str,
-    config: RepoContextConfig,
+    config: RepoDossierConfig,
 ) -> tuple[str, bool, int]:
     """Return text truncated by max_line_count.
 
@@ -605,7 +605,7 @@ def truncate_text_by_line_limit(
 def would_exceed_export_byte_limit(
     current_size_bytes: int,
     next_chunk: str | bytes,
-    config: RepoContextConfig,
+    config: RepoDossierConfig,
 ) -> bool:
     """Return whether appending a chunk would exceed max_export_bytes."""
 
@@ -630,12 +630,12 @@ def format_limit_notice(reason: str, *, omitted_count: int | None = None) -> str
     suffix = ""
     if omitted_count is not None:
         suffix = f" Omitted: {omitted_count}."
-    return f"[RepoContext: content truncated because {reason}.{suffix}]"
+    return f"[RepoDossier: content truncated because {reason}.{suffix}]"
 
 
 def apply_config_to_file_infos(
     file_infos: list[Any] | tuple[Any, ...],
-    config: RepoContextConfig,
+    config: RepoDossierConfig,
     repository_root: Path | str | None = None,
 ) -> ConfiguredFileSelection:
     """Apply include/exclude filters and max_total_files in one stable step."""
@@ -659,7 +659,7 @@ def apply_config_to_file_infos(
 
 def filter_file_infos(
     file_infos: list[Any] | tuple[Any, ...],
-    config: RepoContextConfig,
+    config: RepoDossierConfig,
     repository_root: Path | str | None = None,
 ) -> list[Any]:
     """Filter scanner-style file entries using repository-relative config rules.
@@ -746,9 +746,9 @@ def _normalize_filter_path(path: Path | str) -> str:
 
 
 def get_split_export_config(config):
-    """Return validated split export settings from RepoContext config data."""
+    """Return validated split export settings from RepoDossier config data."""
 
-    if isinstance(config, RepoContextConfig):
+    if isinstance(config, RepoDossierConfig):
         return config.split
 
     return parse_split_export_config(config)

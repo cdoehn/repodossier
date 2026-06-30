@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 
-LANGUAGE_MODULE = import_module("repocontext.scanner")
+LANGUAGE_MODULE = import_module("repodossier.scanner")
 DETECTOR_NAME = "detect_language_from_extension"
 
 

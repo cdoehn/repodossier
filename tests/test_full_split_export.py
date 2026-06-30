@@ -1,8 +1,8 @@
 from pathlib import Path
 from types import SimpleNamespace
 
-from repocontext.cli_split import enable_split_write_interceptor_for_args
-from repocontext.split_config import SplitExportConfig
+from repodossier.cli_split import enable_split_write_interceptor_for_args
+from repodossier.split_config import SplitExportConfig
 
 
 def test_full_command_split_interceptor_writes_full_part_files(tmp_path):
@@ -113,7 +113,7 @@ def test_full_command_split_interceptor_uses_base_config_when_cli_has_no_overrid
 
 
 def test_cli_main_enables_split_interceptor_after_parse_args_and_config_load():
-    import repocontext.cli as cli
+    import repodossier.cli as cli
 
     assert cli.__file__ is not None
     source = Path(cli.__file__).read_text(encoding="utf-8")

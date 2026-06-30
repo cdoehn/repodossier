@@ -4,11 +4,11 @@ from argparse import Namespace, RawDescriptionHelpFormatter
 from pathlib import Path
 from typing import Any
 
-from repocontext.changed_exporter import write_changed_export
-from repocontext.git import find_repository_root
-from repocontext.gitignore import ensure_repocontext_gitignore_entries
-from repocontext.config import with_config_arguments
-from repocontext.cli_split import add_split_export_options
+from repodossier.changed_exporter import write_changed_export
+from repodossier.git import find_repository_root
+from repodossier.gitignore import ensure_repodossier_gitignore_entries
+from repodossier.config import with_config_arguments
+from repodossier.cli_split import add_split_export_options
 
 
 def add_changed_subparser(subparsers: Any) -> Any:
@@ -23,10 +23,10 @@ def add_changed_subparser(subparsers: Any) -> Any:
         ),
         epilog=(
             "Examples:\n"
-            "  repocontext changed\n"
-            "  repocontext changed --branch main\n"
-            "  repocontext changed --output review-changes.txt\n"
-            "  repocontext changed --no-diff"
+            "  repodossier changed\n"
+            "  repodossier changed --branch main\n"
+            "  repodossier changed --output review-changes.txt\n"
+            "  repodossier changed --no-diff"
         ),
         formatter_class=RawDescriptionHelpFormatter,
     ))
@@ -74,7 +74,7 @@ def run_changed_command(args: Namespace) -> int:
         print("Error: not inside a Git repository")
         return 1
 
-    ensure_repocontext_gitignore_entries(repository_root)
+    ensure_repodossier_gitignore_entries(repository_root)
 
     requested_output = Path(getattr(args, "output", "changed.txt"))
     output_path = (

@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from repocontext.import_graph import (
+from repodossier.import_graph import (
     ImportAnalysisError,
     ImportEdge,
     ImportGraph,
@@ -31,24 +31,24 @@ from repocontext.import_graph import (
 
 def test_import_graph_stores_modules_edges_imports_and_errors() -> None:
     edge = ImportEdge(
-        source_module="repocontext.cli",
-        target_module="repocontext.exporter",
-        source_path="src/repocontext/cli.py",
-        target_path="src/repocontext/exporter.py",
+        source_module="repodossier.cli",
+        target_module="repodossier.exporter",
+        source_path="src/repodossier/cli.py",
+        target_path="src/repodossier/exporter.py",
         import_type="import",
         line_number=3,
     )
     external_import = ImportReference(
-        source_path="src/repocontext/cli.py",
-        source_module="repocontext.cli",
+        source_path="src/repodossier/cli.py",
+        source_module="repodossier.cli",
         imported_module="argparse",
         import_type="import",
         line_number=1,
         is_local=False,
     )
     unresolved_import = ImportReference(
-        source_path="src/repocontext/exporter.py",
-        source_module="repocontext.exporter",
+        source_path="src/repodossier/exporter.py",
+        source_module="repodossier.exporter",
         imported_module="missing",
         imported_name="thing",
         import_type="from",
@@ -56,7 +56,7 @@ def test_import_graph_stores_modules_edges_imports_and_errors() -> None:
         is_local=False,
     )
     error = ImportAnalysisError(
-        source_path="src/repocontext/broken.py",
+        source_path="src/repodossier/broken.py",
         message="invalid syntax",
         error_type="SyntaxError",
         line_number=1,
@@ -64,8 +64,8 @@ def test_import_graph_stores_modules_edges_imports_and_errors() -> None:
 
     graph = ImportGraph(
         modules={
-            "repocontext.cli": "src/repocontext/cli.py",
-            "repocontext.exporter": Path("src/repocontext/exporter.py"),
+            "repodossier.cli": "src/repodossier/cli.py",
+            "repodossier.exporter": Path("src/repodossier/exporter.py"),
         },
         edges=[edge],
         external_imports=[external_import],
@@ -74,8 +74,8 @@ def test_import_graph_stores_modules_edges_imports_and_errors() -> None:
     )
 
     assert graph.modules == {
-        "repocontext.cli": Path("src/repocontext/cli.py"),
-        "repocontext.exporter": Path("src/repocontext/exporter.py"),
+        "repodossier.cli": Path("src/repodossier/cli.py"),
+        "repodossier.exporter": Path("src/repodossier/exporter.py"),
     }
     assert graph.edges == (edge,)
     assert graph.external_imports == (external_import,)
@@ -86,12 +86,12 @@ def test_import_graph_stores_modules_edges_imports_and_errors() -> None:
 def test_import_graph_defaults_to_empty_collections() -> None:
     graph = ImportGraph(
         modules={
-            "repocontext": "src/repocontext/__init__.py",
+            "repodossier": "src/repodossier/__init__.py",
         }
     )
 
     assert graph.modules == {
-        "repocontext": Path("src/repocontext/__init__.py"),
+        "repodossier": Path("src/repodossier/__init__.py"),
     }
     assert graph.edges == ()
     assert graph.external_imports == ()
@@ -108,15 +108,15 @@ def test_import_graph_is_frozen() -> None:
 
 def test_import_reference_stores_basic_import_metadata() -> None:
     reference = ImportReference(
-        source_path=Path("src/repocontext/cli.py"),
-        source_module="repocontext.cli",
+        source_path=Path("src/repodossier/cli.py"),
+        source_module="repodossier.cli",
         imported_module="argparse",
         import_type="import",
         line_number=3,
     )
 
-    assert reference.source_path == Path("src/repocontext/cli.py")
-    assert reference.source_module == "repocontext.cli"
+    assert reference.source_path == Path("src/repodossier/cli.py")
+    assert reference.source_module == "repodossier.cli"
     assert reference.imported_module == "argparse"
     assert reference.imported_name is None
     assert reference.alias is None
@@ -131,8 +131,8 @@ def test_import_reference_stores_basic_import_metadata() -> None:
 
 def test_import_reference_stores_from_import_alias_and_relative_level() -> None:
     reference = ImportReference(
-        source_path="src/repocontext/exporter.py",
-        source_module="repocontext.exporter",
+        source_path="src/repodossier/exporter.py",
+        source_module="repodossier.exporter",
         imported_module="scanner",
         imported_name="scan_files",
         alias="scan",
@@ -141,11 +141,11 @@ def test_import_reference_stores_from_import_alias_and_relative_level() -> None:
         line_number=8,
         is_relative=True,
         is_local=True,
-        resolved_module="repocontext.scanner",
-        resolved_path="src/repocontext/scanner.py",
+        resolved_module="repodossier.scanner",
+        resolved_path="src/repodossier/scanner.py",
     )
 
-    assert reference.source_path == Path("src/repocontext/exporter.py")
+    assert reference.source_path == Path("src/repodossier/exporter.py")
     assert reference.imported_module == "scanner"
     assert reference.imported_name == "scan_files"
     assert reference.alias == "scan"
@@ -154,25 +154,25 @@ def test_import_reference_stores_from_import_alias_and_relative_level() -> None:
     assert reference.line_number == 8
     assert reference.is_relative is True
     assert reference.is_local is True
-    assert reference.resolved_module == "repocontext.scanner"
-    assert reference.resolved_path == Path("src/repocontext/scanner.py")
+    assert reference.resolved_module == "repodossier.scanner"
+    assert reference.resolved_path == Path("src/repodossier/scanner.py")
 
 
 def test_import_edge_stores_local_dependency_metadata() -> None:
     edge = ImportEdge(
-        source_module="repocontext.exporter",
-        target_module="repocontext.scanner",
-        source_path="src/repocontext/exporter.py",
-        target_path="src/repocontext/scanner.py",
+        source_module="repodossier.exporter",
+        target_module="repodossier.scanner",
+        source_path="src/repodossier/exporter.py",
+        target_path="src/repodossier/scanner.py",
         import_type="from",
         imported_name="scan_files",
         line_number=12,
     )
 
-    assert edge.source_module == "repocontext.exporter"
-    assert edge.target_module == "repocontext.scanner"
-    assert edge.source_path == Path("src/repocontext/exporter.py")
-    assert edge.target_path == Path("src/repocontext/scanner.py")
+    assert edge.source_module == "repodossier.exporter"
+    assert edge.target_module == "repodossier.scanner"
+    assert edge.source_path == Path("src/repodossier/exporter.py")
+    assert edge.target_path == Path("src/repodossier/scanner.py")
     assert edge.import_type == "from"
     assert edge.imported_name == "scan_files"
     assert edge.line_number == 12
@@ -180,13 +180,13 @@ def test_import_edge_stores_local_dependency_metadata() -> None:
 
 def test_import_analysis_error_stores_non_fatal_error_details() -> None:
     error = ImportAnalysisError(
-        source_path="src/repocontext/broken.py",
+        source_path="src/repodossier/broken.py",
         message="invalid syntax",
         error_type="SyntaxError",
         line_number=4,
     )
 
-    assert error.source_path == Path("src/repocontext/broken.py")
+    assert error.source_path == Path("src/repodossier/broken.py")
     assert error.message == "invalid syntax"
     assert error.error_type == "SyntaxError"
     assert error.line_number == 4
@@ -202,18 +202,18 @@ def test_import_type_must_be_supported(model) -> None:
     if model is ImportReference:
         kwargs.update(
             {
-                "source_path": Path("src/repocontext/cli.py"),
-                "source_module": "repocontext.cli",
+                "source_path": Path("src/repodossier/cli.py"),
+                "source_module": "repodossier.cli",
                 "imported_module": "argparse",
             }
         )
     else:
         kwargs.update(
             {
-                "source_module": "repocontext.cli",
-                "target_module": "repocontext.exporter",
-                "source_path": Path("src/repocontext/cli.py"),
-                "target_path": Path("src/repocontext/exporter.py"),
+                "source_module": "repodossier.cli",
+                "target_module": "repodossier.exporter",
+                "source_path": Path("src/repodossier/cli.py"),
+                "target_path": Path("src/repodossier/exporter.py"),
             }
         )
 
@@ -224,8 +224,8 @@ def test_import_type_must_be_supported(model) -> None:
 def test_import_reference_rejects_negative_level() -> None:
     with pytest.raises(ValueError, match="level"):
         ImportReference(
-            source_path=Path("src/repocontext/cli.py"),
-            source_module="repocontext.cli",
+            source_path=Path("src/repodossier/cli.py"),
+            source_module="repodossier.cli",
             imported_module="argparse",
             level=-1,
         )
@@ -235,21 +235,21 @@ def test_import_reference_rejects_negative_level() -> None:
     "factory",
     [
         lambda: ImportReference(
-            source_path=Path("src/repocontext/cli.py"),
-            source_module="repocontext.cli",
+            source_path=Path("src/repodossier/cli.py"),
+            source_module="repodossier.cli",
             imported_module="argparse",
             line_number=-1,
         ),
         lambda: ImportEdge(
-            source_module="repocontext.cli",
-            target_module="repocontext.exporter",
-            source_path=Path("src/repocontext/cli.py"),
-            target_path=Path("src/repocontext/exporter.py"),
+            source_module="repodossier.cli",
+            target_module="repodossier.exporter",
+            source_path=Path("src/repodossier/cli.py"),
+            target_path=Path("src/repodossier/exporter.py"),
             import_type="import",
             line_number=-1,
         ),
         lambda: ImportAnalysisError(
-            source_path=Path("src/repocontext/broken.py"),
+            source_path=Path("src/repodossier/broken.py"),
             message="invalid syntax",
             line_number=-1,
         ),
@@ -264,30 +264,30 @@ def test_line_numbers_must_not_be_negative(factory) -> None:
 
 def test_module_name_from_python_path_handles_src_layout_modules() -> None:
     assert (
-        module_name_from_python_path("src/repocontext/scanner.py")
-        == "repocontext.scanner"
+        module_name_from_python_path("src/repodossier/scanner.py")
+        == "repodossier.scanner"
     )
     assert (
-        module_name_from_python_path("src/repocontext/nested/helper.py")
-        == "repocontext.nested.helper"
+        module_name_from_python_path("src/repodossier/nested/helper.py")
+        == "repodossier.nested.helper"
     )
 
 
 def test_module_name_from_python_path_handles_src_layout_package_init() -> None:
     assert (
-        module_name_from_python_path("src/repocontext/__init__.py")
-        == "repocontext"
+        module_name_from_python_path("src/repodossier/__init__.py")
+        == "repodossier"
     )
     assert (
-        module_name_from_python_path("src/repocontext/nested/__init__.py")
-        == "repocontext.nested"
+        module_name_from_python_path("src/repodossier/nested/__init__.py")
+        == "repodossier.nested"
     )
 
 
 def test_module_name_from_python_path_handles_root_layout_and_tests() -> None:
     assert (
-        module_name_from_python_path("repocontext/scanner.py")
-        == "repocontext.scanner"
+        module_name_from_python_path("repodossier/scanner.py")
+        == "repodossier.scanner"
     )
     assert (
         module_name_from_python_path("tests/test_scanner.py")
@@ -296,34 +296,34 @@ def test_module_name_from_python_path_handles_root_layout_and_tests() -> None:
 
 
 def test_module_name_from_python_path_respects_repo_root(tmp_path: Path) -> None:
-    source_path = tmp_path / "src" / "repocontext" / "scanner.py"
+    source_path = tmp_path / "src" / "repodossier" / "scanner.py"
 
     assert (
         module_name_from_python_path(source_path, repo_root=tmp_path)
-        == "repocontext.scanner"
+        == "repodossier.scanner"
     )
 
 
 def test_module_name_from_python_path_ignores_non_python_and_invalid_paths() -> None:
     assert module_name_from_python_path("README.md") is None
     assert module_name_from_python_path("src/example-data/module.py") is None
-    assert module_name_from_python_path("src/repocontext/__init__.py.md") is None
+    assert module_name_from_python_path("src/repodossier/__init__.py.md") is None
 
 
 def test_build_python_module_map_returns_deterministic_module_to_path_mapping() -> None:
     module_map = build_python_module_map(
         [
             "README.md",
-            "src/repocontext/scanner.py",
-            "src/repocontext/__init__.py",
+            "src/repodossier/scanner.py",
+            "src/repodossier/__init__.py",
             "tests/test_scanner.py",
-            "src/repocontext/scanner.py",
+            "src/repodossier/scanner.py",
         ]
     )
 
     assert module_map == {
-        "repocontext": Path("src/repocontext/__init__.py"),
-        "repocontext.scanner": Path("src/repocontext/scanner.py"),
+        "repodossier": Path("src/repodossier/__init__.py"),
+        "repodossier.scanner": Path("src/repodossier/scanner.py"),
         "tests.test_scanner": Path("tests/test_scanner.py"),
     }
 
@@ -332,9 +332,9 @@ def test_build_python_module_map_returns_deterministic_module_to_path_mapping() 
 
 def test_resolve_absolute_import_reference_marks_exact_local_import() -> None:
     reference = ImportReference(
-        source_path="src/repocontext/cli.py",
-        source_module="repocontext.cli",
-        imported_module="repocontext.scanner",
+        source_path="src/repodossier/cli.py",
+        source_module="repodossier.cli",
+        imported_module="repodossier.scanner",
         import_type="import",
         line_number=5,
     )
@@ -342,21 +342,21 @@ def test_resolve_absolute_import_reference_marks_exact_local_import() -> None:
     resolved = resolve_absolute_import_reference(
         reference,
         {
-            "repocontext": Path("src/repocontext/__init__.py"),
-            "repocontext.scanner": Path("src/repocontext/scanner.py"),
+            "repodossier": Path("src/repodossier/__init__.py"),
+            "repodossier.scanner": Path("src/repodossier/scanner.py"),
         },
     )
 
     assert resolved.is_local is True
-    assert resolved.resolved_module == "repocontext.scanner"
-    assert resolved.resolved_path == Path("src/repocontext/scanner.py")
+    assert resolved.resolved_module == "repodossier.scanner"
+    assert resolved.resolved_path == Path("src/repodossier/scanner.py")
 
 
 def test_resolve_absolute_import_reference_marks_from_import_module_as_local() -> None:
     reference = ImportReference(
-        source_path="src/repocontext/exporter.py",
-        source_module="repocontext.exporter",
-        imported_module="repocontext.git",
+        source_path="src/repodossier/exporter.py",
+        source_module="repodossier.exporter",
+        imported_module="repodossier.git",
         imported_name="discover_repo",
         import_type="from",
         line_number=7,
@@ -365,20 +365,20 @@ def test_resolve_absolute_import_reference_marks_from_import_module_as_local() -
     resolved = resolve_absolute_import_reference(
         reference,
         {
-            "repocontext.git": Path("src/repocontext/git.py"),
+            "repodossier.git": Path("src/repodossier/git.py"),
         },
     )
 
     assert resolved.is_local is True
-    assert resolved.resolved_module == "repocontext.git"
-    assert resolved.resolved_path == Path("src/repocontext/git.py")
+    assert resolved.resolved_module == "repodossier.git"
+    assert resolved.resolved_path == Path("src/repodossier/git.py")
 
 
 def test_resolve_absolute_import_reference_prefers_imported_submodule_from_package() -> None:
     reference = ImportReference(
-        source_path="src/repocontext/cli.py",
-        source_module="repocontext.cli",
-        imported_module="repocontext",
+        source_path="src/repodossier/cli.py",
+        source_module="repodossier.cli",
+        imported_module="repodossier",
         imported_name="scanner",
         import_type="from",
         line_number=9,
@@ -387,20 +387,20 @@ def test_resolve_absolute_import_reference_prefers_imported_submodule_from_packa
     resolved = resolve_absolute_import_reference(
         reference,
         {
-            "repocontext": Path("src/repocontext/__init__.py"),
-            "repocontext.scanner": Path("src/repocontext/scanner.py"),
+            "repodossier": Path("src/repodossier/__init__.py"),
+            "repodossier.scanner": Path("src/repodossier/scanner.py"),
         },
     )
 
     assert resolved.is_local is True
-    assert resolved.resolved_module == "repocontext.scanner"
-    assert resolved.resolved_path == Path("src/repocontext/scanner.py")
+    assert resolved.resolved_module == "repodossier.scanner"
+    assert resolved.resolved_path == Path("src/repodossier/scanner.py")
 
 
 def test_resolve_absolute_import_reference_marks_external_import_as_not_local() -> None:
     reference = ImportReference(
-        source_path="src/repocontext/cli.py",
-        source_module="repocontext.cli",
+        source_path="src/repodossier/cli.py",
+        source_module="repodossier.cli",
         imported_module="pathlib",
         imported_name="Path",
         import_type="from",
@@ -410,7 +410,7 @@ def test_resolve_absolute_import_reference_marks_external_import_as_not_local() 
     resolved = resolve_absolute_import_reference(
         reference,
         {
-            "repocontext.cli": Path("src/repocontext/cli.py"),
+            "repodossier.cli": Path("src/repodossier/cli.py"),
         },
     )
 
@@ -421,8 +421,8 @@ def test_resolve_absolute_import_reference_marks_external_import_as_not_local() 
 
 def test_resolve_absolute_import_reference_leaves_relative_imports_for_later_step() -> None:
     reference = ImportReference(
-        source_path="src/repocontext/exporter.py",
-        source_module="repocontext.exporter",
+        source_path="src/repodossier/exporter.py",
+        source_module="repodossier.exporter",
         imported_module="scanner",
         imported_name="scan_files",
         import_type="from",
@@ -434,7 +434,7 @@ def test_resolve_absolute_import_reference_leaves_relative_imports_for_later_ste
     resolved = resolve_absolute_import_reference(
         reference,
         {
-            "repocontext.scanner": Path("src/repocontext/scanner.py"),
+            "repodossier.scanner": Path("src/repodossier/scanner.py"),
         },
     )
 
@@ -447,15 +447,15 @@ def test_resolve_absolute_import_reference_leaves_relative_imports_for_later_ste
 def test_resolve_absolute_imports_resolves_multiple_references() -> None:
     references = [
         ImportReference(
-            source_path="src/repocontext/cli.py",
-            source_module="repocontext.cli",
-            imported_module="repocontext.exporter",
+            source_path="src/repodossier/cli.py",
+            source_module="repodossier.cli",
+            imported_module="repodossier.exporter",
             import_type="import",
             line_number=1,
         ),
         ImportReference(
-            source_path="src/repocontext/cli.py",
-            source_module="repocontext.cli",
+            source_path="src/repodossier/cli.py",
+            source_module="repodossier.cli",
             imported_module="argparse",
             import_type="import",
             line_number=2,
@@ -465,12 +465,12 @@ def test_resolve_absolute_imports_resolves_multiple_references() -> None:
     resolved = resolve_absolute_imports(
         references,
         {
-            "repocontext.exporter": Path("src/repocontext/exporter.py"),
+            "repodossier.exporter": Path("src/repodossier/exporter.py"),
         },
     )
 
     assert [reference.is_local for reference in resolved] == [True, False]
-    assert resolved[0].resolved_module == "repocontext.exporter"
+    assert resolved[0].resolved_module == "repodossier.exporter"
     assert resolved[1].resolved_module is None
 
 
@@ -478,8 +478,8 @@ def test_resolve_absolute_imports_resolves_multiple_references() -> None:
 
 def test_resolve_relative_import_reference_resolves_sibling_module_import() -> None:
     reference = ImportReference(
-        source_path="src/repocontext/exporter.py",
-        source_module="repocontext.exporter",
+        source_path="src/repodossier/exporter.py",
+        source_module="repodossier.exporter",
         imported_module="scanner",
         imported_name="scan_files",
         import_type="from",
@@ -491,19 +491,19 @@ def test_resolve_relative_import_reference_resolves_sibling_module_import() -> N
     resolved = resolve_relative_import_reference(
         reference,
         {
-            "repocontext.scanner": Path("src/repocontext/scanner.py"),
+            "repodossier.scanner": Path("src/repodossier/scanner.py"),
         },
     )
 
     assert resolved.is_local is True
-    assert resolved.resolved_module == "repocontext.scanner"
-    assert resolved.resolved_path == Path("src/repocontext/scanner.py")
+    assert resolved.resolved_module == "repodossier.scanner"
+    assert resolved.resolved_path == Path("src/repodossier/scanner.py")
 
 
 def test_resolve_relative_import_reference_resolves_parent_package_import() -> None:
     reference = ImportReference(
-        source_path="src/repocontext/subpkg/example.py",
-        source_module="repocontext.subpkg.example",
+        source_path="src/repodossier/subpkg/example.py",
+        source_module="repodossier.subpkg.example",
         imported_module="git",
         imported_name="discover_repo",
         import_type="from",
@@ -515,19 +515,19 @@ def test_resolve_relative_import_reference_resolves_parent_package_import() -> N
     resolved = resolve_relative_import_reference(
         reference,
         {
-            "repocontext.git": Path("src/repocontext/git.py"),
+            "repodossier.git": Path("src/repodossier/git.py"),
         },
     )
 
     assert resolved.is_local is True
-    assert resolved.resolved_module == "repocontext.git"
-    assert resolved.resolved_path == Path("src/repocontext/git.py")
+    assert resolved.resolved_module == "repodossier.git"
+    assert resolved.resolved_path == Path("src/repodossier/git.py")
 
 
 def test_resolve_relative_import_reference_resolves_from_dot_import_module() -> None:
     reference = ImportReference(
-        source_path="src/repocontext/exporter.py",
-        source_module="repocontext.exporter",
+        source_path="src/repodossier/exporter.py",
+        source_module="repodossier.exporter",
         imported_module=None,
         imported_name="symbols",
         import_type="from",
@@ -539,19 +539,19 @@ def test_resolve_relative_import_reference_resolves_from_dot_import_module() -> 
     resolved = resolve_relative_import_reference(
         reference,
         {
-            "repocontext.symbols": Path("src/repocontext/symbols.py"),
+            "repodossier.symbols": Path("src/repodossier/symbols.py"),
         },
     )
 
     assert resolved.is_local is True
-    assert resolved.resolved_module == "repocontext.symbols"
-    assert resolved.resolved_path == Path("src/repocontext/symbols.py")
+    assert resolved.resolved_module == "repodossier.symbols"
+    assert resolved.resolved_path == Path("src/repodossier/symbols.py")
 
 
 def test_resolve_relative_import_reference_prefers_imported_submodule() -> None:
     reference = ImportReference(
-        source_path="src/repocontext/exporter.py",
-        source_module="repocontext.exporter",
+        source_path="src/repodossier/exporter.py",
+        source_module="repodossier.exporter",
         imported_module="subpackage",
         imported_name="helper",
         import_type="from",
@@ -563,20 +563,20 @@ def test_resolve_relative_import_reference_prefers_imported_submodule() -> None:
     resolved = resolve_relative_import_reference(
         reference,
         {
-            "repocontext.subpackage": Path("src/repocontext/subpackage/__init__.py"),
-            "repocontext.subpackage.helper": Path("src/repocontext/subpackage/helper.py"),
+            "repodossier.subpackage": Path("src/repodossier/subpackage/__init__.py"),
+            "repodossier.subpackage.helper": Path("src/repodossier/subpackage/helper.py"),
         },
     )
 
     assert resolved.is_local is True
-    assert resolved.resolved_module == "repocontext.subpackage.helper"
-    assert resolved.resolved_path == Path("src/repocontext/subpackage/helper.py")
+    assert resolved.resolved_module == "repodossier.subpackage.helper"
+    assert resolved.resolved_path == Path("src/repodossier/subpackage/helper.py")
 
 
 def test_resolve_relative_import_reference_handles_package_init_source() -> None:
     reference = ImportReference(
-        source_path="src/repocontext/__init__.py",
-        source_module="repocontext",
+        source_path="src/repodossier/__init__.py",
+        source_module="repodossier",
         imported_module=None,
         imported_name="scanner",
         import_type="from",
@@ -588,19 +588,19 @@ def test_resolve_relative_import_reference_handles_package_init_source() -> None
     resolved = resolve_relative_import_reference(
         reference,
         {
-            "repocontext.scanner": Path("src/repocontext/scanner.py"),
+            "repodossier.scanner": Path("src/repodossier/scanner.py"),
         },
     )
 
     assert resolved.is_local is True
-    assert resolved.resolved_module == "repocontext.scanner"
-    assert resolved.resolved_path == Path("src/repocontext/scanner.py")
+    assert resolved.resolved_module == "repodossier.scanner"
+    assert resolved.resolved_path == Path("src/repodossier/scanner.py")
 
 
 def test_resolve_relative_import_reference_marks_unresolved_relative_import_as_not_local() -> None:
     reference = ImportReference(
-        source_path="src/repocontext/exporter.py",
-        source_module="repocontext.exporter",
+        source_path="src/repodossier/exporter.py",
+        source_module="repodossier.exporter",
         imported_module="missing",
         imported_name="thing",
         import_type="from",
@@ -612,7 +612,7 @@ def test_resolve_relative_import_reference_marks_unresolved_relative_import_as_n
     resolved = resolve_relative_import_reference(
         reference,
         {
-            "repocontext.scanner": Path("src/repocontext/scanner.py"),
+            "repodossier.scanner": Path("src/repodossier/scanner.py"),
         },
     )
 
@@ -623,9 +623,9 @@ def test_resolve_relative_import_reference_marks_unresolved_relative_import_as_n
 
 def test_resolve_relative_import_reference_leaves_absolute_imports_unchanged() -> None:
     reference = ImportReference(
-        source_path="src/repocontext/cli.py",
-        source_module="repocontext.cli",
-        imported_module="repocontext.scanner",
+        source_path="src/repodossier/cli.py",
+        source_module="repodossier.cli",
+        imported_module="repodossier.scanner",
         import_type="import",
         level=0,
         line_number=3,
@@ -635,7 +635,7 @@ def test_resolve_relative_import_reference_leaves_absolute_imports_unchanged() -
     resolved = resolve_relative_import_reference(
         reference,
         {
-            "repocontext.scanner": Path("src/repocontext/scanner.py"),
+            "repodossier.scanner": Path("src/repodossier/scanner.py"),
         },
     )
 
@@ -648,8 +648,8 @@ def test_resolve_relative_import_reference_leaves_absolute_imports_unchanged() -
 def test_resolve_relative_imports_resolves_multiple_references() -> None:
     references = [
         ImportReference(
-            source_path="src/repocontext/exporter.py",
-            source_module="repocontext.exporter",
+            source_path="src/repodossier/exporter.py",
+            source_module="repodossier.exporter",
             imported_module="scanner",
             imported_name="scan_files",
             import_type="from",
@@ -658,8 +658,8 @@ def test_resolve_relative_imports_resolves_multiple_references() -> None:
             is_relative=True,
         ),
         ImportReference(
-            source_path="src/repocontext/exporter.py",
-            source_module="repocontext.exporter",
+            source_path="src/repodossier/exporter.py",
+            source_module="repodossier.exporter",
             imported_module="missing",
             imported_name="thing",
             import_type="from",
@@ -672,12 +672,12 @@ def test_resolve_relative_imports_resolves_multiple_references() -> None:
     resolved = resolve_relative_imports(
         references,
         {
-            "repocontext.scanner": Path("src/repocontext/scanner.py"),
+            "repodossier.scanner": Path("src/repodossier/scanner.py"),
         },
     )
 
     assert [reference.is_local for reference in resolved] == [True, False]
-    assert resolved[0].resolved_module == "repocontext.scanner"
+    assert resolved[0].resolved_module == "repodossier.scanner"
     assert resolved[1].resolved_module is None
 
 
@@ -685,9 +685,9 @@ def test_resolve_relative_imports_resolves_multiple_references() -> None:
 
 def test_resolve_import_reference_maps_absolute_import_to_file_target() -> None:
     reference = ImportReference(
-        source_path="src/repocontext/cli.py",
-        source_module="repocontext.cli",
-        imported_module="repocontext.exporter",
+        source_path="src/repodossier/cli.py",
+        source_module="repodossier.cli",
+        imported_module="repodossier.exporter",
         import_type="import",
         line_number=3,
     )
@@ -695,23 +695,23 @@ def test_resolve_import_reference_maps_absolute_import_to_file_target() -> None:
     resolved = resolve_import_reference(
         reference,
         {
-            "repocontext.exporter": Path("src/repocontext/exporter.py"),
+            "repodossier.exporter": Path("src/repodossier/exporter.py"),
         },
     )
 
     assert resolved.is_local is True
-    assert resolved.resolved_module == "repocontext.exporter"
-    assert resolved.resolved_path == Path("src/repocontext/exporter.py")
+    assert resolved.resolved_module == "repodossier.exporter"
+    assert resolved.resolved_path == Path("src/repodossier/exporter.py")
     assert resolved_import_target(resolved) == (
-        "repocontext.exporter",
-        Path("src/repocontext/exporter.py"),
+        "repodossier.exporter",
+        Path("src/repodossier/exporter.py"),
     )
 
 
 def test_resolve_import_reference_maps_relative_import_to_file_target() -> None:
     reference = ImportReference(
-        source_path="src/repocontext/exporter.py",
-        source_module="repocontext.exporter",
+        source_path="src/repodossier/exporter.py",
+        source_module="repodossier.exporter",
         imported_module="scanner",
         imported_name="scan_files",
         import_type="from",
@@ -723,24 +723,24 @@ def test_resolve_import_reference_maps_relative_import_to_file_target() -> None:
     resolved = resolve_import_reference(
         reference,
         {
-            "repocontext.scanner": Path("src/repocontext/scanner.py"),
+            "repodossier.scanner": Path("src/repodossier/scanner.py"),
         },
     )
 
     assert resolved.is_local is True
-    assert resolved.resolved_module == "repocontext.scanner"
-    assert resolved.resolved_path == Path("src/repocontext/scanner.py")
+    assert resolved.resolved_module == "repodossier.scanner"
+    assert resolved.resolved_path == Path("src/repodossier/scanner.py")
     assert resolved_import_target(resolved) == (
-        "repocontext.scanner",
-        Path("src/repocontext/scanner.py"),
+        "repodossier.scanner",
+        Path("src/repodossier/scanner.py"),
     )
 
 
 def test_resolve_import_reference_maps_from_package_import_to_submodule_file_target() -> None:
     reference = ImportReference(
-        source_path="src/repocontext/cli.py",
-        source_module="repocontext.cli",
-        imported_module="repocontext",
+        source_path="src/repodossier/cli.py",
+        source_module="repodossier.cli",
+        imported_module="repodossier",
         imported_name="scanner",
         import_type="from",
         line_number=6,
@@ -749,20 +749,20 @@ def test_resolve_import_reference_maps_from_package_import_to_submodule_file_tar
     resolved = resolve_import_reference(
         reference,
         {
-            "repocontext": Path("src/repocontext/__init__.py"),
-            "repocontext.scanner": Path("src/repocontext/scanner.py"),
+            "repodossier": Path("src/repodossier/__init__.py"),
+            "repodossier.scanner": Path("src/repodossier/scanner.py"),
         },
     )
 
     assert resolved.is_local is True
-    assert resolved.resolved_module == "repocontext.scanner"
-    assert resolved.resolved_path == Path("src/repocontext/scanner.py")
+    assert resolved.resolved_module == "repodossier.scanner"
+    assert resolved.resolved_path == Path("src/repodossier/scanner.py")
 
 
 def test_resolve_import_reference_maps_external_import_to_no_file_target() -> None:
     reference = ImportReference(
-        source_path="src/repocontext/cli.py",
-        source_module="repocontext.cli",
+        source_path="src/repodossier/cli.py",
+        source_module="repodossier.cli",
         imported_module="argparse",
         import_type="import",
         line_number=1,
@@ -771,7 +771,7 @@ def test_resolve_import_reference_maps_external_import_to_no_file_target() -> No
     resolved = resolve_import_reference(
         reference,
         {
-            "repocontext.cli": Path("src/repocontext/cli.py"),
+            "repodossier.cli": Path("src/repodossier/cli.py"),
         },
     )
 
@@ -783,8 +783,8 @@ def test_resolve_import_reference_maps_external_import_to_no_file_target() -> No
 
 def test_resolve_import_reference_maps_unresolved_relative_import_to_no_file_target() -> None:
     reference = ImportReference(
-        source_path="src/repocontext/exporter.py",
-        source_module="repocontext.exporter",
+        source_path="src/repodossier/exporter.py",
+        source_module="repodossier.exporter",
         imported_module="missing",
         imported_name="thing",
         import_type="from",
@@ -796,7 +796,7 @@ def test_resolve_import_reference_maps_unresolved_relative_import_to_no_file_tar
     resolved = resolve_import_reference(
         reference,
         {
-            "repocontext.scanner": Path("src/repocontext/scanner.py"),
+            "repodossier.scanner": Path("src/repodossier/scanner.py"),
         },
     )
 
@@ -809,15 +809,15 @@ def test_resolve_import_reference_maps_unresolved_relative_import_to_no_file_tar
 def test_resolve_imports_maps_mixed_imports_to_file_targets() -> None:
     references = [
         ImportReference(
-            source_path="src/repocontext/cli.py",
-            source_module="repocontext.cli",
-            imported_module="repocontext.exporter",
+            source_path="src/repodossier/cli.py",
+            source_module="repodossier.cli",
+            imported_module="repodossier.exporter",
             import_type="import",
             line_number=1,
         ),
         ImportReference(
-            source_path="src/repocontext/exporter.py",
-            source_module="repocontext.exporter",
+            source_path="src/repodossier/exporter.py",
+            source_module="repodossier.exporter",
             imported_module="scanner",
             imported_name="scan_files",
             import_type="from",
@@ -826,8 +826,8 @@ def test_resolve_imports_maps_mixed_imports_to_file_targets() -> None:
             is_relative=True,
         ),
         ImportReference(
-            source_path="src/repocontext/cli.py",
-            source_module="repocontext.cli",
+            source_path="src/repodossier/cli.py",
+            source_module="repodossier.cli",
             imported_module="argparse",
             import_type="import",
             line_number=3,
@@ -837,8 +837,8 @@ def test_resolve_imports_maps_mixed_imports_to_file_targets() -> None:
     resolved = resolve_imports(
         references,
         {
-            "repocontext.exporter": Path("src/repocontext/exporter.py"),
-            "repocontext.scanner": Path("src/repocontext/scanner.py"),
+            "repodossier.exporter": Path("src/repodossier/exporter.py"),
+            "repodossier.scanner": Path("src/repodossier/scanner.py"),
         },
     )
 
@@ -847,8 +847,8 @@ def test_resolve_imports_maps_mixed_imports_to_file_targets() -> None:
         resolved_import_target(reference)
         for reference in resolved
     ] == [
-        ("repocontext.exporter", Path("src/repocontext/exporter.py")),
-        ("repocontext.scanner", Path("src/repocontext/scanner.py")),
+        ("repodossier.exporter", Path("src/repodossier/exporter.py")),
+        ("repodossier.scanner", Path("src/repodossier/scanner.py")),
         None,
     ]
 
@@ -857,22 +857,22 @@ def test_resolve_imports_maps_mixed_imports_to_file_targets() -> None:
 
 def test_import_resolution_integration_handles_mini_src_project(tmp_path: Path) -> None:
     project_files = {
-        "src/repocontext/__init__.py": "",
-        "src/repocontext/cli.py": """
+        "src/repodossier/__init__.py": "",
+        "src/repodossier/cli.py": """
 import argparse
-import repocontext.exporter
-from repocontext import scanner
+import repodossier.exporter
+from repodossier import scanner
 """,
-        "src/repocontext/exporter.py": """
+        "src/repodossier/exporter.py": """
 from .scanner import scan_files
 from . import symbols
 from .missing import nope
 """,
-        "src/repocontext/git.py": "",
-        "src/repocontext/scanner.py": "def scan_files(): pass\n",
-        "src/repocontext/symbols.py": "",
-        "src/repocontext/subpkg/__init__.py": "",
-        "src/repocontext/subpkg/example.py": """
+        "src/repodossier/git.py": "",
+        "src/repodossier/scanner.py": "def scan_files(): pass\n",
+        "src/repodossier/symbols.py": "",
+        "src/repodossier/subpkg/__init__.py": "",
+        "src/repodossier/subpkg/example.py": """
 from .. import git as repo_git
 from ..scanner import scan_files as scan
 """,
@@ -888,22 +888,22 @@ from ..scanner import scan_files as scan
     module_map = build_python_module_map(source_paths, repo_root=tmp_path)
 
     assert module_map == {
-        "repocontext": tmp_path / "src/repocontext/__init__.py",
-        "repocontext.cli": tmp_path / "src/repocontext/cli.py",
-        "repocontext.exporter": tmp_path / "src/repocontext/exporter.py",
-        "repocontext.git": tmp_path / "src/repocontext/git.py",
-        "repocontext.scanner": tmp_path / "src/repocontext/scanner.py",
-        "repocontext.subpkg": tmp_path / "src/repocontext/subpkg/__init__.py",
-        "repocontext.subpkg.example": tmp_path / "src/repocontext/subpkg/example.py",
-        "repocontext.symbols": tmp_path / "src/repocontext/symbols.py",
+        "repodossier": tmp_path / "src/repodossier/__init__.py",
+        "repodossier.cli": tmp_path / "src/repodossier/cli.py",
+        "repodossier.exporter": tmp_path / "src/repodossier/exporter.py",
+        "repodossier.git": tmp_path / "src/repodossier/git.py",
+        "repodossier.scanner": tmp_path / "src/repodossier/scanner.py",
+        "repodossier.subpkg": tmp_path / "src/repodossier/subpkg/__init__.py",
+        "repodossier.subpkg.example": tmp_path / "src/repodossier/subpkg/example.py",
+        "repodossier.symbols": tmp_path / "src/repodossier/symbols.py",
     }
 
     references = []
     errors = []
     for source_path in [
-        tmp_path / "src/repocontext/cli.py",
-        tmp_path / "src/repocontext/exporter.py",
-        tmp_path / "src/repocontext/subpkg/example.py",
+        tmp_path / "src/repodossier/cli.py",
+        tmp_path / "src/repodossier/exporter.py",
+        tmp_path / "src/repodossier/subpkg/example.py",
     ]:
         source_module = module_name_from_python_path(source_path, repo_root=tmp_path)
         assert source_module is not None
@@ -935,7 +935,7 @@ from ..scanner import scan_files as scan
 
     assert resolved_summary == [
         (
-            "repocontext.cli",
+            "repodossier.cli",
             "argparse",
             None,
             False,
@@ -943,39 +943,39 @@ from ..scanner import scan_files as scan
             None,
         ),
         (
-            "repocontext.cli",
-            "repocontext.exporter",
+            "repodossier.cli",
+            "repodossier.exporter",
             None,
             True,
-            "repocontext.exporter",
-            "src/repocontext/exporter.py",
+            "repodossier.exporter",
+            "src/repodossier/exporter.py",
         ),
         (
-            "repocontext.cli",
-            "repocontext",
+            "repodossier.cli",
+            "repodossier",
             "scanner",
             True,
-            "repocontext.scanner",
-            "src/repocontext/scanner.py",
+            "repodossier.scanner",
+            "src/repodossier/scanner.py",
         ),
         (
-            "repocontext.exporter",
+            "repodossier.exporter",
             "scanner",
             "scan_files",
             True,
-            "repocontext.scanner",
-            "src/repocontext/scanner.py",
+            "repodossier.scanner",
+            "src/repodossier/scanner.py",
         ),
         (
-            "repocontext.exporter",
+            "repodossier.exporter",
             None,
             "symbols",
             True,
-            "repocontext.symbols",
-            "src/repocontext/symbols.py",
+            "repodossier.symbols",
+            "src/repodossier/symbols.py",
         ),
         (
-            "repocontext.exporter",
+            "repodossier.exporter",
             "missing",
             "nope",
             False,
@@ -983,20 +983,20 @@ from ..scanner import scan_files as scan
             None,
         ),
         (
-            "repocontext.subpkg.example",
+            "repodossier.subpkg.example",
             None,
             "git",
             True,
-            "repocontext.git",
-            "src/repocontext/git.py",
+            "repodossier.git",
+            "src/repodossier/git.py",
         ),
         (
-            "repocontext.subpkg.example",
+            "repodossier.subpkg.example",
             "scanner",
             "scan_files",
             True,
-            "repocontext.scanner",
-            "src/repocontext/scanner.py",
+            "repodossier.scanner",
+            "src/repodossier/scanner.py",
         ),
     ]
 
@@ -1046,23 +1046,23 @@ from . import plugins as local_plugins
 
 def test_import_edge_from_reference_creates_local_dependency_edge() -> None:
     reference = ImportReference(
-        source_path="src/repocontext/cli.py",
-        source_module="repocontext.cli",
-        imported_module="repocontext.exporter",
+        source_path="src/repodossier/cli.py",
+        source_module="repodossier.cli",
+        imported_module="repodossier.exporter",
         import_type="import",
         line_number=3,
         is_local=True,
-        resolved_module="repocontext.exporter",
-        resolved_path="src/repocontext/exporter.py",
+        resolved_module="repodossier.exporter",
+        resolved_path="src/repodossier/exporter.py",
     )
 
     edge = import_edge_from_reference(reference)
 
     assert edge == ImportEdge(
-        source_module="repocontext.cli",
-        target_module="repocontext.exporter",
-        source_path=Path("src/repocontext/cli.py"),
-        target_path=Path("src/repocontext/exporter.py"),
+        source_module="repodossier.cli",
+        target_module="repodossier.exporter",
+        source_path=Path("src/repodossier/cli.py"),
+        target_path=Path("src/repodossier/exporter.py"),
         import_type="import",
         imported_name=None,
         line_number=3,
@@ -1071,8 +1071,8 @@ def test_import_edge_from_reference_creates_local_dependency_edge() -> None:
 
 def test_import_edge_from_reference_returns_none_for_external_import() -> None:
     reference = ImportReference(
-        source_path="src/repocontext/cli.py",
-        source_module="repocontext.cli",
+        source_path="src/repodossier/cli.py",
+        source_module="repodossier.cli",
         imported_module="argparse",
         import_type="import",
         line_number=1,
@@ -1290,17 +1290,17 @@ from . import c
 
 def test_build_import_graph_builds_local_edges_and_separates_external_and_unresolved(tmp_path: Path) -> None:
     project_files = {
-        "src/repocontext/__init__.py": "",
-        "src/repocontext/cli.py": """
+        "src/repodossier/__init__.py": "",
+        "src/repodossier/cli.py": """
 import argparse
-import repocontext.exporter
-from repocontext import scanner
+import repodossier.exporter
+from repodossier import scanner
 """,
-        "src/repocontext/exporter.py": """
+        "src/repodossier/exporter.py": """
 from .scanner import scan_files
 from .missing import nope
 """,
-        "src/repocontext/scanner.py": "",
+        "src/repodossier/scanner.py": "",
     }
 
     source_paths: list[Path] = []
@@ -1313,10 +1313,10 @@ from .missing import nope
     graph = build_import_graph(source_paths, repo_root=tmp_path)
 
     assert graph.modules == {
-        "repocontext": tmp_path / "src/repocontext/__init__.py",
-        "repocontext.cli": tmp_path / "src/repocontext/cli.py",
-        "repocontext.exporter": tmp_path / "src/repocontext/exporter.py",
-        "repocontext.scanner": tmp_path / "src/repocontext/scanner.py",
+        "repodossier": tmp_path / "src/repodossier/__init__.py",
+        "repodossier.cli": tmp_path / "src/repodossier/cli.py",
+        "repodossier.exporter": tmp_path / "src/repodossier/exporter.py",
+        "repodossier.scanner": tmp_path / "src/repodossier/scanner.py",
     }
 
     assert [
@@ -1332,28 +1332,28 @@ from .missing import nope
         for edge in graph.edges
     ] == [
         (
-            "repocontext.cli",
-            "repocontext.exporter",
-            "src/repocontext/cli.py",
-            "src/repocontext/exporter.py",
+            "repodossier.cli",
+            "repodossier.exporter",
+            "src/repodossier/cli.py",
+            "src/repodossier/exporter.py",
             "import",
             None,
             3,
         ),
         (
-            "repocontext.cli",
-            "repocontext.scanner",
-            "src/repocontext/cli.py",
-            "src/repocontext/scanner.py",
+            "repodossier.cli",
+            "repodossier.scanner",
+            "src/repodossier/cli.py",
+            "src/repodossier/scanner.py",
             "from",
             "scanner",
             4,
         ),
         (
-            "repocontext.exporter",
-            "repocontext.scanner",
-            "src/repocontext/exporter.py",
-            "src/repocontext/scanner.py",
+            "repodossier.exporter",
+            "repodossier.scanner",
+            "src/repodossier/exporter.py",
+            "src/repodossier/scanner.py",
             "from",
             "scan_files",
             2,
@@ -1369,7 +1369,7 @@ from .missing import nope
         )
         for reference in graph.external_imports
     ] == [
-        ("repocontext.cli", "argparse", None, False),
+        ("repodossier.cli", "argparse", None, False),
     ]
 
     assert [
@@ -1381,7 +1381,7 @@ from .missing import nope
         )
         for reference in graph.unresolved_imports
     ] == [
-        ("repocontext.exporter", "missing", "nope", False),
+        ("repodossier.exporter", "missing", "nope", False),
     ]
 
     assert graph.errors == ()
@@ -1451,8 +1451,8 @@ import os
 import pathlib as p
 import package.module
 """,
-        source_path="src/repocontext/example.py",
-        source_module="repocontext.example",
+        source_path="src/repodossier/example.py",
+        source_module="repodossier.example",
     )
 
     assert errors == []
@@ -1470,10 +1470,10 @@ def test_parse_imports_from_source_detects_from_imports() -> None:
     references, errors = parse_imports_from_source(
         """
 from pathlib import Path, PurePath as PP
-from repocontext.scanner import scan_files
+from repodossier.scanner import scan_files
 """,
-        source_path="src/repocontext/example.py",
-        source_module="repocontext.example",
+        source_path="src/repodossier/example.py",
+        source_module="repodossier.example",
     )
 
     assert errors == []
@@ -1483,7 +1483,7 @@ from repocontext.scanner import scan_files
     ] == [
         ("from", "pathlib", "Path", None, 2),
         ("from", "pathlib", "PurePath", "PP", 2),
-        ("from", "repocontext.scanner", "scan_files", None, 3),
+        ("from", "repodossier.scanner", "scan_files", None, 3),
     ]
 
 
@@ -1493,10 +1493,10 @@ def test_parse_imports_from_source_detects_relative_and_wildcard_imports() -> No
 from .scanner import scan_files
 from ..git import discover_repo as discover
 from . import symbols
-from repocontext.symbols import *
+from repodossier.symbols import *
 """,
-        source_path="src/repocontext/exporter.py",
-        source_module="repocontext.exporter",
+        source_path="src/repodossier/exporter.py",
+        source_module="repodossier.exporter",
     )
 
     assert errors == []
@@ -1514,7 +1514,7 @@ from repocontext.symbols import *
         ("scanner", "scan_files", None, 1, True, 2),
         ("git", "discover_repo", "discover", 2, True, 3),
         (None, "symbols", None, 1, True, 4),
-        ("repocontext.symbols", "*", None, 0, False, 5),
+        ("repodossier.symbols", "*", None, 0, False, 5),
     ]
 
 
@@ -1525,8 +1525,8 @@ def test_parse_imports_from_source_detects_multiple_plain_imports_in_one_stateme
         """
 import os, sys as system
 """,
-        source_path="src/repocontext/example.py",
-        source_module="repocontext.example",
+        source_path="src/repodossier/example.py",
+        source_module="repodossier.example",
     )
 
     assert errors == []
@@ -1542,13 +1542,13 @@ import os, sys as system
 def test_parse_imports_from_source_detects_multiline_from_imports() -> None:
     references, errors = parse_imports_from_source(
         """
-from repocontext.symbols import (
+from repodossier.symbols import (
     Symbol,
     SymbolKind as Kind,
 )
 """,
-        source_path="src/repocontext/example.py",
-        source_module="repocontext.example",
+        source_path="src/repodossier/example.py",
+        source_module="repodossier.example",
     )
 
     assert errors == []
@@ -1556,8 +1556,8 @@ from repocontext.symbols import (
         (ref.import_type, ref.imported_module, ref.imported_name, ref.alias, ref.line_number)
         for ref in references
     ] == [
-        ("from", "repocontext.symbols", "Symbol", None, 2),
-        ("from", "repocontext.symbols", "SymbolKind", "Kind", 2),
+        ("from", "repodossier.symbols", "Symbol", None, 2),
+        ("from", "repodossier.symbols", "SymbolKind", "Kind", 2),
     ]
 
 
@@ -1573,8 +1573,8 @@ class Loader:
 def helper():
     import collections.abc
 """,
-        source_path="src/repocontext/example.py",
-        source_module="repocontext.example",
+        source_path="src/repodossier/example.py",
+        source_module="repodossier.example",
     )
 
     assert errors == []
@@ -1592,15 +1592,15 @@ def test_parse_imports_from_source_detects_conditional_imports() -> None:
     references, errors = parse_imports_from_source(
         """
 if TYPE_CHECKING:
-    from repocontext.scanner import ScannedFile
+    from repodossier.scanner import ScannedFile
 
 try:
     import tomllib
 except ImportError:
     import tomli as tomllib
 """,
-        source_path="src/repocontext/example.py",
-        source_module="repocontext.example",
+        source_path="src/repodossier/example.py",
+        source_module="repodossier.example",
     )
 
     assert errors == []
@@ -1608,7 +1608,7 @@ except ImportError:
         (ref.import_type, ref.imported_module, ref.imported_name, ref.alias, ref.line_number)
         for ref in references
     ] == [
-        ("from", "repocontext.scanner", "ScannedFile", None, 3),
+        ("from", "repodossier.scanner", "ScannedFile", None, 3),
         ("import", "tomllib", None, None, 6),
         ("import", "tomli", None, "tomllib", 8),
     ]
@@ -1621,8 +1621,8 @@ from .. import git as repo_git
 from . import scanner, symbols as symbol_module
 from .scanner import *
 """,
-        source_path="src/repocontext/subpkg/example.py",
-        source_module="repocontext.subpkg.example",
+        source_path="src/repodossier/subpkg/example.py",
+        source_module="repodossier.subpkg.example",
     )
 
     assert errors == []
@@ -1647,13 +1647,13 @@ from .scanner import *
 def test_parse_imports_from_source_collects_syntax_errors_without_raising() -> None:
     references, errors = parse_imports_from_source(
         "from import broken\n",
-        source_path="src/repocontext/broken.py",
-        source_module="repocontext.broken",
+        source_path="src/repodossier/broken.py",
+        source_module="repodossier.broken",
     )
 
     assert references == []
     assert len(errors) == 1
-    assert errors[0].source_path == Path("src/repocontext/broken.py")
+    assert errors[0].source_path == Path("src/repodossier/broken.py")
     assert errors[0].error_type == "SyntaxError"
     assert errors[0].line_number == 1
 

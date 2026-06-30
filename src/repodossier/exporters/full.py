@@ -1,20 +1,20 @@
 """Foundational structures and orchestration for the Full Export MVP."""
 
 from __future__ import annotations
-from repocontext.secrets import SecretFinding, mask_secrets_in_text
+from repodossier.secrets import SecretFinding, mask_secrets_in_text
 
 from collections import Counter
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Sequence
 
-from repocontext.dependencies import analyze_dependencies, render_dependency_full_section
-from repocontext.git import RepositoryInfo, get_repository_info
-from repocontext.gitignore import ensure_repocontext_gitignore_entries
-from repocontext.models import FileInfo
-from repocontext.scanner import RepositoryScanner
-from repocontext.schema import analyze_database_schemas
-from repocontext.config import apply_config_to_file_infos, apply_export_byte_limit, format_limit_notice, full_config_summary_section, get_active_config, is_file_size_allowed, truncate_text_by_line_limit
+from repodossier.dependencies import analyze_dependencies, render_dependency_full_section
+from repodossier.git import RepositoryInfo, get_repository_info
+from repodossier.gitignore import ensure_repodossier_gitignore_entries
+from repodossier.models import FileInfo
+from repodossier.scanner import RepositoryScanner
+from repodossier.schema import analyze_database_schemas
+from repodossier.config import apply_config_to_file_infos, apply_export_byte_limit, format_limit_notice, full_config_summary_section, get_active_config, is_file_size_allowed, truncate_text_by_line_limit
 
 FULL_EXPORT_SECTION_ORDER: tuple[str, ...] = (
     "ai_quick_start",
@@ -358,7 +358,7 @@ def _remove_temporary_output_file(temporary_output_path: Path) -> None:
 def generate_full_export(repository_root: Path | str) -> Path:
     """Build, render, and write the Full Export for a repository."""
     resolved_repository_root = Path(repository_root).resolve()
-    ensure_repocontext_gitignore_entries(resolved_repository_root)
+    ensure_repodossier_gitignore_entries(resolved_repository_root)
     context = build_full_export_context(resolved_repository_root)
     return write_full_export(context)
 
@@ -1219,7 +1219,7 @@ def _append_limited_items(lines, items, *, max_items, formatter):
 def _format_import_graph_section(import_graph, *, max_edges=200, max_imports=100):
     """Render a compact Import Graph section for full.txt."""
 
-    from repocontext.import_graph import calculate_import_graph_metrics
+    from repodossier.import_graph import calculate_import_graph_metrics
 
     metrics = calculate_import_graph_metrics(import_graph)
     sorted_edges = _sorted_import_graph_edges(import_graph)
@@ -1364,7 +1364,7 @@ def _import_graph_export_source_path(file_info, repo_root):
 def _build_import_graph_for_export(repo_root, files):
     """Build an import graph from the file list used by the export pipeline."""
 
-    from repocontext.import_graph import build_import_graph
+    from repodossier.import_graph import build_import_graph
 
     source_paths = []
     for file_info in files:
@@ -1433,9 +1433,9 @@ def _call_graph_display_source_path(source_path, repo_root):
 def _build_call_graph_for_export(repo_root, files, *, import_graph=None):
     """Build a call graph from the file list used by the export pipeline."""
 
-    from repocontext.call_graph import CallGraph, parse_calls_from_source
-    from repocontext.import_graph import build_import_graph, module_name_from_python_path
-    from repocontext.symbols import build_symbol_index
+    from repodossier.call_graph import CallGraph, parse_calls_from_source
+    from repodossier.import_graph import build_import_graph, module_name_from_python_path
+    from repodossier.symbols import build_symbol_index
 
     source_entries = _call_graph_export_source_entries(repo_root, files)
     source_paths = tuple(

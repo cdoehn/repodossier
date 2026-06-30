@@ -11,15 +11,15 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 SRC_ROOT = REPO_ROOT / "src"
 
 
-def _repocontext_command() -> list[str]:
-    executable = shutil.which("repocontext")
+def _repodossier_command() -> list[str]:
+    executable = shutil.which("repodossier")
     if executable:
         return [executable]
 
     return [
         sys.executable,
         "-c",
-        "import sys; from repocontext.cli import main; raise SystemExit(main())",
+        "import sys; from repodossier.cli import main; raise SystemExit(main())",
     ]
 
 
@@ -32,7 +32,7 @@ def _run(args: list[str], cwd: Path) -> subprocess.CompletedProcess[str]:
     env["PYTHONPATH"] = os.pathsep.join(pythonpath_parts)
 
     result = subprocess.run(
-        _repocontext_command() + args,
+        _repodossier_command() + args,
         cwd=cwd,
         env=env,
         text=True,
@@ -70,7 +70,7 @@ def _create_smoke_repo(tmp_path: Path) -> Path:
     (repo / "docs").mkdir()
 
     (repo / "README.md").write_text(
-        "# Smoke README\n\nThis repository validates RepoContext release smoke exports.\n",
+        "# Smoke README\n\nThis repository validates RepoDossier release smoke exports.\n",
         encoding="utf-8",
     )
 
@@ -89,7 +89,7 @@ def _create_smoke_repo(tmp_path: Path) -> Path:
         "def area(radius: float) -> float:\n"
         "    return math.pi * radius * radius\n\n"
         "def main() -> str:\n"
-        "    return Greeter().greet(\"RepoContext\")\n",
+        "    return Greeter().greet(\"RepoDossier\")\n",
         encoding="utf-8",
     )
 
@@ -112,7 +112,7 @@ def _create_smoke_repo(tmp_path: Path) -> Path:
 
     _git(["init"], cwd=repo)
     _git(["config", "user.email", "smoke@example.invalid"], cwd=repo)
-    _git(["config", "user.name", "RepoContext Smoke Test"], cwd=repo)
+    _git(["config", "user.name", "RepoDossier Smoke Test"], cwd=repo)
     _git(["add", "."], cwd=repo)
     _git(["commit", "-m", "Initial smoke repo"], cwd=repo)
 

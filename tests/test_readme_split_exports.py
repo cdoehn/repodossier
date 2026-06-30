@@ -40,10 +40,10 @@ def test_readme_documents_split_export_commands_and_flags() -> None:
     readme = _readme()
 
     assert "### Split exports" in readme
-    assert "repocontext full --split" in readme
-    assert "repocontext export-ai --split" in readme
-    assert "repocontext export-docs --split" in readme
-    assert "repocontext changed --split" in readme
+    assert "repodossier full --split" in readme
+    assert "repodossier export-ai --split" in readme
+    assert "repodossier export-docs --split" in readme
+    assert "repodossier changed --split" in readme
     assert "--split-max-chars" in readme
     assert "--split-strategy" in readme
     assert "--no-split" in readme
@@ -74,7 +74,7 @@ def test_readme_documents_split_config_schema() -> None:
 
 
 def test_example_config_documents_split_settings() -> None:
-    example = Path(".repocontext.example.yml").read_text(encoding="utf-8")
+    example = Path(".repodossier.example.yml").read_text(encoding="utf-8")
 
     assert "exports:" in example
     assert "split:" in example

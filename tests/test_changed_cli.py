@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from repocontext.changed_command import add_changed_subparser, run_changed_command
+from repodossier.changed_command import add_changed_subparser, run_changed_command
 
 
 def test_changed_subparser_registers_output_branch_and_diff_options(capsys) -> None:
@@ -49,7 +49,7 @@ def test_run_changed_command_writes_changed_export(
 ) -> None:
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(
-        "repocontext.changed_command.find_repository_root",
+        "repodossier.changed_command.find_repository_root",
         lambda current_path: tmp_path,
     )
 
@@ -69,7 +69,7 @@ def test_run_changed_command_writes_changed_export(
         return output
 
     monkeypatch.setattr(
-        "repocontext.changed_command.write_changed_export",
+        "repodossier.changed_command.write_changed_export",
         fake_write_changed_export,
     )
 
@@ -81,19 +81,19 @@ def test_run_changed_command_writes_changed_export(
     assert "Wrote" in capsys.readouterr().out
 
 
-def test_run_changed_command_ensures_repocontext_gitignore_entries(
+def test_run_changed_command_ensures_repodossier_gitignore_entries(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(
-        "repocontext.changed_command.find_repository_root",
+        "repodossier.changed_command.find_repository_root",
         lambda current_path: tmp_path,
     )
 
     ensured_roots: list[Path] = []
 
-    def fake_ensure_repocontext_gitignore_entries(repository_root: Path) -> bool:
+    def fake_ensure_repodossier_gitignore_entries(repository_root: Path) -> bool:
         ensured_roots.append(repository_root)
         return True
 
@@ -111,11 +111,11 @@ def test_run_changed_command_ensures_repocontext_gitignore_entries(
         return output
 
     monkeypatch.setattr(
-        "repocontext.changed_command.ensure_repocontext_gitignore_entries",
-        fake_ensure_repocontext_gitignore_entries,
+        "repodossier.changed_command.ensure_repodossier_gitignore_entries",
+        fake_ensure_repodossier_gitignore_entries,
     )
     monkeypatch.setattr(
-        "repocontext.changed_command.write_changed_export",
+        "repodossier.changed_command.write_changed_export",
         fake_write_changed_export,
     )
 
@@ -128,7 +128,7 @@ def test_run_changed_command_ensures_repocontext_gitignore_entries(
 
 
 def test_changed_help_documents_all_changed_export_options(capsys) -> None:
-    parser = ArgumentParser(prog="repocontext")
+    parser = ArgumentParser(prog="repodossier")
     subparsers = parser.add_subparsers(dest="command")
     add_changed_subparser(subparsers)
 
@@ -150,7 +150,7 @@ def test_changed_help_documents_all_changed_export_options(capsys) -> None:
 
 
 def test_changed_help_documents_usage_examples(capsys) -> None:
-    parser = ArgumentParser(prog="repocontext")
+    parser = ArgumentParser(prog="repodossier")
     subparsers = parser.add_subparsers(dest="command")
     add_changed_subparser(subparsers)
 
@@ -162,8 +162,8 @@ def test_changed_help_documents_usage_examples(capsys) -> None:
     help_text = capsys.readouterr().out
 
     assert "Examples:" in help_text
-    assert "repocontext changed" in help_text
-    assert "repocontext changed --branch main" in help_text
-    assert "repocontext changed --output review-changes.txt" in help_text
-    assert "repocontext changed --no-diff" in help_text
+    assert "repodossier changed" in help_text
+    assert "repodossier changed --branch main" in help_text
+    assert "repodossier changed --output review-changes.txt" in help_text
+    assert "repodossier changed --no-diff" in help_text
 

@@ -38,7 +38,7 @@ package-dir = {"" = "src"}
 
 [tool.setuptools.packages.find]
 where = ["src"]
-include = ["repocontext*", "repodossier*"]
+include = ["repodossier*", "repodossier*"]
 
 [tool.pytest.ini_options]
 testpaths = [

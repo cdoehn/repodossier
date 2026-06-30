@@ -1,4 +1,4 @@
-"""Export generation helpers for RepoContext."""
+"""Export generation helpers for RepoDossier."""
 
 from .ai import (
     AI_EXPORT_DOCUMENT_HEADING,

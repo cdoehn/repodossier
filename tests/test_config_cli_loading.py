@@ -11,7 +11,7 @@ def test_full_command_rejects_missing_explicit_config_file(tmp_path):
     _init_repo(tmp_path)
 
     result = subprocess.run(
-        ["repocontext", "full", "--config", "missing.yml"],
+        ["repodossier", "full", "--config", "missing.yml"],
         cwd=tmp_path,
         capture_output=True,
         text=True,
@@ -25,10 +25,10 @@ def test_full_command_rejects_missing_explicit_config_file(tmp_path):
 
 def test_full_command_rejects_config_and_no_config_together(tmp_path):
     _init_repo(tmp_path)
-    (tmp_path / ".repocontext.yml").write_text("", encoding="utf-8")
+    (tmp_path / ".repodossier.yml").write_text("", encoding="utf-8")
 
     result = subprocess.run(
-        ["repocontext", "full", "--config", ".repocontext.yml", "--no-config"],
+        ["repodossier", "full", "--config", ".repodossier.yml", "--no-config"],
         cwd=tmp_path,
         capture_output=True,
         text=True,
@@ -40,12 +40,12 @@ def test_full_command_rejects_config_and_no_config_together(tmp_path):
     assert "--config and --no-config cannot be used together" in output
 
 
-def test_full_command_no_config_ignores_invalid_repocontext_yml(tmp_path):
+def test_full_command_no_config_ignores_invalid_repodossier_yml(tmp_path):
     _init_repo(tmp_path)
-    (tmp_path / ".repocontext.yml").write_text("include: [unterminated", encoding="utf-8")
+    (tmp_path / ".repodossier.yml").write_text("include: [unterminated", encoding="utf-8")
 
     result = subprocess.run(
-        ["repocontext", "full", "--no-config"],
+        ["repodossier", "full", "--no-config"],
         cwd=tmp_path,
         capture_output=True,
         text=True,
@@ -67,7 +67,7 @@ include:
     )
 
     result = subprocess.run(
-        ["repocontext", "full", "--config", "custom.yml"],
+        ["repodossier", "full", "--config", "custom.yml"],
         cwd=tmp_path,
         capture_output=True,
         text=True,

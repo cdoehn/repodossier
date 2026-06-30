@@ -1,11 +1,7 @@
-"""RepoDossier package namespace.
+"""RepoDossier package initialization."""
 
-This namespace is introduced during the rename from RepoContext to
-RepoDossier. The implementation still lives in repocontext until the
-package rename commit.
-"""
+from .cli import main
 
-try:
-    from repocontext import __version__ as __version__
-except ImportError:
-    __version__ = "0+unknown"
+__all__ = ["__version__", "get_version"]
+
+from ._version import __version__, get_version

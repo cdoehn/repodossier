@@ -40,7 +40,7 @@ def add_split_export_options(parser: argparse.ArgumentParser) -> None:
         dest="split_enabled",
         action="store_false",
         default=None,
-        help="Disable split part files even when enabled in .repocontext.yml.",
+        help="Disable split part files even when enabled in .repodossier.yml.",
     )
     parser.add_argument(
         "--split-max-chars",
@@ -272,7 +272,7 @@ def _config_path_from_args(args: argparse.Namespace) -> Path | None:
         if path.exists():
             return path
 
-    for candidate in (Path.cwd() / ".repocontext.yml", Path.cwd() / ".repocontext.yaml"):
+    for candidate in (Path.cwd() / ".repodossier.yml", Path.cwd() / ".repodossier.yaml"):
         if candidate.exists():
             return candidate
 

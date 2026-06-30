@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from repocontext.changed import ChangedFileScan
-from repocontext.changed_exporter import render_changed_export, write_changed_export
-from repocontext.git import ChangedFile
+from repodossier.changed import ChangedFileScan
+from repodossier.changed_exporter import render_changed_export, write_changed_export
+from repodossier.git import ChangedFile
 
 
 class DummyFileInfo:
@@ -171,7 +171,7 @@ def test_render_changed_export_includes_git_diff_section(
         assert path == "app.py"
         return "diff --git a/app.py b/app.py\n-print('old')\n+print('changed')\n"
 
-    monkeypatch.setattr("repocontext.changed_exporter.get_diff", fake_get_diff)
+    monkeypatch.setattr("repodossier.changed_exporter.get_diff", fake_get_diff)
 
     output = render_changed_export(tmp_path, scans=scans)
 
@@ -207,7 +207,7 @@ def test_render_changed_export_skips_binary_files_in_git_diff_section(
     def fake_get_diff(repo_path: Path, path: str | None = None) -> str:
         raise AssertionError("Binary files should not request git diff")
 
-    monkeypatch.setattr("repocontext.changed_exporter.get_diff", fake_get_diff)
+    monkeypatch.setattr("repodossier.changed_exporter.get_diff", fake_get_diff)
 
     output = render_changed_export(tmp_path, scans=scans)
 
@@ -230,7 +230,7 @@ def test_render_changed_export_marks_missing_diff_for_untracked_file(
         )
     ]
 
-    monkeypatch.setattr("repocontext.changed_exporter.get_diff", lambda repo, path=None: "")
+    monkeypatch.setattr("repodossier.changed_exporter.get_diff", lambda repo, path=None: "")
 
     output = render_changed_export(tmp_path, scans=scans)
 
@@ -253,7 +253,7 @@ def test_render_changed_export_uses_branch_compare_mode_and_branch_diff(
         return "diff --git a/app.py b/app.py\n-print('main')\n+print('feature')\n"
 
     monkeypatch.setattr(
-        "repocontext.changed_exporter.get_diff_against_branch",
+        "repodossier.changed_exporter.get_diff_against_branch",
         fake_get_diff_against_branch,
     )
 
@@ -272,7 +272,7 @@ def test_write_changed_export_accepts_branch_argument(
     scans = [make_scan("app.py", "modified", file_info=DummyFileInfo())]
 
     monkeypatch.setattr(
-        "repocontext.changed_exporter.get_diff_against_branch",
+        "repodossier.changed_exporter.get_diff_against_branch",
         lambda repo_path, branch, path=None: "",
     )
 

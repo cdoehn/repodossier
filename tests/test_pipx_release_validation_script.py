@@ -33,5 +33,5 @@ def test_pipx_release_validation_script_covers_release_exports() -> None:
 def test_pipx_release_validation_script_checks_reinstall() -> None:
     text = Path("scripts/validate_pipx_release.sh").read_text(encoding="utf-8")
 
-    assert "uninstall repocontext" in text
+    assert "uninstall repodossier" in text
     assert "install \"$ROOT_DIR\"" in text

@@ -1,21 +1,21 @@
-"""AI-focused export generation for RepoContext.
+"""AI-focused export generation for RepoDossier.
 
 The AI export is intentionally compact. It provides stable, high-level
 sections for language models without embedding complete source dumps.
 """
 
 from __future__ import annotations
-from repocontext.secrets import SecretFinding, mask_secrets_in_text
-from repocontext.dependencies import append_dependencies_ai_section
+from repodossier.secrets import SecretFinding, mask_secrets_in_text
+from repodossier.dependencies import append_dependencies_ai_section
 
 from dataclasses import dataclass, replace
 from pathlib import Path
 
-from repocontext.gitignore import ensure_repocontext_gitignore_entries
-from repocontext.schema import analyze_database_schemas
+from repodossier.gitignore import ensure_repodossier_gitignore_entries
+from repodossier.schema import analyze_database_schemas
 
 from .full import FullExportContext, build_full_export_context
-from repocontext.config import ai_config_summary_section, apply_config_to_file_infos, format_limit_notice, get_active_config, is_file_size_allowed
+from repodossier.config import ai_config_summary_section, apply_config_to_file_infos, format_limit_notice, get_active_config, is_file_size_allowed
 
 
 AI_EXPORT_FILENAME = "ai.txt"
@@ -93,7 +93,7 @@ def create_ai_export_context(full_context: FullExportContext) -> AIExportContext
 
 
 def _filter_ai_export_input_context(full_context: FullExportContext) -> FullExportContext:
-    """Exclude generated RepoContext export files from AI-export analysis input."""
+    """Exclude generated RepoDossier export files from AI-export analysis input."""
 
     filtered_scanned_files = tuple(
         file_info
@@ -140,7 +140,7 @@ def _strip_ai_file_content_for_size_limit(file_info: object, config: object) -> 
     return replace(file_info, content="")
 
 def _is_generated_export_file_path(relative_path: object) -> bool:
-    """Return True when a repository-root path is a generated RepoContext export."""
+    """Return True when a repository-root path is a generated RepoDossier export."""
 
     path = Path(relative_path)
     return path.as_posix().lower() in GENERATED_EXPORT_FILENAMES
@@ -153,7 +153,7 @@ def build_ai_export_context(repository_root: Path | str) -> AIExportContext:
 
 
 def _insert_ai_config_summary_after_heading(rendered: str) -> str:
-    """Insert the RepoContext config summary without replacing the AI export title."""
+    """Insert the RepoDossier config summary without replacing the AI export title."""
 
     summary = ai_config_summary_section(get_active_config()).rstrip()
     if not summary:
@@ -252,7 +252,7 @@ def generate_ai_export(repository_root: Path | str) -> Path:
     """Build, render, and write ai.txt for a repository."""
 
     resolved_repository_root = Path(repository_root).resolve()
-    ensure_repocontext_gitignore_entries(resolved_repository_root)
+    ensure_repodossier_gitignore_entries(resolved_repository_root)
     context = build_ai_export_context(resolved_repository_root)
     return write_ai_export(context)
 
@@ -497,7 +497,7 @@ def _detect_python_package_roots(paths: tuple[str, ...]) -> tuple[str, ...]:
 
 
 def _detect_core_areas(paths: tuple[str, ...]) -> tuple[str, ...]:
-    """Detect known RepoContext core areas from existing module filenames."""
+    """Detect known RepoDossier core areas from existing module filenames."""
 
     area_rules: tuple[tuple[str, str], ...] = (
         ("git.py", "Git repository discovery"),
@@ -620,14 +620,14 @@ def _rank_important_files_with_shared_ranker(
     *,
     limit: int,
 ) -> tuple[tuple[str, str, int], ...] | None:
-    """Rank important files with the central repocontext.ranking module.
+    """Rank important files with the central repodossier.ranking module.
 
     Returning None means the shared ranker could not be used and the older AI
     export fallback should preserve existing output behavior.
     """
 
     try:
-        from repocontext.ranking import rank_important_files as shared_rank_important_files
+        from repodossier.ranking import rank_important_files as shared_rank_important_files
     except Exception:
         return None
 
@@ -672,7 +672,7 @@ def _build_ai_important_file_ranking_inputs(
 
     if source_paths:
         try:
-            from repocontext.symbols import build_symbol_index
+            from repodossier.symbols import build_symbol_index
 
             symbols = build_symbol_index(
                 source_paths,
@@ -682,7 +682,7 @@ def _build_ai_important_file_ranking_inputs(
             symbols = None
 
         try:
-            from repocontext.import_graph import build_import_graph
+            from repodossier.import_graph import build_import_graph
 
             import_graph = build_import_graph(
                 source_paths,
@@ -1010,7 +1010,7 @@ def _render_symbol_index_section(context: AIExportContext) -> str:
         return "\n".join(lines)
 
     try:
-        from repocontext.symbols import build_symbol_index
+        from repodossier.symbols import build_symbol_index
 
         symbol_indexes = build_symbol_index(
             source_paths,
@@ -1246,7 +1246,7 @@ def _render_import_graph_section(context: AIExportContext) -> str:
         return "\n".join(lines)
 
     try:
-        from repocontext.import_graph import (
+        from repodossier.import_graph import (
             build_import_graph,
             calculate_import_graph_metrics,
         )
@@ -1615,9 +1615,9 @@ def _build_ai_call_graph(
 ) -> object:
     """Build a repository call graph for the AI export."""
 
-    from repocontext.call_graph import CallGraph, parse_calls_from_source
-    from repocontext.import_graph import build_import_graph, module_name_from_python_path
-    from repocontext.symbols import build_symbol_index
+    from repodossier.call_graph import CallGraph, parse_calls_from_source
+    from repodossier.import_graph import build_import_graph, module_name_from_python_path
+    from repodossier.symbols import build_symbol_index
 
     source_paths = tuple(source_path for source_path, _content in source_entries)
     symbol_index = build_symbol_index(source_paths, base_path=context.repository_root)
@@ -1795,10 +1795,10 @@ __all__ = [
 ]
 
 
-_REPOCONTEXT_DEPENDENCY_AI_EXPORT_WRAPPER = True
+_REPODOSSIER_DEPENDENCY_AI_EXPORT_WRAPPER = True
 
 
-def _repocontext_dependency_ai_path_from_value(value):
+def _repodossier_dependency_ai_path_from_value(value):
     from pathlib import Path as _Path
 
     if isinstance(value, (str, _Path)):
@@ -1829,7 +1829,7 @@ def _repocontext_dependency_ai_path_from_value(value):
     return None
 
 
-def _repocontext_dependency_ai_files_from_value(value):
+def _repodossier_dependency_ai_files_from_value(value):
     if value is None or isinstance(value, (str, bytes, dict)):
         return None
 
@@ -1843,7 +1843,7 @@ def _repocontext_dependency_ai_files_from_value(value):
 
     path_like_count = 0
     for item in items:
-        if _repocontext_dependency_ai_path_from_value(item) is not None:
+        if _repodossier_dependency_ai_path_from_value(item) is not None:
             path_like_count += 1
 
     if path_like_count == 0:
@@ -1852,7 +1852,7 @@ def _repocontext_dependency_ai_files_from_value(value):
     return items
 
 
-def _repocontext_dependency_ai_files_from_call(args, kwargs):
+def _repodossier_dependency_ai_files_from_call(args, kwargs):
     for key in (
         "files",
         "scanned_files",
@@ -1862,12 +1862,12 @@ def _repocontext_dependency_ai_files_from_call(args, kwargs):
         "project_files",
     ):
         if key in kwargs:
-            files = _repocontext_dependency_ai_files_from_value(kwargs[key])
+            files = _repodossier_dependency_ai_files_from_value(kwargs[key])
             if files is not None:
                 return files
 
     for value in args:
-        files = _repocontext_dependency_ai_files_from_value(value)
+        files = _repodossier_dependency_ai_files_from_value(value)
         if files is not None:
             selection = apply_config_to_file_infos(
                 files,
@@ -1878,7 +1878,7 @@ def _repocontext_dependency_ai_files_from_call(args, kwargs):
     return None
 
 
-def _repocontext_dependency_ai_root_from_call(args, kwargs):
+def _repodossier_dependency_ai_root_from_call(args, kwargs):
     for key in (
         "repo_root",
         "repository_root",
@@ -1889,23 +1889,23 @@ def _repocontext_dependency_ai_root_from_call(args, kwargs):
         "cwd",
     ):
         if key in kwargs:
-            candidate = _repocontext_dependency_ai_path_from_value(kwargs[key])
+            candidate = _repodossier_dependency_ai_path_from_value(kwargs[key])
             if candidate is not None and candidate.exists() and candidate.is_dir():
                 return candidate
 
     for value in args:
-        candidate = _repocontext_dependency_ai_path_from_value(value)
+        candidate = _repodossier_dependency_ai_path_from_value(value)
         if candidate is not None and candidate.exists() and candidate.is_dir():
             return candidate
 
-    files = _repocontext_dependency_ai_files_from_call(args, kwargs)
+    files = _repodossier_dependency_ai_files_from_call(args, kwargs)
     if files:
         from pathlib import Path as _Path
         import os as _os
 
         absolute_paths = []
         for file_item in files:
-            path_value = _repocontext_dependency_ai_path_from_value(file_item)
+            path_value = _repodossier_dependency_ai_path_from_value(file_item)
             if path_value is not None and path_value.is_absolute():
                 absolute_paths.append(path_value)
 
@@ -1919,15 +1919,15 @@ def _repocontext_dependency_ai_root_from_call(args, kwargs):
     return None
 
 
-def _repocontext_dependency_ai_root_and_files(args, kwargs):
+def _repodossier_dependency_ai_root_and_files(args, kwargs):
     return (
-        _repocontext_dependency_ai_root_from_call(args, kwargs),
-        _repocontext_dependency_ai_files_from_call(args, kwargs),
+        _repodossier_dependency_ai_root_from_call(args, kwargs),
+        _repodossier_dependency_ai_files_from_call(args, kwargs),
     )
 
 
-def _repocontext_wrap_ai_export_function(original_function):
-    if getattr(original_function, "_repocontext_dependencies_wrapped", False):
+def _repodossier_wrap_ai_export_function(original_function):
+    if getattr(original_function, "_repodossier_dependencies_wrapped", False):
         return original_function
 
     def wrapped_function(*args, **kwargs):
@@ -1936,7 +1936,7 @@ def _repocontext_wrap_ai_export_function(original_function):
         if not isinstance(result, str):
             return result
 
-        repo_root, files = _repocontext_dependency_ai_root_and_files(args, kwargs)
+        repo_root, files = _repodossier_dependency_ai_root_and_files(args, kwargs)
         if repo_root is None:
             return result
 
@@ -1944,19 +1944,19 @@ def _repocontext_wrap_ai_export_function(original_function):
 
     wrapped_function.__name__ = getattr(original_function, "__name__", "wrapped_function")
     wrapped_function.__doc__ = getattr(original_function, "__doc__", None)
-    wrapped_function._repocontext_dependencies_wrapped = True
+    wrapped_function._repodossier_dependencies_wrapped = True
     return wrapped_function
 
 
-for _repocontext_ai_export_name in ('generate_ai_export', 'render_ai_export', 'build_ai_export_context'):
-    _repocontext_ai_export_function = globals().get(_repocontext_ai_export_name)
-    if callable(_repocontext_ai_export_function):
-        globals()[_repocontext_ai_export_name] = _repocontext_wrap_ai_export_function(
-            _repocontext_ai_export_function
+for _repodossier_ai_export_name in ('generate_ai_export', 'render_ai_export', 'build_ai_export_context'):
+    _repodossier_ai_export_function = globals().get(_repodossier_ai_export_name)
+    if callable(_repodossier_ai_export_function):
+        globals()[_repodossier_ai_export_name] = _repodossier_wrap_ai_export_function(
+            _repodossier_ai_export_function
         )
 
-del _repocontext_ai_export_name
-del _repocontext_ai_export_function
+del _repodossier_ai_export_name
+del _repodossier_ai_export_function
 
 
 AI_DATABASE_SCHEMA_MAX_FILES = 20
@@ -2134,7 +2134,7 @@ def _insert_database_schema_ai_section(rendered: str, context: AIExportContext) 
     return f"{rendered.rstrip()}\n\n{database_schema_section}\n"
 
 
-def _repocontext_schema_wrap_ai_render_function(function):
+def _repodossier_schema_wrap_ai_render_function(function):
     """Wrap AI rendering so Database Schema appears in ai.txt."""
 
     def wrapped_function(*args, **kwargs):
@@ -2152,11 +2152,11 @@ def _repocontext_schema_wrap_ai_render_function(function):
     return wrapped_function
 
 
-_REPOCONTEXT_DATABASE_SCHEMA_AI_EXPORT_WRAPPER = True
-render_ai_export = _repocontext_schema_wrap_ai_render_function(render_ai_export)
+_REPODOSSIER_DATABASE_SCHEMA_AI_EXPORT_WRAPPER = True
+render_ai_export = _repodossier_schema_wrap_ai_render_function(render_ai_export)
 
 
-_REPOCONTEXT_AI_MAX_EXPORT_BYTES_WRAPPER = True
+_REPODOSSIER_AI_MAX_EXPORT_BYTES_WRAPPER = True
 
 
 def _apply_ai_max_export_bytes_limit(rendered: str) -> str:
@@ -2181,12 +2181,12 @@ def _apply_ai_max_export_bytes_limit(rendered: str) -> str:
     return truncated + notice
 
 
-_REPOCONTEXT_ORIGINAL_RENDER_AI_EXPORT_FOR_MAX_EXPORT_BYTES = render_ai_export
+_REPODOSSIER_ORIGINAL_RENDER_AI_EXPORT_FOR_MAX_EXPORT_BYTES = render_ai_export
 
 
 def render_ai_export(context: AIExportContext) -> str:
     """Render ai.txt and apply the configured final export byte limit."""
 
-    rendered = _REPOCONTEXT_ORIGINAL_RENDER_AI_EXPORT_FOR_MAX_EXPORT_BYTES(context)
+    rendered = _REPODOSSIER_ORIGINAL_RENDER_AI_EXPORT_FOR_MAX_EXPORT_BYTES(context)
     return _apply_ai_max_export_bytes_limit(rendered)
 

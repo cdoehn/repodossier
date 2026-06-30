@@ -2,15 +2,15 @@ from pathlib import Path
 import subprocess
 
 
-def test_docs_export_includes_repocontext_configuration_documentation(tmp_path):
+def test_docs_export_includes_repodossier_configuration_documentation(tmp_path):
     readme = tmp_path / "README.md"
     readme.write_text(
         """
 # Demo Project
 
-## Configuration with `.repocontext.yml`
+## Configuration with `.repodossier.yml`
 
-RepoContext can read an optional `.repocontext.yml` file from the repository root.
+RepoDossier can read an optional `.repodossier.yml` file from the repository root.
 
 Supported sections:
 
@@ -32,7 +32,7 @@ Exclude rules always win over include rules.
     subprocess.run(["git", "add", "README.md"], cwd=tmp_path, check=True, capture_output=True, text=True)
 
     result = subprocess.run(
-        ["repocontext", "export-docs"],
+        ["repodossier", "export-docs"],
         cwd=tmp_path,
         check=True,
         capture_output=True,
@@ -43,7 +43,7 @@ Exclude rules always win over include rules.
     assert docs_path.exists(), result.stdout + result.stderr
 
     docs = docs_path.read_text(encoding="utf-8")
-    assert ".repocontext.yml" in docs
+    assert ".repodossier.yml" in docs
     assert "include.paths" in docs
     assert "include.globs" in docs
     assert "exclude.paths" in docs

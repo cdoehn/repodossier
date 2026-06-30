@@ -11,9 +11,9 @@ def _run(repo, *args):
     )
 
 
-def _run_repocontext(repo, *args):
+def _run_repodossier(repo, *args):
     return subprocess.run(
-        ["repocontext", *args],
+        ["repodossier", *args],
         cwd=repo,
         capture_output=True,
         text=True,
@@ -51,7 +51,7 @@ def test_configuration_applies_across_all_export_modes(tmp_path):
         encoding="utf-8",
     )
 
-    (tmp_path / ".repocontext.yml").write_text(
+    (tmp_path / ".repodossier.yml").write_text(
         """
 include:
   paths:
@@ -94,11 +94,11 @@ limits:
         encoding="utf-8",
     )
 
-    full_result = _run_repocontext(tmp_path, "full")
+    full_result = _run_repodossier(tmp_path, "full")
     assert full_result.returncode == 0, full_result.stdout + full_result.stderr
     full = (tmp_path / "full.txt").read_text(encoding="utf-8")
 
-    assert "## RepoContext Configuration" in full
+    assert "## RepoDossier Configuration" in full
     assert "- Config active: yes" in full
     assert "- Include paths: src, docs" in full
     assert "VISIBLE_CONFIG_MARKER" in full
@@ -106,27 +106,27 @@ limits:
     assert "DOCS_VISIBLE_CONFIG_MARKER" in full
     assert "DOCS_HIDDEN_CONFIG_MARKER" not in full
 
-    ai_result = _run_repocontext(tmp_path, "export-ai")
+    ai_result = _run_repodossier(tmp_path, "export-ai")
     assert ai_result.returncode == 0, ai_result.stdout + ai_result.stderr
     ai = (tmp_path / "ai.txt").read_text(encoding="utf-8")
 
     assert ai.startswith("# AI CONTEXT\n")
-    assert "## RepoContext Configuration" in ai
+    assert "## RepoDossier Configuration" in ai
     assert "- Config active: yes" in ai
     assert "visible_config_marker" in ai
     assert "hidden_config_marker" not in ai
 
-    docs_result = _run_repocontext(tmp_path, "export-docs")
+    docs_result = _run_repodossier(tmp_path, "export-docs")
     assert docs_result.returncode == 0, docs_result.stdout + docs_result.stderr
     docs = (tmp_path / "docs.txt").read_text(encoding="utf-8")
 
     assert docs.startswith("# Documentation Context")
-    assert "## RepoContext Configuration" in docs
+    assert "## RepoDossier Configuration" in docs
     assert "- Config active: yes" in docs
     assert "DOCS_VISIBLE_CONFIG_MARKER" in docs
     assert "DOCS_HIDDEN_CONFIG_MARKER" not in docs
 
-    changed_result = _run_repocontext(tmp_path, "changed", "--no-diff")
+    changed_result = _run_repodossier(tmp_path, "changed", "--no-diff")
     assert changed_result.returncode == 0, changed_result.stdout + changed_result.stderr
     changed = (tmp_path / "changed.txt").read_text(encoding="utf-8")
 

@@ -18,7 +18,7 @@ def test_docs_export_respects_max_total_files_limit(tmp_path):
         encoding="utf-8",
     )
 
-    (tmp_path / ".repocontext.yml").write_text(
+    (tmp_path / ".repodossier.yml").write_text(
         """
 include:
   paths:
@@ -38,7 +38,7 @@ limits:
     )
 
     result = subprocess.run(
-        ["repocontext", "export-docs"],
+        ["repodossier", "export-docs"],
         cwd=tmp_path,
         capture_output=True,
         text=True,
@@ -65,7 +65,7 @@ def test_docs_export_no_config_ignores_max_total_files_limit(tmp_path):
         encoding="utf-8",
     )
 
-    (tmp_path / ".repocontext.yml").write_text(
+    (tmp_path / ".repodossier.yml").write_text(
         """
 include:
   paths:
@@ -85,7 +85,7 @@ limits:
     )
 
     result = subprocess.run(
-        ["repocontext", "export-docs", "--no-config"],
+        ["repodossier", "export-docs", "--no-config"],
         cwd=tmp_path,
         capture_output=True,
         text=True,
@@ -110,7 +110,7 @@ def test_docs_export_respects_max_file_bytes_limit(tmp_path):
         encoding="utf-8",
     )
 
-    (tmp_path / ".repocontext.yml").write_text(
+    (tmp_path / ".repodossier.yml").write_text(
         """
 include:
   paths:
@@ -130,7 +130,7 @@ limits:
     )
 
     result = subprocess.run(
-        ["repocontext", "export-docs"],
+        ["repodossier", "export-docs"],
         cwd=tmp_path,
         capture_output=True,
         text=True,
@@ -155,7 +155,7 @@ def test_docs_export_respects_max_line_count_limit(tmp_path):
         encoding="utf-8",
     )
 
-    (tmp_path / ".repocontext.yml").write_text(
+    (tmp_path / ".repodossier.yml").write_text(
         """
 include:
   paths:
@@ -175,7 +175,7 @@ limits:
     )
 
     result = subprocess.run(
-        ["repocontext", "export-docs"],
+        ["repodossier", "export-docs"],
         cwd=tmp_path,
         capture_output=True,
         text=True,
@@ -200,7 +200,7 @@ def test_docs_export_respects_max_export_bytes_limit(tmp_path):
         encoding="utf-8",
     )
 
-    (tmp_path / ".repocontext.yml").write_text(
+    (tmp_path / ".repodossier.yml").write_text(
         """
 include:
   paths:
@@ -220,7 +220,7 @@ limits:
     )
 
     result = subprocess.run(
-        ["repocontext", "export-docs"],
+        ["repodossier", "export-docs"],
         cwd=tmp_path,
         capture_output=True,
         text=True,
@@ -245,7 +245,7 @@ def test_docs_export_no_config_ignores_max_export_bytes_limit(tmp_path):
         encoding="utf-8",
     )
 
-    (tmp_path / ".repocontext.yml").write_text(
+    (tmp_path / ".repodossier.yml").write_text(
         """
 include:
   paths:
@@ -265,7 +265,7 @@ limits:
     )
 
     result = subprocess.run(
-        ["repocontext", "export-docs", "--no-config"],
+        ["repodossier", "export-docs", "--no-config"],
         cwd=tmp_path,
         capture_output=True,
         text=True,

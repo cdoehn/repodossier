@@ -3,7 +3,7 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
-from repocontext.git import (ChangedFile, GitBranchComparisonError, get_changed_files, get_changed_files_against_branch, get_diff, get_diff_against_branch)
+from repodossier.git import (ChangedFile, GitBranchComparisonError, get_changed_files, get_changed_files_against_branch, get_diff, get_diff_against_branch)
 
 
 def run_git(repo: Path, *args: str) -> str:
@@ -22,7 +22,7 @@ def init_repo(tmp_path: Path) -> Path:
     repo.mkdir()
     run_git(repo, "init")
     run_git(repo, "config", "user.email", "tests@example.invalid")
-    run_git(repo, "config", "user.name", "RepoContext Tests")
+    run_git(repo, "config", "user.name", "RepoDossier Tests")
     return repo
 
 

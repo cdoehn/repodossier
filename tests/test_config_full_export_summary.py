@@ -18,7 +18,7 @@ def test_full_export_contains_inactive_configuration_summary_by_default(tmp_path
     )
 
     result = subprocess.run(
-        ["repocontext", "full"],
+        ["repodossier", "full"],
         cwd=tmp_path,
         capture_output=True,
         text=True,
@@ -28,7 +28,7 @@ def test_full_export_contains_inactive_configuration_summary_by_default(tmp_path
 
     full = (tmp_path / "full.txt").read_text(encoding="utf-8")
 
-    assert "## RepoContext Configuration" in full
+    assert "## RepoDossier Configuration" in full
     assert "- Config active: no" in full
     assert "- Include paths: none" in full
     assert "- Exclude paths: none" in full
@@ -40,7 +40,7 @@ def test_full_export_contains_active_configuration_summary(tmp_path):
 
     (tmp_path / "src").mkdir()
     (tmp_path / "src" / "main.py").write_text("VALUE = True\n", encoding="utf-8")
-    (tmp_path / ".repocontext.yml").write_text(
+    (tmp_path / ".repodossier.yml").write_text(
         """
 include:
   paths:
@@ -70,7 +70,7 @@ limits:
     )
 
     result = subprocess.run(
-        ["repocontext", "full"],
+        ["repodossier", "full"],
         cwd=tmp_path,
         capture_output=True,
         text=True,
@@ -80,10 +80,10 @@ limits:
 
     full = (tmp_path / "full.txt").read_text(encoding="utf-8")
 
-    assert "## RepoContext Configuration" in full
+    assert "## RepoDossier Configuration" in full
     assert "- Config active: yes" in full
     assert "- Config path:" in full
-    assert ".repocontext.yml" in full
+    assert ".repodossier.yml" in full
     assert "- Include paths: src" in full
     assert "- Include globs: *.md" in full
     assert "- Exclude paths: build" in full
@@ -101,7 +101,7 @@ def test_full_export_summary_is_preserved_with_max_export_bytes_limit(tmp_path):
         "\\n".join(f"VALUE_{index:03d} = True" for index in range(150)) + "\\n",
         encoding="utf-8",
     )
-    (tmp_path / ".repocontext.yml").write_text(
+    (tmp_path / ".repodossier.yml").write_text(
         """
 limits:
   max_export_bytes: 1200
@@ -118,7 +118,7 @@ limits:
     )
 
     result = subprocess.run(
-        ["repocontext", "full"],
+        ["repodossier", "full"],
         cwd=tmp_path,
         capture_output=True,
         text=True,
@@ -129,7 +129,7 @@ limits:
     full = (tmp_path / "full.txt").read_text(encoding="utf-8")
 
     assert len(full.encode("utf-8")) <= 1200
-    assert "## RepoContext Configuration" in full
+    assert "## RepoDossier Configuration" in full
     assert "- Config active: yes" in full
     assert "- Limit max_export_bytes: 1200" in full
     assert "limits.max_export_bytes was reached" in full

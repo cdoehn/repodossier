@@ -1,12 +1,12 @@
-"""Focused tests for repocontext.scanner behaviors from task 2.3.c."""
+"""Focused tests for repodossier.scanner behaviors from task 2.3.c."""
 import subprocess
 from pathlib import Path
 
 import pytest
 
-import repocontext.scanner as scanner_module
-from repocontext.models import FileInfo
-from repocontext.scanner import (
+import repodossier.scanner as scanner_module
+from repodossier.models import FileInfo
+from repodossier.scanner import (
     count_empty_lines,
     count_python_comment_lines,
     count_shell_comment_lines,
@@ -25,7 +25,7 @@ from repocontext.scanner import (
 
 def test_is_text_file_returns_true_for_utf8_text(tmp_path: Path) -> None:
     text_file = tmp_path / "example.txt"
-    text_file.write_text("Hello, RepoContext!")
+    text_file.write_text("Hello, RepoDossier!")
 
     assert is_text_file(text_file) is True
 

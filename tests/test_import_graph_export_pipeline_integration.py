@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from pathlib import Path
 
-from repocontext.exporters.full import (
+from repodossier.exporters.full import (
     _build_import_graph_for_export,
     _import_graph_export_source_path,
 )

@@ -1,4 +1,4 @@
-"""Important file ranking utilities for RepoContext.
+"""Important file ranking utilities for RepoDossier.
 
 The ranking module provides a reusable, deterministic foundation for deciding
 which repository files are most useful for AI-oriented context exports.
@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
 import tomllib
-from repocontext.config import apply_config_to_file_infos, get_active_config
+from repodossier.config import apply_config_to_file_infos, get_active_config
 
 
 GENERATED_EXPORT_FILENAMES: frozenset[str] = frozenset(

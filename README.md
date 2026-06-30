@@ -1,18 +1,18 @@
-# RepoContext
+# RepoDossier
 
-RepoContext creates AI-friendly exports of Git repositories.
+RepoDossier creates AI-friendly exports of Git repositories.
 
 It scans Git-tracked files, builds a structured repository overview, and writes `full.txt`, a compact `ai.txt` export, an explicit documentation-only `docs.txt` export, and a focused `changed.txt` export that can be pasted into large language models such as ChatGPT, Claude, Gemini, Aider, and other coding assistants.
 
 The current implementation focuses on robust **Full Export**, compact **AI Export**, documentation-only **Docs Export**, and focused **Changed Export** modes for Python projects. It includes repository statistics, file summaries, a tree view, complete source export, documentation extraction, warnings, important-file ranking, a Python symbol index, a Python import graph, and a static Python call graph.
 
-## Why RepoContext exists
+## Why RepoDossier exists
 
 Large language models work best when they receive repository context in a stable, readable format.
 
-Manually copying files into a chat is slow and error-prone. RepoContext automates that process and produces a deterministic export that is easy for AI tools to understand.
+Manually copying files into a chat is slow and error-prone. RepoDossier automates that process and produces a deterministic export that is easy for AI tools to understand.
 
-RepoContext is useful when you want to:
+RepoDossier is useful when you want to:
 
 - give an AI assistant the current state of a repository
 - review a project architecture with AI
@@ -23,11 +23,11 @@ RepoContext is useful when you want to:
 
 ## Current status
 
-RepoContext 1.0 is the first stable release line for local CLI repository exports.
+RepoDossier 1.0 is the first stable release line for local CLI repository exports.
 
 Implemented:
 
-- configuration via `.repocontext.yml`
+- configuration via `.repodossier.yml`
 - split exports for large `full.txt`, `ai.txt`, `docs.txt`, and `changed.txt` files
 - Git repository detection
 - Git-tracked file discovery via `git ls-files`
@@ -36,7 +36,7 @@ Implemented:
 - file metadata scanning
 - line counts and token estimation
 - complete `full.txt` export
-- automatic `.gitignore` integration for RepoContext export files
+- automatic `.gitignore` integration for RepoDossier export files
 - repository info command
 - Python symbol extraction
 - Python import graph
@@ -70,7 +70,7 @@ pipx install .
 Or reinstall after local changes:
 
 ```bash
-pipx uninstall repocontext
+pipx uninstall repodossier
 pipx install .
 ```
 
@@ -85,13 +85,13 @@ python3 -m pip install -e ".[dev]"
 ### Verify installation
 
 ```bash
-repocontext --version
-repocontext info
+repodossier --version
+repodossier info
 ```
 
 ## Secret Detection
 
-RepoContext masks potential secrets before writing exports. This is a best-effort
+RepoDossier masks potential secrets before writing exports. This is a best-effort
 safety feature for sharing repository context with AI tools and documentation
 workflows.
 
@@ -121,12 +121,12 @@ environment.
 
 ## Usage
 
-Run RepoContext inside a Git repository or any subdirectory of a Git repository.
+Run RepoDossier inside a Git repository or any subdirectory of a Git repository.
 
 ### Default export
 
 ```bash
-repocontext
+repodossier
 ```
 
 This writes both standard export files to the repository root:
@@ -139,7 +139,7 @@ ai.txt
 ### Explicit full export command
 
 ```bash
-repocontext full
+repodossier full
 ```
 
 This also writes both `full.txt` and `ai.txt`.
@@ -147,15 +147,15 @@ This also writes both `full.txt` and `ai.txt`.
 ### Export alias
 
 ```bash
-repocontext export
+repodossier export
 ```
 
-`repocontext export` behaves like `repocontext full` and writes both `full.txt` and `ai.txt`.
+`repodossier export` behaves like `repodossier full` and writes both `full.txt` and `ai.txt`.
 
 ### AI-only export
 
 ```bash
-repocontext export-ai
+repodossier export-ai
 ```
 
 This writes only:
@@ -169,7 +169,7 @@ to the repository root.
 ### Documentation-only export
 
 ```bash
-repocontext export-docs
+repodossier export-docs
 ```
 
 This writes only:
@@ -180,12 +180,12 @@ docs.txt
 
 to the repository root.
 
-The documentation export contains Git-tracked documentation files such as README, architecture notes, specifications, tasks, roadmaps, changelogs, contributing documents, licenses, and files under `docs/`. It excludes generated RepoContext export files such as `full.txt`, `ai.txt`, `docs.txt`, and `changed.txt`.
+The documentation export contains Git-tracked documentation files such as README, architecture notes, specifications, tasks, roadmaps, changelogs, contributing documents, licenses, and files under `docs/`. It excludes generated RepoDossier export files such as `full.txt`, `ai.txt`, `docs.txt`, and `changed.txt`.
 
 ### Changed-files export
 
 ```bash
-repocontext changed
+repodossier changed
 ```
 
 This writes:
@@ -201,22 +201,22 @@ The changed export focuses on files changed in the current Git working tree. It 
 For feature branches, compare committed changes against another branch with Git's three-dot comparison:
 
 ```bash
-repocontext changed --branch main
+repodossier changed --branch main
 ```
 
 Use a custom output path when needed:
 
 ```bash
-repocontext changed --output review-changes.txt
+repodossier changed --output review-changes.txt
 ```
 
 Disable the Git diff section while keeping the changed file contents:
 
 ```bash
-repocontext changed --no-diff
+repodossier changed --no-diff
 ```
 
-The changed export can include modified, staged, deleted, renamed, and untracked non-ignored files. Generated RepoContext export files such as `full.txt`, `ai.txt`, `docs.txt`, and `changed.txt` are kept in `.gitignore` to avoid self-reference loops.
+The changed export can include modified, staged, deleted, renamed, and untracked non-ignored files. Generated RepoDossier export files such as `full.txt`, `ai.txt`, `docs.txt`, and `changed.txt` are kept in `.gitignore` to avoid self-reference loops.
 
 
 ### Split exports
@@ -234,23 +234,23 @@ full.part02.txt
 Enable split output for the supported export commands:
 
 ```bash
-repocontext full --split
-repocontext export-ai --split
-repocontext export-docs --split
-repocontext changed --split
+repodossier full --split
+repodossier export-ai --split
+repodossier export-docs --split
+repodossier changed --split
 ```
 
 Choose a maximum raw character count per part:
 
 ```bash
-repocontext full --split --split-max-chars 200000
+repodossier full --split --split-max-chars 200000
 ```
 
 Choose the splitting strategy:
 
 ```bash
-repocontext export-ai --split --split-strategy heading
-repocontext export-ai --split --split-strategy plain
+repodossier export-ai --split --split-strategy heading
+repodossier export-ai --split --split-strategy plain
 ```
 
 Supported strategies:
@@ -261,7 +261,7 @@ Supported strategies:
 Disable split output even when enabled in configuration:
 
 ```bash
-repocontext full --no-split
+repodossier full --no-split
 ```
 
 Output file names follow the source export name:
@@ -276,7 +276,7 @@ changed.part01.txt
 For changed exports with a custom output path, the part files follow the custom name:
 
 ```bash
-repocontext changed --output review-changes.txt --split
+repodossier changed --output review-changes.txt --split
 ```
 
 ```text
@@ -284,7 +284,7 @@ review-changes.part01.txt
 review-changes.part02.txt
 ```
 
-Split exports can also be enabled through `.repocontext.yml`:
+Split exports can also be enabled through `.repodossier.yml`:
 
 ```yaml
 exports:
@@ -298,7 +298,7 @@ CLI options override the configuration file.
 ### Repository info
 
 ```bash
-repocontext info
+repodossier info
 ```
 
 This prints repository metadata and a compact import graph summary.
@@ -306,7 +306,7 @@ This prints repository metadata and a compact import graph summary.
 ### Version
 
 ```bash
-repocontext --version
+repodossier --version
 ```
 
 ## Output: full.txt
@@ -344,7 +344,7 @@ The AI export is intentionally compact and does not include a complete source du
 
 ### Important file ranking
 
-The `Important Files` section is produced by RepoContext's shared important-file ranking.
+The `Important Files` section is produced by RepoDossier's shared important-file ranking.
 
 The ranking combines these deterministic signals:
 
@@ -356,7 +356,7 @@ The ranking combines these deterministic signals:
 
 Each ranked file carries a compact reason in `ai.txt`, for example `Project script entry point`, `Imported by 3 local files`, `Called by 2 local files`, `Primary project documentation`, or `Python project configuration`.
 
-Generated RepoContext exports such as `full.txt`, `ai.txt`, `docs.txt`, and `changed.txt` are excluded from the important-file ranking.
+Generated RepoDossier exports such as `full.txt`, `ai.txt`, `docs.txt`, and `changed.txt` are excluded from the important-file ranking.
 
 ## Output: docs.txt
 
@@ -368,7 +368,7 @@ The current `docs.txt` export contains:
 4. Extracted Documents
 5. Warnings
 
-The docs export is documentation-only. It includes documentation-like Git-tracked text files and excludes source-code files plus generated RepoContext exports.
+The docs export is documentation-only. It includes documentation-like Git-tracked text files and excludes source-code files plus generated RepoDossier exports.
 
 ## Output: changed.txt
 
@@ -386,12 +386,12 @@ The current `changed.txt` export contains:
 
 The changed export is intended for focused code review and AI-assisted patch work. It shows what changed without dumping the entire repository.
 
-Default mode compares the current working tree, including staged and unstaged changes. Branch mode compares committed changes against another branch, for example `repocontext changed --branch main`.
+Default mode compares the current working tree, including staged and unstaged changes. Branch mode compares committed changes against another branch, for example `repodossier changed --branch main`.
 
 
 ## What gets exported
 
-RepoContext's standard `full.txt`, `ai.txt`, and `docs.txt` exports use **Git-tracked files only**.
+RepoDossier's standard `full.txt`, `ai.txt`, and `docs.txt` exports use **Git-tracked files only**.
 
 File discovery for those standard exports is based on:
 
@@ -410,7 +410,7 @@ The `changed.txt` export is different: it is Git-diff based and focuses on curre
 
 ## Automatic .gitignore integration
 
-When RepoContext runs, it ensures these generated export files are present in `.gitignore`:
+When RepoDossier runs, it ensures these generated export files are present in `.gitignore`:
 
 ```text
 full.txt
@@ -423,12 +423,12 @@ The `.gitignore` update is idempotent:
 
 - existing content is preserved
 - existing entries are not duplicated
-- missing RepoContext entries are added
+- missing RepoDossier entries are added
 - repeated runs should not create new diffs
 
 ## Import Graph
 
-RepoContext statically analyzes Python imports and adds an Import Graph section to `full.txt`.
+RepoDossier statically analyzes Python imports and adds an Import Graph section to `full.txt`.
 
 It detects:
 
@@ -454,15 +454,15 @@ Summary:
 - Analysis errors: 0
 
 Local dependencies:
-- repocontext.cli -> repocontext.exporters
-- repocontext.exporters.full -> repocontext.scanner
+- repodossier.cli -> repodossier.exporters
+- repodossier.exporters.full -> repodossier.scanner
 ```
 
 The Import Graph is built with Python AST analysis. Project code is not imported or executed.
 
 ## Call Graph
 
-RepoContext statically analyzes Python function and method calls and adds a Call Graph section to `full.txt`.
+RepoDossier statically analyzes Python function and method calls and adds a Call Graph section to `full.txt`.
 
 It currently detects:
 
@@ -489,18 +489,18 @@ Summary:
 - Unresolved calls: 9
 
 Internal calls by caller:
-repocontext.cli.main (src/repocontext/cli.py)
-  - line 150: calls repocontext.exporters.generate_full_export [function, imported_local]
+repodossier.cli.main (src/repodossier/cli.py)
+  - line 150: calls repodossier.exporters.generate_full_export [function, imported_local]
 
 External calls:
-- repocontext.git.list_tracked_files -> subprocess.run (line 74, method, external)
+- repodossier.git.list_tracked_files -> subprocess.run (line 74, method, external)
 ```
 
 The Call Graph is intentionally conservative. Dynamic calls, monkeypatching, reflection, decorators, runtime imports, and complex type inference are not guaranteed to be resolved.
 
 ### Call Graph guarantees and limits
 
-RepoContext's Call Graph is designed to be useful without pretending to be perfect.
+RepoDossier's Call Graph is designed to be useful without pretending to be perfect.
 
 It guarantees that:
 
@@ -526,7 +526,7 @@ The Call Graph does not guarantee complete resolution for dynamic Python behavio
 
 ## Symbol extraction
 
-RepoContext includes a Python Symbol Index used internally by later analysis stages.
+RepoDossier includes a Python Symbol Index used internally by later analysis stages.
 
 It can detect:
 
@@ -562,7 +562,7 @@ Binary files are detected and excluded from the complete source dump.
 ```text
 .
 ├── src
-│   └── repocontext
+│   └── repodossier
 │       ├── cli.py
 │       ├── exporters
 │       │   ├── ai.py
@@ -585,7 +585,7 @@ Binary files are detected and excluded from the complete source dump.
 
 ## Architecture overview
 
-RepoContext follows a simple pipeline:
+RepoDossier follows a simple pipeline:
 
 ```text
 Git repository
@@ -610,22 +610,22 @@ Main modules:
 
 | Module | Purpose |
 | --- | --- |
-| `repocontext.cli` | command-line interface |
-| `repocontext.git` | Git repository discovery and metadata |
-| `repocontext.scanner` | file scanning, text/binary detection, metadata |
-| `repocontext.schema` | Database schema discovery, SQLite metadata extraction, SQL CREATE TABLE parsing, and schema report merging |
-| `repocontext.gitignore` | automatic `.gitignore` management |
-| `repocontext.symbols` | Python symbol extraction |
-| `repocontext.import_graph` | Python import analysis and dependency graph |
-| `repocontext.call_graph` | Python static call graph analysis |
-| `repocontext.exporters.full` | `full.txt` context creation, rendering, and writing |
-| `repocontext.exporters.ai` | compact `ai.txt` context creation, rendering, and writing |
-| `repocontext.exporters.docs` | documentation-only `docs.txt` context creation, rendering, and writing |
-| `repocontext.models` | shared data models |
+| `repodossier.cli` | command-line interface |
+| `repodossier.git` | Git repository discovery and metadata |
+| `repodossier.scanner` | file scanning, text/binary detection, metadata |
+| `repodossier.schema` | Database schema discovery, SQLite metadata extraction, SQL CREATE TABLE parsing, and schema report merging |
+| `repodossier.gitignore` | automatic `.gitignore` management |
+| `repodossier.symbols` | Python symbol extraction |
+| `repodossier.import_graph` | Python import analysis and dependency graph |
+| `repodossier.call_graph` | Python static call graph analysis |
+| `repodossier.exporters.full` | `full.txt` context creation, rendering, and writing |
+| `repodossier.exporters.ai` | compact `ai.txt` context creation, rendering, and writing |
+| `repodossier.exporters.docs` | documentation-only `docs.txt` context creation, rendering, and writing |
+| `repodossier.models` | shared data models |
 
 ## Bash Support
 
-RepoContext includes static Bash and shell script analysis for common project scripts.
+RepoDossier includes static Bash and shell script analysis for common project scripts.
 
 Supported Bash analysis includes:
 
@@ -634,13 +634,13 @@ Supported Bash analysis includes:
 - Bash functions in the symbol index
 - simple internal Bash function calls in the Bash call graph
 
-The Bash analysis is intentionally static and conservative. RepoContext reads shell source text but does not execute scripts, source files, expand variables, run `eval`, or attempt to implement a complete Bash grammar.
+The Bash analysis is intentionally static and conservative. RepoDossier reads shell source text but does not execute scripts, source files, expand variables, run `eval`, or attempt to implement a complete Bash grammar.
 
-## Configuration with `.repocontext.yml`
+## Configuration with `.repodossier.yml`
 
-RepoContext can read an optional `.repocontext.yml` file from the repository root. This file lets you keep common export settings in the project instead of repeating the same command-line options.
+RepoDossier can read an optional `.repodossier.yml` file from the repository root. This file lets you keep common export settings in the project instead of repeating the same command-line options.
 
-If no `.repocontext.yml` exists, RepoContext keeps its default behavior.
+If no `.repodossier.yml` exists, RepoDossier keeps its default behavior.
 
 Example:
 
@@ -693,9 +693,9 @@ Include rules are additive. If at least one include rule is configured, a file i
 
 Exclude rules always win over include rules. This means you can include a broad directory like `src` and still exclude a sensitive or generated subdirectory.
 
-All paths and globs are interpreted relative to the repository root. This also applies when RepoContext is started from a subdirectory.
+All paths and globs are interpreted relative to the repository root. This also applies when RepoDossier is started from a subdirectory.
 
-A separate `.repocontext.example.yml` file is provided as a starting point. Copy it to `.repocontext.yml` and adjust it for your repository.
+A separate `.repodossier.example.yml` file is provided as a starting point. Copy it to `.repodossier.yml` and adjust it for your repository.
 
 ## Development
 
@@ -730,13 +730,13 @@ python3 -m pytest --color=yes tests/test_cli.py
 ### Generate fresh exports of the current repository
 
 ```bash
-repocontext full
+repodossier full
 ```
 
 or:
 
 ```bash
-repocontext export
+repodossier export
 ```
 
 ## Development workflow
@@ -746,24 +746,24 @@ Typical local workflow:
 ```bash
 source .venv/bin/activate
 python3 -m pytest --color=yes
-repocontext full
-repocontext changed
+repodossier full
+repodossier changed
 git status --short
 ```
 
 For local pipx testing:
 
 ```bash
-pipx uninstall repocontext
+pipx uninstall repodossier
 pipx install .
-repocontext --version
-repocontext info
-repocontext full
+repodossier --version
+repodossier info
+repodossier full
 ```
 
 ## Design principles
 
-RepoContext tries to be:
+RepoDossier tries to be:
 
 - deterministic
 - safe
@@ -775,7 +775,7 @@ RepoContext tries to be:
 
 Important safety rule:
 
-RepoContext does **not** import or execute project code for symbol, import, or call analysis. Python analysis is AST-based.
+RepoDossier does **not** import or execute project code for symbol, import, or call analysis. Python analysis is AST-based.
 
 ## Limitations
 
@@ -788,7 +788,7 @@ Current limitations:
 - external packages are not inspected
 - standard `full.txt`, `ai.txt`, and `docs.txt` exports consider Git-tracked files
 - `changed.txt` is diff-based and can include untracked, non-ignored files
-- configuration support is available via `.repocontext.yml`
+- configuration support is available via `.repodossier.yml`
 
 ## Roadmap
 
@@ -820,7 +820,7 @@ MIT License. See `LICENSE`.
 
 ## Dependency Detection
 
-RepoContext detects Python project dependencies with static analysis and includes them in generated exports.
+RepoDossier detects Python project dependencies with static analysis and includes them in generated exports.
 
 Supported dependency sources:
 
@@ -858,7 +858,7 @@ Current limits:
 
 ## Database Schema Export
 
-RepoContext detects and summarizes database schema information in both `full.txt` and `ai.txt`.
+RepoDossier detects and summarizes database schema information in both `full.txt` and `ai.txt`.
 
 The schema export supports:
 
@@ -889,21 +889,21 @@ The `ai.txt` export includes a compact `## Database Schema` section optimized fo
 
 Database schema export is metadata-only.
 
-RepoContext does **not** export table contents. It does not read application rows, user records, secrets, tokens, e-mail addresses, or inserted values from SQLite databases.
+RepoDossier does **not** export table contents. It does not read application rows, user records, secrets, tokens, e-mail addresses, or inserted values from SQLite databases.
 
 SQLite files are opened read-only and queried only through SQLite schema metadata and PRAGMA metadata.
 
-SQL files are parsed as text. RepoContext does not execute migrations, does not connect to external databases, and does not evaluate SQL expressions.
+SQL files are parsed as text. RepoDossier does not execute migrations, does not connect to external databases, and does not evaluate SQL expressions.
 
 The SQL parser is intentionally best-effort. It is designed to extract useful structure from common `CREATE TABLE` statements, not to fully implement every SQL dialect.
 
-Generated RepoContext exports such as `full.txt`, `ai.txt`, `docs.txt`, and `changed.txt` are excluded from schema discovery.
+Generated RepoDossier exports such as `full.txt`, `ai.txt`, `docs.txt`, and `changed.txt` are excluded from schema discovery.
 
-<!-- repocontext-release-usage:start -->
+<!-- repodossier-release-usage:start -->
 
 ## Release 1.0 usage guide
 
-RepoContext creates repository exports that are designed to be pasted into or attached to AI assistants. It summarizes source files, documentation, symbols, imports, call relationships, dependency metadata, database schemas, changed files, and shell scripts where supported.
+RepoDossier creates repository exports that are designed to be pasted into or attached to AI assistants. It summarizes source files, documentation, symbols, imports, call relationships, dependency metadata, database schemas, changed files, and shell scripts where supported.
 
 The 1.0 release focuses on stable local CLI usage:
 
@@ -911,7 +911,7 @@ The 1.0 release focuses on stable local CLI usage:
 - ai.txt for a compact AI-oriented architecture and code context export.
 - docs.txt for documentation-focused context.
 - changed.txt for reviewing current Git changes.
-- .repocontext.yml for project-specific include, exclude, and limit settings.
+- .repodossier.yml for project-specific include, exclude, and limit settings.
 - secret masking to reduce the risk of exporting credentials.
 - split exports when configured limits require multi-part output.
 - Python and Bash-aware symbol and call analysis where supported.
@@ -921,12 +921,12 @@ The 1.0 release focuses on stable local CLI usage:
 For normal CLI usage from a local checkout, pipx is the recommended installation method:
 
     pipx install .
-    repocontext --help
+    repodossier --help
 
 For a regular local Python installation:
 
     python3 -m pip install .
-    repocontext --help
+    repodossier --help
 
 For development work:
 
@@ -937,18 +937,18 @@ For development work:
 
 ### Quick start
 
-Run RepoContext from the root of a Git repository:
+Run RepoDossier from the root of a Git repository:
 
-    repocontext full
-    repocontext export-ai
-    repocontext export-docs
-    repocontext changed
+    repodossier full
+    repodossier export-ai
+    repodossier export-docs
+    repodossier changed
 
 The generated export files are intended as local artifacts. They should normally stay uncommitted.
 
 ### Command reference
 
-#### repocontext full
+#### repodossier full
 
 Creates full.txt, the broadest repository export. Use it when an AI assistant needs maximum project context.
 
@@ -966,9 +966,9 @@ Typical content includes:
 
 Example:
 
-    repocontext full
+    repodossier full
 
-#### repocontext export-ai
+#### repodossier export-ai
 
 Creates ai.txt, a more focused export for AI coding sessions.
 
@@ -984,9 +984,9 @@ Typical content includes:
 
 Example:
 
-    repocontext export-ai
+    repodossier export-ai
 
-#### repocontext export-docs
+#### repodossier export-docs
 
 Creates docs.txt, a documentation-focused export.
 
@@ -1000,9 +1000,9 @@ Typical content includes recognized project documentation such as:
 
 Example:
 
-    repocontext export-docs
+    repodossier export-docs
 
-#### repocontext changed
+#### repodossier changed
 
 Creates changed.txt, a Git-change-focused export for review work.
 
@@ -1015,11 +1015,11 @@ Typical content includes:
 
 Example:
 
-    repocontext changed
+    repodossier changed
 
 ### Configuration
 
-RepoContext can be configured with .repocontext.yml when project-specific filtering or limits are needed.
+RepoDossier can be configured with .repodossier.yml when project-specific filtering or limits are needed.
 
 Example:
 
@@ -1041,11 +1041,11 @@ Example:
       max_file_bytes: 200000
       max_total_bytes: 2000000
 
-Only use options that are supported by the installed RepoContext version. If an option is not supported, prefer removing it rather than relying on undefined behavior.
+Only use options that are supported by the installed RepoDossier version. If an option is not supported, prefer removing it rather than relying on undefined behavior.
 
 ### Export files
 
-RepoContext commonly creates these local files:
+RepoDossier commonly creates these local files:
 
 | File | Purpose |
 | --- | --- |
@@ -1054,21 +1054,21 @@ RepoContext commonly creates these local files:
 | docs.txt | documentation-only context |
 | changed.txt | Git change review context |
 
-When split exports are enabled or required by configured limits, RepoContext may create multiple numbered output parts instead of one large file.
+When split exports are enabled or required by configured limits, RepoDossier may create multiple numbered output parts instead of one large file.
 
 ### Secret masking
 
-RepoContext includes secret detection and masking for common credential-like values such as API keys, tokens, secrets, and passwords. This reduces accidental exposure, but it is not a substitute for manual review.
+RepoDossier includes secret detection and masking for common credential-like values such as API keys, tokens, secrets, and passwords. This reduces accidental exposure, but it is not a substitute for manual review.
 
 Before sharing an export externally, inspect the generated file and confirm that no private credentials, personal data, or proprietary material are included unintentionally.
 
 ### Bash support
 
-RepoContext 1.0 includes Bash-aware analysis where supported by the current implementation. Bash files may contribute function information, symbol index entries, and call graph information.
+RepoDossier 1.0 includes Bash-aware analysis where supported by the current implementation. Bash files may contribute function information, symbol index entries, and call graph information.
 
 ### Release limitations
 
-RepoContext uses static analysis. Some relationships may be incomplete when code depends on dynamic imports, reflection, runtime-generated calls, shell indirection, external tools, or framework magic.
+RepoDossier uses static analysis. Some relationships may be incomplete when code depends on dynamic imports, reflection, runtime-generated calls, shell indirection, external tools, or framework magic.
 
 The generated exports are designed to be useful AI context, not a formal compiler, security scanner, or complete program analysis database.
 
@@ -1077,24 +1077,24 @@ The generated exports are designed to be useful AI context, not a formal compile
 Before cutting or validating a release, run:
 
     python3 -m pytest --color=yes
-    repocontext --help
-    repocontext full --help
-    repocontext export-ai --help
-    repocontext export-docs --help
-    repocontext changed --help
+    repodossier --help
+    repodossier full --help
+    repodossier export-ai --help
+    repodossier export-docs --help
+    repodossier changed --help
 
-<!-- repocontext-pipx-validation-note -->
+<!-- repodossier-pipx-validation-note -->
 
 For a full isolated pipx release validation, run:
 
     scripts/validate_pipx_release.sh
 
-The script installs RepoContext into a temporary pipx home, runs CLI help checks, creates a temporary Git repository, validates full, AI, docs, and changed exports, and verifies that reinstalling through pipx still exposes the CLI.
+The script installs RepoDossier into a temporary pipx home, runs CLI help checks, creates a temporary Git repository, validates full, AI, docs, and changed exports, and verifies that reinstalling through pipx still exposes the CLI.
 
 For pipx validation from a local checkout:
 
-    pipx uninstall repocontext || true
+    pipx uninstall repodossier || true
     pipx install .
-    repocontext --help
+    repodossier --help
 
-<!-- repocontext-release-usage:end -->
+<!-- repodossier-release-usage:end -->

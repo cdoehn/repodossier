@@ -25,7 +25,7 @@ def test_ai_export_respects_include_and_exclude_filters(tmp_path):
         encoding="utf-8",
     )
 
-    (tmp_path / ".repocontext.yml").write_text(
+    (tmp_path / ".repodossier.yml").write_text(
         """
 include:
   paths:
@@ -50,7 +50,7 @@ exclude:
     )
 
     result = subprocess.run(
-        ["repocontext", "export-ai"],
+        ["repodossier", "export-ai"],
         cwd=tmp_path,
         capture_output=True,
         text=True,
@@ -60,7 +60,7 @@ exclude:
 
     ai = (tmp_path / "ai.txt").read_text(encoding="utf-8")
 
-    assert "## RepoContext Configuration" in ai
+    assert "## RepoDossier Configuration" in ai
     assert "- Config active: yes" in ai
 
     # ai.txt is a compact AI context, not a complete source dump.
@@ -87,7 +87,7 @@ def test_ai_export_no_config_ignores_include_and_exclude_filters(tmp_path):
         encoding="utf-8",
     )
 
-    (tmp_path / ".repocontext.yml").write_text(
+    (tmp_path / ".repodossier.yml").write_text(
         """
 include:
   paths:
@@ -108,7 +108,7 @@ exclude:
     )
 
     result = subprocess.run(
-        ["repocontext", "export-ai", "--no-config"],
+        ["repodossier", "export-ai", "--no-config"],
         cwd=tmp_path,
         capture_output=True,
         text=True,
@@ -138,7 +138,7 @@ def test_full_command_ai_export_respects_include_and_exclude_filters(tmp_path):
         encoding="utf-8",
     )
 
-    (tmp_path / ".repocontext.yml").write_text(
+    (tmp_path / ".repodossier.yml").write_text(
         """
 include:
   paths:
@@ -160,7 +160,7 @@ exclude:
     )
 
     result = subprocess.run(
-        ["repocontext", "full"],
+        ["repodossier", "full"],
         cwd=tmp_path,
         capture_output=True,
         text=True,
@@ -170,7 +170,7 @@ exclude:
 
     ai = (tmp_path / "ai.txt").read_text(encoding="utf-8")
 
-    assert "## RepoContext Configuration" in ai
+    assert "## RepoDossier Configuration" in ai
     assert "- Config active: yes" in ai
     assert "Tracked files: 2" in ai
     assert "Scanned files: 1" in ai

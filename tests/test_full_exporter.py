@@ -1,7 +1,7 @@
 from pathlib import Path
 import sqlite3
 
-from repocontext.exporters.full import (
+from repodossier.exporters.full import (
     FULL_EXPORT_SECTION_HEADINGS,
     FULL_EXPORT_SECTION_ORDER,
     FullExportContext,
@@ -10,8 +10,8 @@ from repocontext.exporters.full import (
     render_full_export,
     write_full_export,
 )
-from repocontext.git import RepositoryInfo, TrackedFile
-from repocontext.models import FileInfo
+from repodossier.git import RepositoryInfo, TrackedFile
+from repodossier.models import FileInfo
 
 
 def make_repository_info(tmp_path: Path) -> RepositoryInfo:
@@ -193,15 +193,15 @@ def test_render_full_export_renders_ai_quick_start_details(tmp_path: Path) -> No
             'description = "AI-friendly exports of Git repositories."\n'
             '\n'
             '[project.scripts]\n'
-            'repocontext = "repocontext.cli:main"\n'
+            'repodossier = "repodossier.cli:main"\n'
             '\n'
             '[project.optional-dependencies]\n'
             'dev = ["pytest>=7.4"]\n'
         ),
     )
     module = FileInfo(
-        relative_path=Path("src/repocontext/cli.py"),
-        absolute_path=tmp_path / "src/repocontext/cli.py",
+        relative_path=Path("src/repodossier/cli.py"),
+        absolute_path=tmp_path / "src/repodossier/cli.py",
         is_text=True,
         is_binary=False,
         language="python",
@@ -228,7 +228,7 @@ def test_render_full_export_renders_ai_quick_start_details(tmp_path: Path) -> No
     assert "Primary language: Python" in rendered
     assert "Package manager: pyproject.toml" in rendered
     assert "Test framework: pytest" in rendered
-    assert "Entrypoints: repocontext" in rendered
+    assert "Entrypoints: repodossier" in rendered
     assert "Purpose: AI-friendly exports of Git repositories." in rendered
     assert "AI Quick Start details will be expanded" not in rendered
 
@@ -387,8 +387,8 @@ def test_render_full_export_renders_repository_tree(tmp_path: Path) -> None:
     repository_info = make_repository_info(tmp_path)
     files = [
         FileInfo(
-            relative_path=Path("src/repocontext/scanner.py"),
-            absolute_path=tmp_path / "src/repocontext/scanner.py",
+            relative_path=Path("src/repodossier/scanner.py"),
+            absolute_path=tmp_path / "src/repodossier/scanner.py",
             is_text=True,
             is_binary=False,
             language="python",
@@ -403,8 +403,8 @@ def test_render_full_export_renders_repository_tree(tmp_path: Path) -> None:
             content="# Readme\n",
         ),
         FileInfo(
-            relative_path=Path("src/repocontext/cli.py"),
-            absolute_path=tmp_path / "src/repocontext/cli.py",
+            relative_path=Path("src/repodossier/cli.py"),
+            absolute_path=tmp_path / "src/repodossier/cli.py",
             is_text=True,
             is_binary=False,
             language="python",
@@ -436,7 +436,7 @@ def test_render_full_export_renders_repository_tree(tmp_path: Path) -> None:
     assert "├── README.md" in rendered
     assert "├── image.bin [binary skipped]" in rendered
     assert "├── src" in rendered
-    assert "│   └── repocontext" in rendered
+    assert "│   └── repodossier" in rendered
     assert "│       ├── cli.py" in rendered
     assert "│       └── scanner.py" in rendered
     assert "└── tests" in rendered
@@ -1045,9 +1045,9 @@ def test_full_command_masks_secret_values_and_reports_summary(tmp_path):
         [
             "git",
             "-c",
-            "user.name=RepoContext Test",
+            "user.name=RepoDossier Test",
             "-c",
-            "user.email=repocontext@example.invalid",
+            "user.email=repodossier@example.invalid",
             "commit",
             "-m",
             "init",
@@ -1064,7 +1064,7 @@ def test_full_command_masks_secret_values_and_reports_summary(tmp_path):
     env["PYTHONPATH"] = src_path + os.pathsep + env.get("PYTHONPATH", "")
 
     result = subprocess.run(
-        [sys.executable, "-m", "repocontext", "full"],
+        [sys.executable, "-m", "repodossier", "full"],
         cwd=repo,
         env=env,
         capture_output=True,
@@ -1084,11 +1084,11 @@ def test_full_command_masks_secret_values_and_reports_summary(tmp_path):
 
 
 def test_full_secret_detection_section_is_inserted_before_complete_source_export():
-    from repocontext.exporters.full import (
+    from repodossier.exporters.full import (
         _format_full_secret_detection_section,
         _insert_full_secret_detection_section,
     )
-    from repocontext.secrets import SecretFinding
+    from repodossier.secrets import SecretFinding
 
     finding = SecretFinding(
         file_path="config.py",

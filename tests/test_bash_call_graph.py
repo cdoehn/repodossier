@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from repocontext.bash_call_graph import BashCallEdge
-from repocontext.bash_call_graph import discover_bash_call_graph
-from repocontext.bash_call_graph import discover_bash_call_graph_for_files
+from repodossier.bash_call_graph import BashCallEdge
+from repodossier.bash_call_graph import discover_bash_call_graph
+from repodossier.bash_call_graph import discover_bash_call_graph_for_files
 
 
 def _edge_set(edges: list[BashCallEdge]):

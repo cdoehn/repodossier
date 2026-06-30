@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from repocontext.exporters.full import create_full_export_context, render_full_export
-from repocontext.git import RepositoryInfo, TrackedFile
-from repocontext.models import FileInfo
+from repodossier.exporters.full import create_full_export_context, render_full_export
+from repodossier.git import RepositoryInfo, TrackedFile
+from repodossier.models import FileInfo
 
 
 def make_repository_info(tmp_path: Path) -> RepositoryInfo:

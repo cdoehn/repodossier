@@ -22,7 +22,7 @@ def test_docs_export_contains_inactive_configuration_summary_by_default(tmp_path
     )
 
     result = subprocess.run(
-        ["repocontext", "export-docs"],
+        ["repodossier", "export-docs"],
         cwd=tmp_path,
         capture_output=True,
         text=True,
@@ -33,7 +33,7 @@ def test_docs_export_contains_inactive_configuration_summary_by_default(tmp_path
     docs = (tmp_path / "docs.txt").read_text(encoding="utf-8")
 
     assert docs.startswith("# Documentation Context\n")
-    assert "## RepoContext Configuration" in docs
+    assert "## RepoDossier Configuration" in docs
     assert "- Config active: no" in docs
     assert "- Include paths: none" in docs
     assert "- Limit max_total_files: none" in docs
@@ -48,7 +48,7 @@ def test_docs_export_contains_active_configuration_summary(tmp_path):
         encoding="utf-8",
     )
 
-    (tmp_path / ".repocontext.yml").write_text(
+    (tmp_path / ".repodossier.yml").write_text(
         """
 include:
   paths:
@@ -72,7 +72,7 @@ limits:
     )
 
     result = subprocess.run(
-        ["repocontext", "export-docs"],
+        ["repodossier", "export-docs"],
         cwd=tmp_path,
         capture_output=True,
         text=True,
@@ -83,7 +83,7 @@ limits:
     docs = (tmp_path / "docs.txt").read_text(encoding="utf-8")
 
     assert docs.startswith("# Documentation Context\n")
-    assert "## RepoContext Configuration" in docs
+    assert "## RepoDossier Configuration" in docs
     assert "- Config active: yes" in docs
     assert "- Include paths: docs" in docs
     assert "- Exclude globs: *.tmp" in docs
@@ -101,7 +101,7 @@ def test_docs_export_no_config_reports_inactive_configuration_summary(tmp_path):
         encoding="utf-8",
     )
 
-    (tmp_path / ".repocontext.yml").write_text(
+    (tmp_path / ".repodossier.yml").write_text(
         """
 include:
   paths:
@@ -121,7 +121,7 @@ limits:
     )
 
     result = subprocess.run(
-        ["repocontext", "export-docs", "--no-config"],
+        ["repodossier", "export-docs", "--no-config"],
         cwd=tmp_path,
         capture_output=True,
         text=True,
@@ -131,7 +131,7 @@ limits:
 
     docs = (tmp_path / "docs.txt").read_text(encoding="utf-8")
 
-    assert "## RepoContext Configuration" in docs
+    assert "## RepoDossier Configuration" in docs
     assert "- Config active: no" in docs
     assert "- Include paths: none" in docs
     assert "# Docs" in docs

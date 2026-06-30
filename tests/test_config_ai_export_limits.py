@@ -18,7 +18,7 @@ def test_ai_export_respects_max_total_files_limit(tmp_path):
         encoding="utf-8",
     )
 
-    (tmp_path / ".repocontext.yml").write_text(
+    (tmp_path / ".repodossier.yml").write_text(
         """
 include:
   paths:
@@ -38,7 +38,7 @@ limits:
     )
 
     result = subprocess.run(
-        ["repocontext", "export-ai"],
+        ["repodossier", "export-ai"],
         cwd=tmp_path,
         capture_output=True,
         text=True,
@@ -48,7 +48,7 @@ limits:
 
     ai = (tmp_path / "ai.txt").read_text(encoding="utf-8")
 
-    assert "## RepoContext Configuration" in ai
+    assert "## RepoDossier Configuration" in ai
     assert "- Config active: yes" in ai
 
     # ai.txt is compact, so this checks the stable repository counters.
@@ -69,7 +69,7 @@ def test_ai_export_no_config_ignores_max_total_files_limit(tmp_path):
         encoding="utf-8",
     )
 
-    (tmp_path / ".repocontext.yml").write_text(
+    (tmp_path / ".repodossier.yml").write_text(
         """
 include:
   paths:
@@ -89,7 +89,7 @@ limits:
     )
 
     result = subprocess.run(
-        ["repocontext", "export-ai", "--no-config"],
+        ["repodossier", "export-ai", "--no-config"],
         cwd=tmp_path,
         capture_output=True,
         text=True,
@@ -114,7 +114,7 @@ def test_ai_export_respects_max_file_bytes_for_symbol_index(tmp_path):
     )
     (tmp_path / "src" / "large.py").write_text(large_content, encoding="utf-8")
 
-    (tmp_path / ".repocontext.yml").write_text(
+    (tmp_path / ".repodossier.yml").write_text(
         """
 include:
   paths:
@@ -134,7 +134,7 @@ limits:
     )
 
     result = subprocess.run(
-        ["repocontext", "export-ai"],
+        ["repodossier", "export-ai"],
         cwd=tmp_path,
         capture_output=True,
         text=True,
@@ -144,7 +144,7 @@ limits:
 
     ai = (tmp_path / "ai.txt").read_text(encoding="utf-8")
 
-    assert "## RepoContext Configuration" in ai
+    assert "## RepoDossier Configuration" in ai
     assert "- Config active: yes" in ai
     assert "- Limit max_file_bytes: 40" in ai
     assert "SHOULD_NOT_APPEAR_AFTER_AI_FILE_SIZE_LIMIT" not in ai
@@ -161,7 +161,7 @@ def test_ai_export_no_config_ignores_max_file_bytes_for_symbol_index(tmp_path):
     )
     (tmp_path / "src" / "large.py").write_text(large_content, encoding="utf-8")
 
-    (tmp_path / ".repocontext.yml").write_text(
+    (tmp_path / ".repodossier.yml").write_text(
         """
 include:
   paths:
@@ -181,7 +181,7 @@ limits:
     )
 
     result = subprocess.run(
-        ["repocontext", "export-ai", "--no-config"],
+        ["repodossier", "export-ai", "--no-config"],
         cwd=tmp_path,
         capture_output=True,
         text=True,
@@ -206,7 +206,7 @@ def test_ai_export_respects_max_line_count_for_symbol_index(tmp_path):
         encoding="utf-8",
     )
 
-    (tmp_path / ".repocontext.yml").write_text(
+    (tmp_path / ".repodossier.yml").write_text(
         """
 include:
   paths:
@@ -226,7 +226,7 @@ limits:
     )
 
     result = subprocess.run(
-        ["repocontext", "export-ai"],
+        ["repodossier", "export-ai"],
         cwd=tmp_path,
         capture_output=True,
         text=True,
@@ -236,7 +236,7 @@ limits:
 
     ai = (tmp_path / "ai.txt").read_text(encoding="utf-8")
 
-    assert "## RepoContext Configuration" in ai
+    assert "## RepoDossier Configuration" in ai
     assert "- Config active: yes" in ai
     assert "- Limit max_line_count: 1" in ai
     assert "SHOULD_NOT_APPEAR_AFTER_AI_LINE_COUNT_LIMIT" not in ai
@@ -254,7 +254,7 @@ def test_ai_export_no_config_ignores_max_line_count_for_symbol_index(tmp_path):
         encoding="utf-8",
     )
 
-    (tmp_path / ".repocontext.yml").write_text(
+    (tmp_path / ".repodossier.yml").write_text(
         """
 include:
   paths:
@@ -274,7 +274,7 @@ limits:
     )
 
     result = subprocess.run(
-        ["repocontext", "export-ai", "--no-config"],
+        ["repodossier", "export-ai", "--no-config"],
         cwd=tmp_path,
         capture_output=True,
         text=True,
@@ -300,7 +300,7 @@ def test_ai_export_respects_max_export_bytes_limit(tmp_path):
         encoding="utf-8",
     )
 
-    (tmp_path / ".repocontext.yml").write_text(
+    (tmp_path / ".repodossier.yml").write_text(
         """
 include:
   paths:
@@ -320,7 +320,7 @@ limits:
     )
 
     result = subprocess.run(
-        ["repocontext", "export-ai"],
+        ["repodossier", "export-ai"],
         cwd=tmp_path,
         capture_output=True,
         text=True,
@@ -346,7 +346,7 @@ def test_ai_export_no_config_ignores_max_export_bytes_limit(tmp_path):
         encoding="utf-8",
     )
 
-    (tmp_path / ".repocontext.yml").write_text(
+    (tmp_path / ".repodossier.yml").write_text(
         """
 include:
   paths:
@@ -366,7 +366,7 @@ limits:
     )
 
     result = subprocess.run(
-        ["repocontext", "export-ai", "--no-config"],
+        ["repodossier", "export-ai", "--no-config"],
         cwd=tmp_path,
         capture_output=True,
         text=True,

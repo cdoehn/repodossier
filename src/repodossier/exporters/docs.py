@@ -1,4 +1,4 @@
-"""Documentation export helpers for RepoContext.
+"""Documentation export helpers for RepoDossier.
 
 This module contains the documentation-file detection, export-context model,
 and renderer for Milestone 9. Writing and CLI integration are added in later
@@ -6,15 +6,15 @@ steps.
 """
 
 from __future__ import annotations
-from repocontext.secrets import SecretFinding, mask_secrets_in_text
+from repodossier.secrets import SecretFinding, mask_secrets_in_text
 
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Sequence
 
-from repocontext.gitignore import ensure_repocontext_gitignore_entries
-from repocontext.models import FileInfo
-from repocontext.config import ai_config_summary_section, format_limit_notice, get_active_config, is_file_size_allowed, truncate_text_by_line_limit
+from repodossier.gitignore import ensure_repodossier_gitignore_entries
+from repodossier.models import FileInfo
+from repodossier.config import ai_config_summary_section, format_limit_notice, get_active_config, is_file_size_allowed, truncate_text_by_line_limit
 
 from .full import FullExportContext, build_full_export_context
 
@@ -331,7 +331,7 @@ def generate_docs_export(repository_root: Path | str) -> Path:
     """Build, render, and write docs.txt for a repository."""
 
     resolved_repository_root = Path(repository_root).resolve()
-    ensure_repocontext_gitignore_entries(resolved_repository_root)
+    ensure_repodossier_gitignore_entries(resolved_repository_root)
     context = build_docs_export_context(resolved_repository_root)
     return write_docs_export(context)
 
@@ -654,7 +654,7 @@ def _is_possible_documentation_path(path: str | Path) -> bool:
 def _skipped_generated_export_warning(file_info: FileInfo) -> str:
     """Return a deterministic warning for skipped generated export files."""
 
-    return f"Skipped generated RepoContext export file: {file_info.relative_path.as_posix()}"
+    return f"Skipped generated RepoDossier export file: {file_info.relative_path.as_posix()}"
 
 
 def _skipped_documentation_warning(file_info: FileInfo) -> str:
@@ -696,7 +696,7 @@ def _lower_path_parts(path: str) -> tuple[str, ...]:
 
 
 def _is_generated_export_path(path: str) -> bool:
-    """Return True for generated RepoContext export file paths."""
+    """Return True for generated RepoDossier export file paths."""
 
     return Path(path).name.lower() in GENERATED_EXPORT_FILENAMES
 
@@ -770,13 +770,13 @@ __all__ = [
 
 
 def _insert_docs_config_summary_after_heading(rendered: str) -> str:
-    """Insert the RepoContext config summary without replacing the docs title."""
+    """Insert the RepoDossier config summary without replacing the docs title."""
 
     summary = ai_config_summary_section(get_active_config()).rstrip()
     if not summary:
         return rendered
 
-    if rendered.startswith("# Documentation Context\n\n## RepoContext Configuration\n"):
+    if rendered.startswith("# Documentation Context\n\n## RepoDossier Configuration\n"):
         return rendered
 
     heading = "# Documentation Context\n"
@@ -786,7 +786,7 @@ def _insert_docs_config_summary_after_heading(rendered: str) -> str:
 
     return f"{summary}\n\n{rendered}"
 
-_REPOCONTEXT_DOCS_EXPORT_LIMITS_WRAPPER = True
+_REPODOSSIER_DOCS_EXPORT_LIMITS_WRAPPER = True
 
 
 class _LimitedDocumentationFileInfo:
@@ -884,14 +884,14 @@ def _apply_docs_max_export_bytes_limit(rendered: str) -> str:
     return truncated + notice
 
 
-_REPOCONTEXT_ORIGINAL_RENDER_DOCS_EXPORT_FOR_LIMITS = render_docs_export
+_REPODOSSIER_ORIGINAL_RENDER_DOCS_EXPORT_FOR_LIMITS = render_docs_export
 
 
 def render_docs_export(context: DocumentationExportContext) -> str:
     """Render docs.txt while applying active docs export limits."""
 
     limited_context = _apply_docs_document_limits(context)
-    rendered = _REPOCONTEXT_ORIGINAL_RENDER_DOCS_EXPORT_FOR_LIMITS(limited_context)
+    rendered = _REPODOSSIER_ORIGINAL_RENDER_DOCS_EXPORT_FOR_LIMITS(limited_context)
     rendered = _insert_docs_config_summary_after_heading(rendered)
     return _apply_docs_max_export_bytes_limit(rendered)
 

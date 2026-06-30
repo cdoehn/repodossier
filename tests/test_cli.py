@@ -6,7 +6,7 @@ from typing import Optional
 
 import pytest
 
-from repocontext.cli import main
+from repodossier.cli import main
 
 AUTHOR_NAME = "Test Author"
 AUTHOR_EMAIL = "author@example.com"
@@ -354,7 +354,7 @@ def test_cli_export_ai_command_updates_gitignore_for_ai_txt(
     repo_path = setup_repository(tmp_path / "repo_export_ai_gitignore")
     gitignore_path = repo_path / ".gitignore"
     gitignore_path.write_text(
-        "# RepoContext exports\n"
+        "# RepoDossier exports\n"
         "full.txt\n"
         "docs.txt\n"
         "changed.txt\n",
@@ -449,7 +449,7 @@ def test_cli_default_command_creates_gitignore_entries_for_exports(
 
     assert exit_code == 0
     gitignore_content = (repo_path / ".gitignore").read_text(encoding="utf-8")
-    assert "# RepoContext exports" in gitignore_content
+    assert "# RepoDossier exports" in gitignore_content
     assert "full.txt" in gitignore_content
     assert "ai.txt" in gitignore_content
     assert "docs.txt" in gitignore_content
@@ -471,7 +471,7 @@ def test_cli_default_command_preserves_existing_gitignore_content(
     gitignore_content = gitignore_path.read_text(encoding="utf-8")
     assert ".venv/" in gitignore_content
     assert "__pycache__/" in gitignore_content
-    assert "# RepoContext exports" in gitignore_content
+    assert "# RepoDossier exports" in gitignore_content
     assert gitignore_content.count("full.txt") == 1
 
 

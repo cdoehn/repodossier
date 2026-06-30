@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from repocontext.schema import (
+from repodossier.schema import (
     DatabaseSchemaReport,
     analyze_database_schemas,
     SchemaColumn,

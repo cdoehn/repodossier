@@ -1,7 +1,13 @@
-"""RepoContext package initialization."""
+"""Legacy compatibility namespace for the old repocontext package name.
 
-from .cli import main
+New code should import repodossier instead.
+"""
 
-__all__ = ["__version__", "get_version"]
+from importlib import import_module as _import_module
 
-from ._version import __version__, get_version
+_repodossier = _import_module("repodossier")
+__version__ = getattr(_repodossier, "__version__", "0+unknown")
+
+
+def __getattr__(name):
+    return getattr(_repodossier, name)

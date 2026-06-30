@@ -18,7 +18,7 @@ def test_ai_export_contains_inactive_configuration_summary_by_default(tmp_path):
     )
 
     result = subprocess.run(
-        ["repocontext", "export-ai"],
+        ["repodossier", "export-ai"],
         cwd=tmp_path,
         capture_output=True,
         text=True,
@@ -28,7 +28,7 @@ def test_ai_export_contains_inactive_configuration_summary_by_default(tmp_path):
 
     ai = (tmp_path / "ai.txt").read_text(encoding="utf-8")
 
-    assert "## RepoContext Configuration" in ai
+    assert "## RepoDossier Configuration" in ai
     assert "- Config active: no" in ai
     assert "- Include paths: none" in ai
     assert "- Exclude paths: none" in ai
@@ -40,7 +40,7 @@ def test_ai_export_contains_active_configuration_summary(tmp_path):
 
     (tmp_path / "src").mkdir()
     (tmp_path / "src" / "main.py").write_text("VALUE = True\n", encoding="utf-8")
-    (tmp_path / ".repocontext.yml").write_text(
+    (tmp_path / ".repodossier.yml").write_text(
         """
 include:
   paths:
@@ -70,7 +70,7 @@ limits:
     )
 
     result = subprocess.run(
-        ["repocontext", "export-ai"],
+        ["repodossier", "export-ai"],
         cwd=tmp_path,
         capture_output=True,
         text=True,
@@ -80,10 +80,10 @@ limits:
 
     ai = (tmp_path / "ai.txt").read_text(encoding="utf-8")
 
-    assert "## RepoContext Configuration" in ai
+    assert "## RepoDossier Configuration" in ai
     assert "- Config active: yes" in ai
     assert "- Config path:" in ai
-    assert ".repocontext.yml" in ai
+    assert ".repodossier.yml" in ai
     assert "- Include paths: src" in ai
     assert "- Include globs: *.md" in ai
     assert "- Exclude paths: build" in ai
@@ -98,7 +98,7 @@ def test_ai_export_config_summary_is_written_by_full_command_too(tmp_path):
     _init_repo(tmp_path)
 
     (tmp_path / "main.py").write_text("VALUE = True\n", encoding="utf-8")
-    (tmp_path / ".repocontext.yml").write_text(
+    (tmp_path / ".repodossier.yml").write_text(
         """
 include:
   paths:
@@ -116,7 +116,7 @@ include:
     )
 
     result = subprocess.run(
-        ["repocontext", "full"],
+        ["repodossier", "full"],
         cwd=tmp_path,
         capture_output=True,
         text=True,
@@ -126,6 +126,6 @@ include:
 
     ai = (tmp_path / "ai.txt").read_text(encoding="utf-8")
 
-    assert "## RepoContext Configuration" in ai
+    assert "## RepoDossier Configuration" in ai
     assert "- Config active: yes" in ai
     assert "- Include paths: ." in ai

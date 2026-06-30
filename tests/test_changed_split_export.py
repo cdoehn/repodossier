@@ -1,9 +1,9 @@
 import argparse
 from types import SimpleNamespace
 
-from repocontext.changed_command import add_changed_subparser
-from repocontext.cli_split import enable_split_write_interceptor_for_args
-from repocontext.split_config import SplitExportConfig
+from repodossier.changed_command import add_changed_subparser
+from repodossier.cli_split import enable_split_write_interceptor_for_args
+from repodossier.split_config import SplitExportConfig
 
 
 def test_changed_command_split_interceptor_writes_changed_part_files(tmp_path):

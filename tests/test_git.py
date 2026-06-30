@@ -6,7 +6,7 @@ from typing import Optional
 
 import pytest
 
-from repocontext.git import (
+from repodossier.git import (
     TrackedFile,
     find_repository_root,
     get_current_branch,

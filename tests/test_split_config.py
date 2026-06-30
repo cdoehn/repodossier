@@ -1,7 +1,7 @@
 import pytest
 
-from repocontext.config import ConfigError, RepoContextConfig, get_split_export_config, load_config, parse_config
-from repocontext.split_config import (
+from repodossier.config import ConfigError, RepoDossierConfig, get_split_export_config, load_config, parse_config
+from repodossier.split_config import (
     DEFAULT_SPLIT_MAX_CHARS,
     DEFAULT_SPLIT_STRATEGY,
     SplitExportConfig,
@@ -132,7 +132,7 @@ def test_parse_config_rejects_invalid_exports_split_section():
 
 
 def test_load_config_preserves_exports_split_section(tmp_path):
-    config_file = tmp_path / ".repocontext.yml"
+    config_file = tmp_path / ".repodossier.yml"
     config_file.write_text(
         """
 exports:
@@ -155,8 +155,8 @@ exports:
     )
 
 
-def test_get_split_export_config_accepts_loaded_repocontext_config():
-    loaded_config = RepoContextConfig(
+def test_get_split_export_config_accepts_loaded_repodossier_config():
+    loaded_config = RepoDossierConfig(
         split=SplitExportConfig(enabled=True, max_chars=999, strategy="plain")
     )
 

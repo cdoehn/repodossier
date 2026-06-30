@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from repocontext.bash_symbols import BashFunction
-from repocontext.bash_symbols import discover_bash_functions
-from repocontext.bash_symbols import extract_bash_functions
+from repodossier.bash_symbols import BashFunction
+from repodossier.bash_symbols import discover_bash_functions
+from repodossier.bash_symbols import extract_bash_functions
 
 
 def test_discovers_common_bash_function_forms():

@@ -36,7 +36,7 @@ def test_changed_command_respects_include_and_exclude_filters(tmp_path):
         "VALUE = 'before private'\n",
         encoding="utf-8",
     )
-    (tmp_path / ".repocontext.yml").write_text(
+    (tmp_path / ".repodossier.yml").write_text(
         """
 include:
   paths:
@@ -61,7 +61,7 @@ exclude:
     )
 
     result = subprocess.run(
-        ["repocontext", "changed"],
+        ["repodossier", "changed"],
         cwd=tmp_path,
         capture_output=True,
         text=True,
@@ -89,7 +89,7 @@ def test_changed_command_no_config_ignores_include_and_exclude_filters(tmp_path)
         "VALUE = 'before private'\n",
         encoding="utf-8",
     )
-    (tmp_path / ".repocontext.yml").write_text(
+    (tmp_path / ".repodossier.yml").write_text(
         """
 include:
   paths:
@@ -113,7 +113,7 @@ exclude:
     )
 
     result = subprocess.run(
-        ["repocontext", "changed", "--no-config"],
+        ["repodossier", "changed", "--no-config"],
         cwd=tmp_path,
         capture_output=True,
         text=True,

@@ -1,5 +1,5 @@
-# Example RepoContext configuration.
-# Copy this file to .repocontext.yml and adjust it for your repository.
+# Example RepoDossier configuration.
+# Copy this file to .repodossier.yml and adjust it for your repository.
 
 include:
   paths:

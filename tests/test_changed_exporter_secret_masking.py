@@ -2,7 +2,7 @@ import importlib
 
 
 def test_changed_export_masks_diff_secret_values_and_reports_summary(monkeypatch):
-    changed_exporter = importlib.import_module("repocontext.changed_exporter")
+    changed_exporter = importlib.import_module("repodossier.changed_exporter")
 
     api_secret = "sk-live-1234567890abcdefSECRET"
     token_secret = "ghp_1234567890abcdefSECRET"

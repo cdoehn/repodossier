@@ -1,6 +1,6 @@
 import re
 
-from repocontext.secrets import (
+from repodossier.secrets import (
     SecretFinding,
     SecretPattern,
     default_secret_patterns,
@@ -463,7 +463,7 @@ def test_mask_secrets_in_text_masks_export_prefixed_assignment():
 
 
 def test_mask_export_file_adds_summary_for_already_redacted_export(tmp_path):
-    from repocontext.secrets import mask_export_file
+    from repodossier.secrets import mask_export_file
 
     export_path = tmp_path / "ai.txt"
     export_path.write_text(

@@ -28,7 +28,7 @@ class SplitExportConfig:
 
 
 def parse_split_export_config(raw_config: Mapping[str, Any] | None = None) -> SplitExportConfig:
-    """Parse split export configuration from a full RepoContext config mapping.
+    """Parse split export configuration from a full RepoDossier config mapping.
 
     Expected shape:
 

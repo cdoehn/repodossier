@@ -1,18 +1,18 @@
 from dataclasses import dataclass
 from pathlib import Path
 
-from repocontext.call_graph import CallEdge, CallGraph
-from repocontext.import_graph import (
+from repodossier.call_graph import CallEdge, CallGraph
+from repodossier.import_graph import (
     ImportAnalysisError,
     ImportEdge,
     ImportGraph,
     ImportReference,
 )
 
-from repocontext.git import RepositoryInfo, TrackedFile
-from repocontext.models import FileInfo
+from repodossier.git import RepositoryInfo, TrackedFile
+from repodossier.models import FileInfo
 
-from repocontext.exporters.full import (
+from repodossier.exporters.full import (
     _build_call_graph_for_export,
     _build_import_graph_for_export,
     _format_call_graph_section,
@@ -690,7 +690,7 @@ def test_build_call_graph_for_export_reuses_provided_import_graph(
 
     import_graph = _build_import_graph_for_export(tmp_path, files)
 
-    import repocontext.import_graph as import_graph_module
+    import repodossier.import_graph as import_graph_module
 
     def fail_if_import_graph_is_rebuilt(*_args, **_kwargs):
         raise AssertionError("build_import_graph should not be called again")
@@ -756,7 +756,7 @@ def test_build_call_graph_for_export_reuses_scanner_content_for_call_analysis(
 
     import_graph = _build_import_graph_for_export(tmp_path, files)
 
-    import repocontext.call_graph as call_graph_module
+    import repodossier.call_graph as call_graph_module
 
     captured_sources = []
 

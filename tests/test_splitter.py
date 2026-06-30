@@ -1,6 +1,6 @@
 import pytest
 
-from repocontext.splitter import split_text
+from repodossier.splitter import split_text
 
 
 def test_split_text_returns_single_part_when_text_fits_limit():

@@ -1,4 +1,4 @@
-from repocontext.symbols import (
+from repodossier.symbols import (
     build_symbol_index,
     extract_symbols_from_file,
     format_symbol_index,

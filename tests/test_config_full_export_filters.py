@@ -17,7 +17,7 @@ def test_full_export_applies_include_and_exclude_filters(tmp_path):
     (src_dir / "keep.py").write_text("KEEP_ME = True\n", encoding="utf-8")
     (private_dir / "secret.py").write_text("SECRET_PRIVATE = True\n", encoding="utf-8")
 
-    (tmp_path / ".repocontext.yml").write_text(
+    (tmp_path / ".repodossier.yml").write_text(
         """
 include:
   paths:
@@ -39,7 +39,7 @@ exclude:
     )
 
     result = subprocess.run(
-        ["repocontext", "full"],
+        ["repodossier", "full"],
         cwd=tmp_path,
         capture_output=True,
         text=True,
@@ -66,7 +66,7 @@ def test_full_export_no_config_ignores_include_exclude_filters(tmp_path):
     (src_dir / "keep.py").write_text("KEEP_ME = True\n", encoding="utf-8")
     (private_dir / "secret.py").write_text("SECRET_PRIVATE = True\n", encoding="utf-8")
 
-    (tmp_path / ".repocontext.yml").write_text(
+    (tmp_path / ".repodossier.yml").write_text(
         """
 include:
   paths:
@@ -87,7 +87,7 @@ exclude:
     )
 
     result = subprocess.run(
-        ["repocontext", "full", "--no-config"],
+        ["repodossier", "full", "--no-config"],
         cwd=tmp_path,
         capture_output=True,
         text=True,

@@ -1,4 +1,4 @@
-"""Data models used by RepoContext scanning components."""
+"""Data models used by RepoDossier scanning components."""
 
 from __future__ import annotations
 

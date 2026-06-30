@@ -2,13 +2,13 @@ from pathlib import Path
 
 import pytest
 
-from repocontext.output_writer import (
+from repodossier.output_writer import (
     ExportWriteResult,
     build_part_header,
     part_path_for,
     write_export_output,
 )
-from repocontext.split_config import SplitExportConfig
+from repodossier.split_config import SplitExportConfig
 
 
 def test_write_export_output_writes_single_file_without_split(tmp_path):
@@ -46,7 +46,7 @@ def test_write_export_output_writes_main_file_and_part_files_with_split(tmp_path
     ]
     assert all(path.exists() for path in result.part_paths)
     assert result.part_paths[0].read_text(encoding="utf-8").startswith(
-        "# RepoContext Export Part 1/2\n\n"
+        "# RepoDossier Export Part 1/2\n\n"
         "Source export: full.txt\n"
         "Part: 1 of 2\n\n"
     )
@@ -134,7 +134,7 @@ def test_part_path_for_handles_extensionless_output_paths(tmp_path):
 
 def test_build_part_header_returns_expected_header():
     assert build_part_header("full.txt", 2, 3) == (
-        "# RepoContext Export Part 2/3\n\n"
+        "# RepoDossier Export Part 2/3\n\n"
         "Source export: full.txt\n"
         "Part: 2 of 3\n\n"
     )
