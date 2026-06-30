@@ -1,8 +1,8 @@
-# REPOCONTEXT ARCHITECTURE
+# REPODOSSIER ARCHITECTURE
 
 ## Goal
 
-RepoContext generates AI-friendly repository exports from Git repositories.
+RepoDossier generates AI-friendly repository exports from Git repositories.
 
 The architecture is designed around a simple pipeline:
 
@@ -309,7 +309,7 @@ Generates:
 
     docs.txt
 
-Contains documentation files only. It extracts Git-tracked documentation-like text files and excludes generated RepoContext export files.
+Contains documentation files only. It extracts Git-tracked documentation-like text files and excludes generated RepoDossier export files.
 
 ---
 

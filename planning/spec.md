@@ -1,13 +1,13 @@
-REPOCONTEXT SPECIFICATION
+REPODOSSIER SPECIFICATION
 Version: 1.3
 
 PROJECT NAME
 ============
-RepoContext
+RepoDossier
 
 PURPOSE
 =======
-RepoContext creates AI-friendly exports of Git repositories.
+RepoDossier creates AI-friendly exports of Git repositories.
 
 The goal is to provide complete or summarized repository context for AI systems
 such as ChatGPT, Claude, Gemini, Aider and others.
@@ -126,7 +126,7 @@ Only Git-tracked files are exported.
 GITIGNORE MANAGEMENT
 ====================
 
-RepoContext automatically ensures the following files are present in .gitignore:
+RepoDossier automatically ensures the following files are present in .gitignore:
 
 - full.txt
 - ai.txt
