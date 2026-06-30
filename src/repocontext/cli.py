@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from .cli_split import add_split_export_options
 from .dependencies import append_dependencies_full_section
 
 import argparse
@@ -190,15 +191,18 @@ def _build_parser() -> argparse.ArgumentParser:
     info_parser.set_defaults(handler=_handle_info_command)
 
     full_parser = with_config_arguments(subparsers.add_parser("full", help="Generate full.txt and ai.txt exports"))
+    add_split_export_options(full_parser)
     full_parser.set_defaults(handler=_handle_full_export_command)
 
     export_parser = subparsers.add_parser("export", help="Generate full.txt and ai.txt exports")
     export_parser.set_defaults(handler=_handle_full_export_command)
 
     ai_export_parser = with_config_arguments(subparsers.add_parser("export-ai", help="Generate ai.txt export"))
+    add_split_export_options(ai_export_parser)
     ai_export_parser.set_defaults(handler=_handle_ai_export_command)
 
     docs_export_parser = with_config_arguments(subparsers.add_parser("export-docs", help="Generate docs.txt export"))
+    add_split_export_options(docs_export_parser)
     docs_export_parser.set_defaults(handler=_handle_docs_export_command)
 
     parser.set_defaults(handler=_handle_full_export_command)
