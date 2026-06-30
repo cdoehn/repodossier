@@ -27,6 +27,7 @@ RepoContext is currently in early development.
 
 Implemented:
 
+- configuration via `.repocontext.yml`
 - Git repository detection
 - Git-tracked file discovery via `git ls-files`
 - text and binary file detection
@@ -49,7 +50,6 @@ Implemented:
 
 Planned but not complete yet:
 
-- configuration via `.repocontext.yml`
 - split exports for very large repositories
 - Bash symbol and call graph support
 
@@ -686,7 +686,7 @@ Current limitations:
 - external packages are not inspected
 - standard `full.txt`, `ai.txt`, and `docs.txt` exports consider Git-tracked files
 - `changed.txt` is diff-based and can include untracked, non-ignored files
-- configuration support is planned but not complete yet
+- configuration support is available via `.repocontext.yml`
 
 ## Roadmap
 
