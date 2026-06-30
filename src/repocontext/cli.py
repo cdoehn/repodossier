@@ -213,8 +213,8 @@ def _main_without_export_secret_safety_net(argv: Optional[Iterable[str]] = None)
     """CLI entrypoint."""
     parser = _build_parser()
     arguments = parser.parse_args(list(argv) if argv is not None else None)
-    enable_split_write_interceptor_for_args(arguments)
-    _load_config_for_cli_args(arguments)
+    config = _load_config_for_cli_args(arguments)
+    enable_split_write_interceptor_for_args(arguments, base_config=config)
     return arguments.handler(arguments)
 
 

@@ -286,6 +286,10 @@ def _normalize_base_config(base_config: SplitExportConfig | Mapping[str, Any] | 
     if isinstance(base_config, SplitExportConfig):
         return base_config
 
+    split_attr = getattr(base_config, "split", None)
+    if isinstance(split_attr, SplitExportConfig):
+        return split_attr
+
     return parse_split_export_config(base_config)
 
 

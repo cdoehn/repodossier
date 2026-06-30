@@ -113,3 +113,26 @@ def test_changed_command_hook_is_only_required_when_changed_parser_exists():
 
     if "changed_parser =" in source:
         assert "add_split_export_options(changed_parser)" in source
+
+def test_resolve_split_export_config_uses_loaded_repocontext_config():
+    from repocontext.config import RepoContextConfig
+
+    loaded_config = RepoContextConfig(
+        split=SplitExportConfig(enabled=True, max_chars=888, strategy="plain")
+    )
+
+    config = resolve_split_export_config(loaded_config, _parse_args())
+
+    assert config == SplitExportConfig(enabled=True, max_chars=888, strategy="plain")
+
+
+def test_cli_loads_config_before_enabling_split_interceptor():
+    import repocontext.cli as cli
+
+    assert cli.__file__ is not None
+    source = open(cli.__file__, encoding="utf-8").read()
+
+    assert source.index("config = _load_config_for_cli_args(arguments)") < source.index(
+        "enable_split_write_interceptor_for_args(arguments, base_config=config)"
+    )
+

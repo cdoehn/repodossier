@@ -112,11 +112,18 @@ def test_full_command_split_interceptor_uses_base_config_when_cli_has_no_overrid
     assert (tmp_path / "full.part02.txt").read_text(encoding="utf-8").endswith("def")
 
 
-def test_cli_main_enables_split_interceptor_after_parse_args():
+def test_cli_main_enables_split_interceptor_after_parse_args_and_config_load():
     import repocontext.cli as cli
 
     assert cli.__file__ is not None
     source = Path(cli.__file__).read_text(encoding="utf-8")
 
-    assert "arguments = parser.parse_args(list(argv) if argv is not None else None)" in source
-    assert "enable_split_write_interceptor_for_args(arguments)" in source
+    parse_call = "arguments = parser.parse_args(list(argv) if argv is not None else None)"
+    config_call = "config = _load_config_for_cli_args(arguments)"
+    split_call = "enable_split_write_interceptor_for_args(arguments, base_config=config)"
+
+    assert parse_call in source
+    assert config_call in source
+    assert split_call in source
+    assert source.index(parse_call) < source.index(config_call)
+    assert source.index(config_call) < source.index(split_call)

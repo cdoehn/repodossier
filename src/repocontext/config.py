@@ -69,6 +69,7 @@ class RepoContextConfig:
     include: IncludeExcludeConfig = field(default_factory=IncludeExcludeConfig)
     exclude: IncludeExcludeConfig = field(default_factory=IncludeExcludeConfig)
     limits: ExportLimitsConfig = field(default_factory=ExportLimitsConfig)
+    split: SplitExportConfig = field(default_factory=SplitExportConfig)
     path: Path | None = None
     enabled: bool = False
 
@@ -162,6 +163,7 @@ def load_config(
         include=config.include,
         exclude=config.exclude,
         limits=config.limits,
+        split=config.split,
         path=config_path,
         enabled=True,
     )
@@ -188,7 +190,7 @@ def parse_config(data: Any) -> RepoContextConfig:
     if not isinstance(data, dict):
         raise ConfigError("Configuration root must be a mapping.")
 
-    allowed_top_level = {"include", "exclude", "limits"}
+    allowed_top_level = {"include", "exclude", "limits", "exports"}
     unknown_keys = set(data) - allowed_top_level
     if unknown_keys:
         keys = ", ".join(sorted(str(key) for key in unknown_keys))
@@ -198,7 +200,17 @@ def parse_config(data: Any) -> RepoContextConfig:
         include=_parse_filter_config(data.get("include"), "include"),
         exclude=_parse_filter_config(data.get("exclude"), "exclude"),
         limits=_parse_limits_config(data.get("limits")),
+        split=_parse_split_export_config_for_config(data),
     )
+
+
+def _parse_split_export_config_for_config(data: dict[str, Any]) -> SplitExportConfig:
+    """Parse split settings and convert validation errors to ConfigError."""
+
+    try:
+        return parse_split_export_config(data)
+    except ValueError as exc:
+        raise ConfigError(str(exc)) from exc
 
 
 def _read_yaml_mapping(path: Path) -> Any:
@@ -735,5 +747,8 @@ def _normalize_filter_path(path: Path | str) -> str:
 
 def get_split_export_config(config):
     """Return validated split export settings from RepoContext config data."""
+
+    if isinstance(config, RepoContextConfig):
+        return config.split
 
     return parse_split_export_config(config)
