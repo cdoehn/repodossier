@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from .split_config import SplitExportConfig, parse_split_export_config
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -731,3 +732,8 @@ def _normalize_filter_path(path: Path | str) -> str:
     normalized = normalized.strip("/")
     return normalized
 
+
+def get_split_export_config(config):
+    """Return validated split export settings from RepoContext config data."""
+
+    return parse_split_export_config(config)
