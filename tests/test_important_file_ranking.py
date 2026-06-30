@@ -627,7 +627,6 @@ def test_generated_exports_binary_files_and_errored_files_are_excluded() -> None
             make_file("docs.txt"),
             make_file("changed.txt"),
             make_file("project_bundle.txt"),
-            make_file("bundle_project.sh"),
             make_file("docs/binary.md", is_binary=True),
             make_file("docs/unreadable.md", error="permission denied"),
             make_file("docs/non_text.md", is_text=False),

@@ -758,7 +758,6 @@ def _is_ai_important_file_candidate(file_info: object) -> bool:
 
     if path_string in {
         "project_bundle.txt",
-        "bundle_project.sh",
     }:
         return False
 

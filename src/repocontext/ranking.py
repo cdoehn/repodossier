@@ -28,7 +28,6 @@ GENERATED_EXPORT_FILENAMES: frozenset[str] = frozenset(
 NON_PROJECT_EXPORT_PATHS: frozenset[str] = frozenset(
     {
         "project_bundle.txt",
-        "bundle_project.sh",
     }
 )
 
