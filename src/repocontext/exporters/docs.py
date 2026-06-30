@@ -8,12 +8,13 @@ steps.
 from __future__ import annotations
 from repocontext.secrets import SecretFinding, mask_secrets_in_text
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Sequence
 
 from repocontext.gitignore import ensure_repocontext_gitignore_entries
 from repocontext.models import FileInfo
+from repocontext.config import format_limit_notice, get_active_config, is_file_size_allowed, truncate_text_by_line_limit
 
 from .full import FullExportContext, build_full_export_context
 
@@ -764,3 +765,113 @@ __all__ = [
     "iter_docs_export_headings",
     "render_docs_export",
 ]
+
+
+_REPOCONTEXT_DOCS_EXPORT_LIMITS_WRAPPER = True
+
+
+class _LimitedDocumentationFileInfo:
+    """Proxy FileInfo that overrides content and derived counters for docs limits."""
+
+    def __init__(self, base: object, content: str) -> None:
+        self._base = base
+        self.content = content
+        self.line_count = len(content.splitlines())
+        self.estimated_tokens = max(0, len(content) // 4)
+
+    def __getattr__(self, name: str) -> object:
+        return getattr(self._base, name)
+
+
+def _apply_docs_document_limits(context: DocumentationExportContext) -> DocumentationExportContext:
+    """Apply content limits to documentation files before rendering docs.txt."""
+
+    if not hasattr(context, "documentation_files"):
+        return context
+
+    config = get_active_config()
+    limited_documents: list[DocumentationFile] = []
+    changed = False
+
+    for documentation_file in context.documentation_files:
+        limited_document = _limit_documentation_file_content(documentation_file, config)
+        if limited_document is not documentation_file:
+            changed = True
+        limited_documents.append(limited_document)
+
+    if not changed:
+        return context
+
+    return replace(context, documentation_files=tuple(limited_documents))
+
+
+def _limit_documentation_file_content(
+    documentation_file: DocumentationFile,
+    config: object,
+) -> DocumentationFile:
+    """Return a documentation file whose rendered content respects active limits."""
+
+    content = documentation_file.content or ""
+    limited_content = content
+
+    size_bytes = getattr(documentation_file.file_info, "size_bytes", None)
+    if size_bytes is not None and not is_file_size_allowed(size_bytes, config):
+        limited_content = format_limit_notice("limits.max_file_bytes was reached")
+    else:
+        limited_content, line_truncated, omitted_lines = truncate_text_by_line_limit(
+            content,
+            config,
+        )
+        if line_truncated:
+            if limited_content and not limited_content.endswith("\n"):
+                limited_content += "\n"
+            limited_content += format_limit_notice(
+                "limits.max_line_count was reached",
+                omitted_count=omitted_lines,
+            )
+            limited_content += "\n"
+
+    if limited_content == content:
+        return documentation_file
+
+    return replace(
+        documentation_file,
+        file_info=_LimitedDocumentationFileInfo(
+            documentation_file.file_info,
+            limited_content,
+        ),
+    )
+
+
+def _apply_docs_max_export_bytes_limit(rendered: str) -> str:
+    """Apply the global max_export_bytes limit to a rendered docs export."""
+
+    limit = get_active_config().limits.max_export_bytes
+    if limit is None:
+        return rendered
+
+    rendered_bytes = rendered.encode("utf-8")
+    if len(rendered_bytes) <= limit:
+        return rendered
+
+    notice = "\n\n" + format_limit_notice("limits.max_export_bytes was reached") + "\n"
+    notice_bytes = notice.encode("utf-8")
+
+    if len(notice_bytes) >= limit:
+        return notice_bytes[:limit].decode("utf-8", errors="ignore")
+
+    available_bytes = limit - len(notice_bytes)
+    truncated = rendered_bytes[:available_bytes].decode("utf-8", errors="ignore").rstrip()
+    return truncated + notice
+
+
+_REPOCONTEXT_ORIGINAL_RENDER_DOCS_EXPORT_FOR_LIMITS = render_docs_export
+
+
+def render_docs_export(context: DocumentationExportContext) -> str:
+    """Render docs.txt while applying active docs export limits."""
+
+    limited_context = _apply_docs_document_limits(context)
+    rendered = _REPOCONTEXT_ORIGINAL_RENDER_DOCS_EXPORT_FOR_LIMITS(limited_context)
+    return _apply_docs_max_export_bytes_limit(rendered)
+
