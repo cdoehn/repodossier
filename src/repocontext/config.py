@@ -353,6 +353,66 @@ def full_config_summary_section(config: RepoContextConfig) -> str:
 
     return format_config_summary(config, heading="RepoContext Configuration")
 
+
+_CHANGED_EXPORT_NON_FILE_HEADINGS = {
+    "Changed Export",
+    "Changed Files",
+    "Summary",
+    "Warnings",
+    "Skipped Files",
+}
+
+
+def _changed_export_heading_path(line: str) -> str | None:
+    """Return a file path from a changed export section heading if present."""
+
+    if not line.startswith("## "):
+        return None
+
+    heading = line[3:].strip()
+    if not heading or heading in _CHANGED_EXPORT_NON_FILE_HEADINGS:
+        return None
+
+    if heading.startswith("File: "):
+        heading = heading[6:].strip()
+
+    candidate = heading.split()[0].strip("`")
+    candidate = candidate.replace("\\", "/")
+
+    if not candidate or candidate in _CHANGED_EXPORT_NON_FILE_HEADINGS:
+        return None
+
+    if "/" not in candidate and "." not in Path(candidate).name:
+        return None
+
+    return candidate
+
+
+def filter_changed_export_sections(rendered: str, config: RepoContextConfig) -> str:
+    """Filter per-file changed export sections according to RepoContext config."""
+
+    lines = rendered.splitlines(keepends=True)
+    kept_lines: list[str] = []
+    current_section: list[str] = []
+    keep_current_section = True
+
+    def flush_current_section() -> None:
+        if keep_current_section:
+            kept_lines.extend(current_section)
+
+    for line in lines:
+        heading_path = _changed_export_heading_path(line)
+        if heading_path is not None:
+            flush_current_section()
+            current_section = [line]
+            keep_current_section = bool(filter_file_paths([heading_path], config))
+            continue
+
+        current_section.append(line)
+
+    flush_current_section()
+    return "".join(kept_lines)
+
 def apply_export_byte_limit(rendered: str, config: RepoContextConfig) -> str:
     """Apply max_export_bytes to a rendered export string."""
 

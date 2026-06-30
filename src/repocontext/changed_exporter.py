@@ -8,6 +8,7 @@ from typing import Any
 
 from repocontext.changed import ChangedFileScan, collect_changed_file_scans
 from repocontext.git import get_diff, get_diff_against_branch
+from repocontext.config import filter_changed_export_sections, get_active_config
 
 
 
@@ -351,16 +352,18 @@ def _write_changed_export_without_export_secret_safety_net(
     """Write changed.txt and return the output path."""
 
     output = Path(output_path)
-    output.write_text(
-        render_changed_export(
-            repo_path,
-            scans=scans,
-            compare_mode=compare_mode,
-            include_diff=include_diff,
-            branch=branch,
-        ),
-        encoding="utf-8",
+    rendered_export = render_changed_export(
+        repo_path,
+        scans=scans,
+        compare_mode=compare_mode,
+        include_diff=include_diff,
+        branch=branch,
     )
+    rendered_export = filter_changed_export_sections(
+        rendered_export,
+        get_active_config(),
+    )
+    output.write_text(rendered_export, encoding="utf-8")
     return output
 
 
