@@ -15,7 +15,7 @@ from repocontext.gitignore import ensure_repocontext_gitignore_entries
 from repocontext.schema import analyze_database_schemas
 
 from .full import FullExportContext, build_full_export_context
-from repocontext.config import ai_config_summary_section, apply_config_to_file_infos, get_active_config, is_file_size_allowed
+from repocontext.config import ai_config_summary_section, apply_config_to_file_infos, format_limit_notice, get_active_config, is_file_size_allowed
 
 
 AI_EXPORT_FILENAME = "ai.txt"
@@ -2155,4 +2155,39 @@ def _repocontext_schema_wrap_ai_render_function(function):
 
 _REPOCONTEXT_DATABASE_SCHEMA_AI_EXPORT_WRAPPER = True
 render_ai_export = _repocontext_schema_wrap_ai_render_function(render_ai_export)
+
+
+_REPOCONTEXT_AI_MAX_EXPORT_BYTES_WRAPPER = True
+
+
+def _apply_ai_max_export_bytes_limit(rendered: str) -> str:
+    """Apply the global max_export_bytes limit to a rendered AI export."""
+
+    limit = get_active_config().limits.max_export_bytes
+    if limit is None:
+        return rendered
+
+    rendered_bytes = rendered.encode("utf-8")
+    if len(rendered_bytes) <= limit:
+        return rendered
+
+    notice = "\n\n" + format_limit_notice("limits.max_export_bytes was reached") + "\n"
+    notice_bytes = notice.encode("utf-8")
+
+    if len(notice_bytes) >= limit:
+        return notice_bytes[:limit].decode("utf-8", errors="ignore")
+
+    available_bytes = limit - len(notice_bytes)
+    truncated = rendered_bytes[:available_bytes].decode("utf-8", errors="ignore").rstrip()
+    return truncated + notice
+
+
+_REPOCONTEXT_ORIGINAL_RENDER_AI_EXPORT_FOR_MAX_EXPORT_BYTES = render_ai_export
+
+
+def render_ai_export(context: AIExportContext) -> str:
+    """Render ai.txt and apply the configured final export byte limit."""
+
+    rendered = _REPOCONTEXT_ORIGINAL_RENDER_AI_EXPORT_FOR_MAX_EXPORT_BYTES(context)
+    return _apply_ai_max_export_bytes_limit(rendered)
 

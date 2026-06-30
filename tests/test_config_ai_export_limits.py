@@ -287,3 +287,96 @@ limits:
     assert "- Config active: no" in ai
     assert "SHOULD_APPEAR_WITH_NO_CONFIG_AI_LINE_COUNT_LIMIT" in ai
 
+def test_ai_export_respects_max_export_bytes_limit(tmp_path):
+    _init_repo(tmp_path)
+
+    (tmp_path / "src").mkdir()
+    function_lines = "\n".join(
+        f"def generated_function_{index:03d}():\n    return {index}\n"
+        for index in range(80)
+    )
+    (tmp_path / "src" / "large.py").write_text(
+        function_lines,
+        encoding="utf-8",
+    )
+
+    (tmp_path / ".repocontext.yml").write_text(
+        """
+include:
+  paths:
+    - src
+limits:
+  max_export_bytes: 1200
+""",
+        encoding="utf-8",
+    )
+
+    subprocess.run(
+        ["git", "add", "src/large.py"],
+        cwd=tmp_path,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    result = subprocess.run(
+        ["repocontext", "export-ai"],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+
+    ai = (tmp_path / "ai.txt").read_text(encoding="utf-8")
+
+    assert ai.startswith("# AI CONTEXT\n")
+    assert len(ai.encode("utf-8")) <= 1200
+    assert "limits.max_export_bytes was reached" in ai
+
+
+def test_ai_export_no_config_ignores_max_export_bytes_limit(tmp_path):
+    _init_repo(tmp_path)
+
+    (tmp_path / "src").mkdir()
+    marker = "SHOULD_APPEAR_WITH_NO_CONFIG_AI_MAX_EXPORT_BYTES_LIMIT"
+    (tmp_path / "src" / "small.py").write_text(
+        f"def {marker}():\n"
+        + "    return True\n",
+        encoding="utf-8",
+    )
+
+    (tmp_path / ".repocontext.yml").write_text(
+        """
+include:
+  paths:
+    - src
+limits:
+  max_export_bytes: 80
+""",
+        encoding="utf-8",
+    )
+
+    subprocess.run(
+        ["git", "add", "src/small.py"],
+        cwd=tmp_path,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    result = subprocess.run(
+        ["repocontext", "export-ai", "--no-config"],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+
+    ai = (tmp_path / "ai.txt").read_text(encoding="utf-8")
+
+    assert "- Config active: no" in ai
+    assert "limits.max_export_bytes was reached" not in ai
+    assert marker in ai
+
