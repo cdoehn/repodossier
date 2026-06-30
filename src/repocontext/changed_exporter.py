@@ -8,7 +8,7 @@ from typing import Any
 
 from repocontext.changed import ChangedFileScan, collect_changed_file_scans
 from repocontext.git import get_diff, get_diff_against_branch
-from repocontext.config import filter_changed_export_sections, get_active_config
+from repocontext.config import apply_config_to_file_infos, filter_changed_export_sections, format_limit_notice, get_active_config, is_file_size_allowed, truncate_text_by_line_limit
 
 
 
@@ -374,4 +374,129 @@ def write_changed_export(*args: object, **kwargs: object) -> object:
         return _write_changed_export_without_export_secret_safety_net(*args, **kwargs)
     finally:
         _repocontext_mask_known_export_files()
+
+
+_REPOCONTEXT_CHANGED_EXPORT_LIMITS_WRAPPER = True
+
+
+def _apply_changed_scan_selection_limits(
+    scans: Sequence[ChangedFileScan],
+) -> tuple[ChangedFileScan, ...]:
+    """Apply configured changed-file selection limits before rendering."""
+
+    config = get_active_config()
+    selection = apply_config_to_file_infos(tuple(scans), config)
+    return tuple(selection.files)
+
+
+_REPOCONTEXT_ORIGINAL_COLLECT_CHANGED_FILE_SCANS_FOR_LIMITS = collect_changed_file_scans
+
+
+def collect_changed_file_scans(*args: object, **kwargs: object) -> list[ChangedFileScan]:
+    """Collect changed scans and apply configured file-selection limits."""
+
+    scans = _REPOCONTEXT_ORIGINAL_COLLECT_CHANGED_FILE_SCANS_FOR_LIMITS(
+        *args,
+        **kwargs,
+    )
+    return list(_apply_changed_scan_selection_limits(tuple(scans)))
+
+
+def _changed_limit_notice(reason: str, *, omitted_count: int | None = None) -> str:
+    return format_limit_notice(reason, omitted_count=omitted_count) + "\n"
+
+
+def _changed_scan_file_info(scan: object | None) -> object | None:
+    if scan is None:
+        return None
+    return getattr(scan, "file_info", None)
+
+
+def _changed_file_size_bytes(scan: object | None, content: str) -> int:
+    file_info = _changed_scan_file_info(scan)
+    size_bytes = getattr(file_info, "size_bytes", None)
+    if size_bytes is not None:
+        return int(size_bytes)
+    return len(content.encode("utf-8"))
+
+
+def _apply_changed_content_limits(content: str, scan: object | None) -> str:
+    """Apply configured per-file content limits to changed file contents."""
+
+    config = get_active_config()
+
+    if not is_file_size_allowed(_changed_file_size_bytes(scan, content), config):
+        return _changed_limit_notice("limits.max_file_bytes was reached")
+
+    limited_content, truncated, omitted_lines = truncate_text_by_line_limit(
+        content,
+        config,
+    )
+    if not truncated:
+        return limited_content
+
+    if limited_content and not limited_content.endswith("\n"):
+        limited_content += "\n"
+
+    return limited_content + _changed_limit_notice(
+        "limits.max_line_count was reached",
+        omitted_count=omitted_lines,
+    )
+
+
+_REPOCONTEXT_ORIGINAL_READ_CHANGED_FILE_CONTENT_FOR_LIMITS = _read_changed_file_content
+
+
+def _read_changed_file_content(*args: object, **kwargs: object) -> str:
+    """Read changed file content and apply configured per-file limits."""
+
+    content = _REPOCONTEXT_ORIGINAL_READ_CHANGED_FILE_CONTENT_FOR_LIMITS(
+        *args,
+        **kwargs,
+    )
+
+    scan = kwargs.get("scan")
+    if scan is None and len(args) >= 2:
+        scan = args[1]
+
+    return _apply_changed_content_limits(content, scan)
+
+
+def _apply_changed_max_export_bytes_limit(rendered: str) -> str:
+    """Apply the global max_export_bytes limit to a rendered changed export."""
+
+    limit = get_active_config().limits.max_export_bytes
+    if limit is None:
+        return rendered
+
+    rendered_bytes = rendered.encode("utf-8")
+    if len(rendered_bytes) <= limit:
+        return rendered
+
+    notice = "\n\n" + format_limit_notice("limits.max_export_bytes was reached") + "\n"
+    notice_bytes = notice.encode("utf-8")
+
+    if len(notice_bytes) >= limit:
+        return notice_bytes[:limit].decode("utf-8", errors="ignore")
+
+    available_bytes = limit - len(notice_bytes)
+    truncated = rendered_bytes[:available_bytes].decode("utf-8", errors="ignore").rstrip()
+    return truncated + notice
+
+
+_REPOCONTEXT_ORIGINAL_RENDER_CHANGED_EXPORT_FOR_LIMITS = render_changed_export
+
+
+def render_changed_export(*args: object, **kwargs: object) -> str:
+    """Render changed.txt while applying active changed export limits."""
+
+    if kwargs.get("scans") is not None:
+        kwargs = dict(kwargs)
+        kwargs["scans"] = _apply_changed_scan_selection_limits(kwargs["scans"])
+
+    rendered = _REPOCONTEXT_ORIGINAL_RENDER_CHANGED_EXPORT_FOR_LIMITS(
+        *args,
+        **kwargs,
+    )
+    return _apply_changed_max_export_bytes_limit(rendered)
 
