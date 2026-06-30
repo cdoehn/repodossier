@@ -15,6 +15,12 @@ from .splitter import split_text
 _ORIGINAL_PATH_WRITE_TEXT: Callable[..., int] | None = None
 
 
+_SPLIT_OUTPUTS_BY_COMMAND: dict[str, tuple[str, ...]] = {
+    "full": ("full.txt",),
+    "export-ai": ("ai.txt",),
+}
+
+
 def add_split_export_options(parser: argparse.ArgumentParser) -> None:
     """Add common split export CLI options to an argparse parser."""
 
@@ -76,16 +82,25 @@ def enable_split_write_interceptor_for_args(
     args: argparse.Namespace,
     *,
     base_config: SplitExportConfig | Mapping[str, Any] | None = None,
-    output_names: tuple[str, ...] = ("full.txt",),
+    output_names: tuple[str, ...] | None = None,
 ) -> Callable[[], None] | None:
-    """Enable split part writing for ``repocontext full``.
+    """Enable split part writing for supported export commands.
 
-    The full command already writes the complete ``full.txt`` file. This
-    interceptor keeps that existing behavior and writes additional
-    ``full.partXX.txt`` files when ``full.txt`` is written.
+    The existing export commands already write the complete export files. This
+    interceptor keeps that behavior intact and writes additional ``.partXX``
+    files when the matching complete export file is written.
+
+    Supported commands so far:
+
+    - ``full`` -> ``full.partXX.txt``
+    - ``export-ai`` -> ``ai.partXX.txt``
     """
 
-    if _selected_command_name(args) != "full":
+    resolved_output_names = output_names
+    if resolved_output_names is None:
+        resolved_output_names = _output_names_for_args(args)
+
+    if not resolved_output_names:
         return None
 
     effective_base_config = base_config
@@ -98,8 +113,16 @@ def enable_split_write_interceptor_for_args(
 
     return _enable_split_write_interceptor(
         split_config=split_config,
-        output_names=output_names,
+        output_names=resolved_output_names,
     )
+
+
+def _output_names_for_args(args: argparse.Namespace) -> tuple[str, ...] | None:
+    command_name = _selected_command_name(args)
+    if command_name is None:
+        return None
+
+    return _SPLIT_OUTPUTS_BY_COMMAND.get(command_name)
 
 
 def _enable_split_write_interceptor(

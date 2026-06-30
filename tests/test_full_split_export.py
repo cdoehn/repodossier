@@ -71,9 +71,9 @@ def test_full_command_split_interceptor_ignores_ai_file_written_by_full_command(
     assert not list(tmp_path.glob("ai.part*.txt"))
 
 
-def test_full_command_split_interceptor_is_disabled_for_other_commands(tmp_path):
+def test_full_command_split_interceptor_is_disabled_for_unsupported_commands(tmp_path):
     args = SimpleNamespace(
-        command="export-ai",
+        command="export-docs",
         split_enabled=True,
         split_max_chars=2,
         split_strategy="plain",
