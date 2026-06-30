@@ -70,6 +70,7 @@ def _iter_text_files():
                 and child.suffix in TEXT_SUFFIXES
                 and ".venv" not in child.parts
                 and "__pycache__" not in child.parts
+                and not any(part.endswith(".egg-info") for part in child.parts)
             ]
 
         for candidate in candidates:

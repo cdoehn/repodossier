@@ -24,7 +24,7 @@ The architecture is designed around a simple pipeline:
 
 # High-Level Architecture
 
-repocontext/
+repodossier/
 ├── cli.py
 ├── config.py
 ├── git.py
@@ -59,10 +59,10 @@ Responsibilities:
 
 Commands:
 
-    repocontext
-    repocontext --ai
-    repocontext --docs
-    repocontext --changed
+    repodossier
+    repodossier --ai
+    repodossier --docs
+    repodossier --changed
 
 ---
 
@@ -70,7 +70,7 @@ Commands:
 
 Responsibilities:
 
-- load .repocontext.yml
+- load .repodossier.yml
 - merge defaults
 - validate configuration
 
@@ -377,11 +377,11 @@ Python package
 
 Installation:
 
-    pipx install repocontext
+    pipx install repodossier
 
 CLI entrypoint:
 
-    repocontext
+    repodossier
 
 ---
 

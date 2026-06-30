@@ -76,6 +76,7 @@ def _iter_text_files():
                 and path.suffix in TEXT_SUFFIXES
                 and ".venv" not in path.parts
                 and "__pycache__" not in path.parts
+                and not any(part.endswith(".egg-info") for part in path.parts)
             ]
 
         for candidate in candidates:

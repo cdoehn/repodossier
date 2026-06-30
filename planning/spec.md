@@ -19,24 +19,24 @@ INSTALLATION
 
 Primary installation method:
 
-    pipx install repocontext
+    pipx install repodossier
 
 Supported installation methods:
 
-    pipx install repocontext
-    pip install repocontext
+    pipx install repodossier
+    pip install repodossier
     pip install -e .
 
 CLI entrypoint:
 
-    repocontext
+    repodossier
 
 EXPORT MODES
 ============
 
 1. Full Export
 
-    repocontext
+    repodossier
 
 Output:
 
@@ -53,7 +53,7 @@ Contains:
 
 2. AI Export
 
-    repocontext --ai
+    repodossier --ai
 
 Output:
 
@@ -84,7 +84,7 @@ No complete code dump.
 
 3. Documentation Export
 
-    repocontext --docs
+    repodossier --docs
 
 Output:
 
@@ -100,8 +100,8 @@ Contains documentation files such as:
 
 4. Changed Files Export
 
-    repocontext --changed
-    repocontext --changed main
+    repodossier --changed
+    repodossier --changed main
 
 Output:
 
@@ -322,7 +322,7 @@ CONFIGURATION FILE
 
 Optional:
 
-    .repocontext.yml
+    .repodossier.yml
 
 Supports:
 
