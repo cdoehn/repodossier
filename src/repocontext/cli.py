@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from .cli_split import add_split_export_options
+from .cli_split import add_split_export_options, enable_split_write_interceptor_for_args
 from .dependencies import append_dependencies_full_section
 
 import argparse
@@ -213,6 +213,7 @@ def _main_without_export_secret_safety_net(argv: Optional[Iterable[str]] = None)
     """CLI entrypoint."""
     parser = _build_parser()
     arguments = parser.parse_args(list(argv) if argv is not None else None)
+    enable_split_write_interceptor_for_args(arguments)
     _load_config_for_cli_args(arguments)
     return arguments.handler(arguments)
 
