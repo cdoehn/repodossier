@@ -181,7 +181,8 @@ def _handle_info_command(_args: argparse.Namespace) -> int:
 
 def _build_parser() -> argparse.ArgumentParser:
     """Create the top-level argument parser."""
-    parser = argparse.ArgumentParser(prog="repodossier")
+    parser = argparse.ArgumentParser(
+        description="RepoDossier creates AI-friendly exports of Git repositories.",prog="repodossier")
     parser.add_argument(
         "--version",
         action="version",
