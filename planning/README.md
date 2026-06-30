@@ -24,6 +24,10 @@ Files in `planning/archive/` are historical release records. They are useful for
 
 Current forward-looking work lives in:
 
-    planning/ROADMAP_NEXT.md
+    planning/roadmap_next.md
 
 User-facing usage documentation lives in the repository root README.md.
+
+Shared project specification:
+
+    planning/spec.md

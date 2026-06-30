@@ -65,7 +65,7 @@ def test_readme_documents_docs_exporter_module():
 
 
 def test_architecture_documents_docs_exporter_scope():
-    architecture = Path("REPOCONTEXT_ARCHITECTURE.md").read_text(encoding="utf-8")
+    architecture = Path("architecture.md").read_text(encoding="utf-8")
 
     assert "## exporters/docs.py" in architecture
     assert "docs.txt" in architecture
@@ -195,4 +195,3 @@ def test_readme_lists_secret_detection_as_implemented_not_planned():
     assert "## Secret Detection" in readme
     assert "- secret detection" not in readme
     assert "Planned but not complete yet:" in readme
-

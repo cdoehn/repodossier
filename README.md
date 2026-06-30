@@ -808,7 +808,7 @@ Completed 1.0 roadmap:
 12. Split exports
 13. Release 1.0
 
-See `planning/ROADMAP_NEXT.md` for future work and `planning/archive/1.0.0/roadmap.md` plus `planning/archive/1.0.0/milestone*.md` for the historical 1.0.0 roadmap and milestone notes.
+See `planning/roadmap_next.md` for future work and `planning/archive/1.0.0/roadmap.md` plus `planning/archive/1.0.0/milestone*.md` for the historical 1.0.0 roadmap and milestone notes.
 
 ## License
 

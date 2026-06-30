@@ -81,8 +81,8 @@ Neue interne Funktion, z. B.:
 
 Erkennen:
 - README.md, README.rst, README.txt, README
-- ARCHITECTURE.md, REPOCONTEXT_ARCHITECTURE.md
-- SPEC.md, SPEC.txt, REPOCONTEXT_SPEC_v1.3.txt
+- ARCHITECTURE.md, architecture.md
+- SPEC.md, SPEC.txt, planning/spec.md
 - TASKS.md
 - ROADMAP.md, REPOCONTEXT_ROADMAP.md
 - CHANGELOG.md
@@ -131,8 +131,8 @@ Die Heuristik isoliert absichern.
 
 Testfälle:
 - README.md wird erkannt.
-- REPOCONTEXT_ARCHITECTURE.md wird erkannt.
-- REPOCONTEXT_SPEC_v1.3.txt wird erkannt.
+- architecture.md wird erkannt.
+- planning/spec.md wird erkannt.
 - planning/archive/1.0.0/roadmap.md wird erkannt.
 - docs/usage.md wird erkannt.
 - src/repocontext/cli.py wird nicht erkannt.
@@ -277,10 +277,10 @@ Primary documentation:
 - README.md — 521 lines, ~2,926 tokens
 
 Architecture documentation:
-- REPOCONTEXT_ARCHITECTURE.md — 403 lines, ~1,029 tokens
+- architecture.md — 403 lines, ~1,029 tokens
 
 Specification documentation:
-- REPOCONTEXT_SPEC_v1.3.txt — 373 lines, ~1,250 tokens
+- planning/spec.md — 373 lines, ~1,250 tokens
 
 Akzeptanzkriterien:
 - Gruppierung nach Kategorie.
@@ -709,7 +709,7 @@ Akzeptanzkriterien:
 
 9.9.c – Architektur-Doku optional minimal aktualisieren
 Ziel:
-Falls REPOCONTEXT_ARCHITECTURE.md bereits Exporter aufführt, docs.py als umgesetzt darstellen.
+Falls architecture.md bereits Exporter aufführt, docs.py als umgesetzt darstellen.
 
 Akzeptanzkriterien:
 - Architektur-Doku widerspricht dem Code nicht.

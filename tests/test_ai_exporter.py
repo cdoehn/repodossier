@@ -330,8 +330,8 @@ def test_important_files_prioritizes_config_and_docs_before_large_test_files(tmp
         {
             "pyproject.toml": "[project]\nname = \"example\"\n",
             "README.md": "# Example\n",
-            "REPOCONTEXT_ARCHITECTURE.md": "# Architecture\n",
-            "REPOCONTEXT_SPEC_v1.3.txt": "SPEC\n",
+            "architecture.md": "# Architecture\n",
+            "planning/spec.md": "SPEC\n",
             "src/example/cli.py": "def main():\n    return 0\n",
             "tests/test_big_module.py": large_test_content,
         },
@@ -341,9 +341,9 @@ def test_important_files_prioritizes_config_and_docs_before_large_test_files(tmp
     important_files_section = rendered.split("## Important Files", 1)[1].split("## Symbol Index", 1)[0]
 
     assert important_files_section.index("- README.md") < important_files_section.index("- pyproject.toml")
-    assert important_files_section.index("- README.md") < important_files_section.index("- REPOCONTEXT_ARCHITECTURE.md")
-    assert important_files_section.index("- REPOCONTEXT_ARCHITECTURE.md") < important_files_section.index("- REPOCONTEXT_SPEC_v1.3.txt")
-    assert important_files_section.index("- REPOCONTEXT_SPEC_v1.3.txt") < important_files_section.index("- src/example/cli.py")
+    assert important_files_section.index("- README.md") < important_files_section.index("- architecture.md")
+    assert important_files_section.index("- architecture.md") < important_files_section.index("- planning/spec.md")
+    assert important_files_section.index("- planning/spec.md") < important_files_section.index("- src/example/cli.py")
     assert "- tests/test_big_module.py" not in important_files_section
 
 
@@ -891,4 +891,3 @@ def test_ai_export_masks_secret_values_and_reports_summary(monkeypatch):
     assert "Potential secrets masked: 1" in rendered
     assert "- API_KEY: 1" in rendered
     assert "def safe_function()" in rendered
-

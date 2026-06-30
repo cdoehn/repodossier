@@ -59,7 +59,7 @@ def make_repository_info(tmp_path: Path) -> RepositoryInfo:
         is_dirty=False,
         tracked_files=[
             TrackedFile(path=Path("README.md")),
-            TrackedFile(path=Path("REPOCONTEXT_SPEC_v1.3.txt")),
+            TrackedFile(path=Path("planning/spec.md")),
             TrackedFile(path=Path("docs/usage.md")),
             TrackedFile(path=Path("src/app.py")),
             TrackedFile(path=Path("full.txt")),
@@ -106,13 +106,13 @@ def test_documentation_file_detection_accepts_primary_documentation_files():
 
 def test_documentation_file_detection_accepts_architecture_and_spec_files():
     assert is_documentation_file("ARCHITECTURE.md")
-    assert is_documentation_file("REPOCONTEXT_ARCHITECTURE.md")
+    assert is_documentation_file("architecture.md")
     assert is_documentation_file("SPEC.md")
     assert is_documentation_file("SPEC.txt")
-    assert is_documentation_file("REPOCONTEXT_SPEC_v1.3.txt")
+    assert is_documentation_file("planning/spec.md")
 
-    assert categorize_documentation_file("REPOCONTEXT_ARCHITECTURE.md") == ARCHITECTURE_DOCUMENTATION_CATEGORY
-    assert categorize_documentation_file("REPOCONTEXT_SPEC_v1.3.txt") == SPECIFICATION_DOCUMENTATION_CATEGORY
+    assert categorize_documentation_file("architecture.md") == ARCHITECTURE_DOCUMENTATION_CATEGORY
+    assert categorize_documentation_file("planning/spec.md") == SPECIFICATION_DOCUMENTATION_CATEGORY
 
 
 def test_documentation_file_detection_accepts_tasks_roadmap_and_planning_files():
@@ -203,7 +203,7 @@ def test_render_docs_export_contains_required_sections_in_stable_order(tmp_path:
         tmp_path,
         [
             make_file(tmp_path, "README.md", content="# Readme\n"),
-            make_file(tmp_path, "REPOCONTEXT_SPEC_v1.3.txt", content="Spec\n"),
+            make_file(tmp_path, "planning/spec.md", content="Spec\n"),
         ],
     )
 
@@ -247,7 +247,7 @@ def test_render_docs_export_summary_groups_files_by_category(tmp_path: Path):
             make_file(tmp_path, "README.md", line_count=2, estimated_tokens=20),
             make_file(
                 tmp_path,
-                "REPOCONTEXT_ARCHITECTURE.md",
+                "architecture.md",
                 line_count=5,
                 estimated_tokens=50,
             ),
@@ -259,7 +259,7 @@ def test_render_docs_export_summary_groups_files_by_category(tmp_path: Path):
     assert "Primary documentation:\n- README.md — 2 lines, ~20 tokens" in rendered
     assert (
         "Architecture documentation:\n"
-        "- REPOCONTEXT_ARCHITECTURE.md — 5 lines, ~50 tokens"
+        "- architecture.md — 5 lines, ~50 tokens"
     ) in rendered
     assert "Other docs:\n- docs/usage.md — 7 lines, ~70 tokens" in rendered
     assert rendered.index("Primary documentation:") < rendered.index("Architecture documentation:")
@@ -383,7 +383,7 @@ def test_documentation_file_wraps_file_info_and_category(tmp_path: Path):
 
 def test_create_docs_export_context_filters_to_exportable_documentation_files(tmp_path: Path):
     readme = make_file(tmp_path, "README.md", line_count=2, estimated_tokens=8)
-    spec = make_file(tmp_path, "REPOCONTEXT_SPEC_v1.3.txt", line_count=3, estimated_tokens=12)
+    spec = make_file(tmp_path, "planning/spec.md", line_count=3, estimated_tokens=12)
     code = make_file(tmp_path, "src/app.py", line_count=10, estimated_tokens=40)
     generated = make_file(tmp_path, "full.txt", line_count=100, estimated_tokens=400)
     binary_doc = make_file(
@@ -400,7 +400,7 @@ def test_create_docs_export_context_filters_to_exportable_documentation_files(tm
 
     assert [document.relative_path.as_posix() for document in context.documentation_files] == [
         "README.md",
-        "REPOCONTEXT_SPEC_v1.3.txt",
+        "planning/spec.md",
     ]
     assert context.skipped_files == (binary_doc, generated)
     assert "Skipped binary documentation file: docs/manual.pdf" in context.warnings
