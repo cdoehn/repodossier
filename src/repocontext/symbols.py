@@ -24,6 +24,282 @@ class SymbolInfo:
     parent: str | None = None
 
 
+def _extract_bash_symbols_for_symbol_index(
+    path: object,
+    content: str | bytes | None = None,
+):
+    """Return Bash function symbols for shell sources, or None for other files."""
+
+    if not _is_bash_symbol_source(path, content):
+        return None
+
+    if isinstance(content, bytes):
+        content = content.decode("utf-8", errors="ignore")
+
+    if content is None:
+        try:
+            content = Path(path).read_text(encoding="utf-8", errors="ignore")
+        except (OSError, TypeError, ValueError):
+            content = ""
+
+    from .bash_symbols import discover_bash_functions
+
+    return [
+        _build_bash_symbol_for_index(function)
+        for function in discover_bash_functions(content, path=path)
+    ]
+
+
+def _is_bash_symbol_source(path: object, content: str | bytes | None = None) -> bool:
+    path_text = str(path).lower()
+
+    if path_text.endswith((".sh", ".bash")):
+        return True
+
+    if isinstance(content, bytes):
+        content = content.decode("utf-8", errors="ignore")
+
+    if not content:
+        return False
+
+    first_line = content.splitlines()[0].strip() if content.splitlines() else ""
+    if not first_line.startswith("#!"):
+        return False
+
+    parts = first_line[2:].strip().lower().replace("\\t", " ").split()
+    if not parts:
+        return False
+
+    executable = parts[0].rsplit("/", 1)[-1]
+    if executable in {"bash", "sh"}:
+        return True
+
+    if executable == "env":
+        for part in parts[1:]:
+            if part.startswith("-"):
+                continue
+            if part.rsplit("/", 1)[-1] in {"bash", "sh"}:
+                return True
+
+    return False
+
+
+
+
+def _build_bash_symbol_index_result(path: object, symbols: list[object]):
+    """Return Bash symbols in the same container shape as the symbol extractor."""
+
+    result_class = globals().get("FileSymbolIndex")
+    if result_class is None:
+        return symbols
+
+    return _construct_bash_symbol_index(result_class, path, symbols)
+
+
+def _construct_bash_symbol_index(result_class, path: object, symbols: list[object]):
+    from dataclasses import MISSING, fields, is_dataclass
+    from inspect import Parameter, signature
+
+    values = {}
+
+    if is_dataclass(result_class):
+        definitions = [
+            (field.name, field.default, field.default_factory)
+            for field in fields(result_class)
+        ]
+    else:
+        definitions = [
+            (name, parameter.default, MISSING)
+            for name, parameter in signature(result_class).parameters.items()
+            if name != "self"
+        ]
+
+    annotations = getattr(result_class, "__annotations__", {})
+
+    for name, default, default_factory in definitions:
+        value = _bash_symbol_index_field_value(name, path, symbols, annotations.get(name))
+        if value is not _MISSING_BASH_SYMBOL_FIELD:
+            values[name] = value
+            continue
+
+        has_default = default is not MISSING and default is not Parameter.empty
+        has_factory = default_factory is not MISSING
+
+        if has_default or has_factory:
+            continue
+
+        values[name] = _bash_symbol_fallback_value(name, annotations.get(name))
+
+    return result_class(**values)
+
+
+def _bash_symbol_index_field_value(name: str, path: object, symbols: list[object], annotation):
+    lower = name.lower()
+
+    if lower in {"path", "file", "filepath", "file_path", "relative_path", "source_path"}:
+        return str(path)
+
+    if lower in {"symbols", "items", "entries", "all_symbols"}:
+        return symbols
+
+    if lower in {"functions", "function_symbols"}:
+        return symbols
+
+    if lower in {"classes", "class_symbols", "methods", "method_symbols"}:
+        return []
+
+    if lower in {"symbol_count", "total_symbols", "count"}:
+        return len(symbols)
+
+    if lower in {"language", "source_language"}:
+        return _bash_language_value()
+
+    if lower in {"errors", "warnings"}:
+        return []
+
+    if lower in {"has_symbols", "contains_symbols"}:
+        return bool(symbols)
+
+    return _MISSING_BASH_SYMBOL_FIELD
+
+def _build_bash_symbol_for_index(function):
+    from dataclasses import MISSING, fields, is_dataclass
+    from inspect import Parameter, signature
+    from pathlib import Path
+
+    symbol_class = SymbolInfo
+    values = {}
+
+    if is_dataclass(symbol_class):
+        definitions = [
+            (field.name, field.default, field.default_factory)
+            for field in fields(symbol_class)
+        ]
+    else:
+        definitions = [
+            (name, parameter.default, MISSING)
+            for name, parameter in signature(symbol_class).parameters.items()
+            if name != "self"
+        ]
+
+    annotations = getattr(symbol_class, "__annotations__", {})
+
+    for name, default, default_factory in definitions:
+        value = _bash_symbol_field_value(name, function, annotations.get(name))
+        if value is not _MISSING_BASH_SYMBOL_FIELD:
+            values[name] = value
+            continue
+
+        has_default = default is not MISSING and default is not Parameter.empty
+        has_factory = default_factory is not MISSING
+
+        if has_default or has_factory:
+            continue
+
+        values[name] = _bash_symbol_fallback_value(name, annotations.get(name))
+
+    return symbol_class(**values)
+
+
+_MISSING_BASH_SYMBOL_FIELD = object()
+
+
+def _bash_symbol_field_value(name: str, function, annotation):
+    lower = name.lower()
+
+    if lower == "name":
+        return function.name
+
+    if lower in {"kind", "type", "symbol_type", "category"}:
+        return _bash_function_kind_value()
+
+    if lower == "language":
+        return _bash_language_value()
+
+    if lower in {"path", "file", "filepath", "file_path", "relative_path", "source_path"}:
+        return function.path or ""
+
+    if lower in {"line", "lineno", "line_number", "start_line"}:
+        return function.start_line
+
+    if lower in {"end_line", "stop_line"}:
+        return function.end_line
+
+    if lower in {"body_start_line", "body_start"}:
+        return function.body_start_line
+
+    if lower in {"body_end_line", "body_end"}:
+        return function.body_end_line
+
+    if lower == "signature":
+        return function.signature
+
+    if lower in {"qualname", "qualified_name", "full_name"}:
+        return function.name
+
+    if lower in {"parent", "container", "scope", "module", "class_name"}:
+        return None
+
+    if lower in {"children", "members", "decorators", "calls"}:
+        return []
+
+    return _MISSING_BASH_SYMBOL_FIELD
+
+
+def _bash_function_kind_value():
+    for enum_name in ("SymbolKind", "SymbolType", "SymbolCategory", "Kind"):
+        enum_class = globals().get(enum_name)
+        if enum_class is None:
+            continue
+
+        for member_name in ("FUNCTION", "Function", "function"):
+            if hasattr(enum_class, member_name):
+                return getattr(enum_class, member_name)
+
+    return "function"
+
+
+def _bash_language_value():
+    for enum_name in ("Language", "SourceLanguage"):
+        enum_class = globals().get(enum_name)
+        if enum_class is None:
+            continue
+
+        for member_name in ("BASH", "SHELL", "SH", "Bash", "Shell", "bash", "shell", "sh"):
+            if hasattr(enum_class, member_name):
+                return getattr(enum_class, member_name)
+
+    return "bash"
+
+
+def _bash_symbol_fallback_value(name: str, annotation):
+    lower = name.lower()
+    annotation_text = str(annotation).lower()
+
+    if "line" in lower or "count" in lower or annotation_text in {"<class 'int'>", "int"}:
+        return 0
+
+    if lower.startswith("is_") or annotation_text in {"<class 'bool'>", "bool"}:
+        return False
+
+    if any(marker in lower for marker in ("children", "members", "decorators", "calls")):
+        return []
+
+    if "list" in annotation_text or "sequence" in annotation_text:
+        return []
+
+    if "tuple" in annotation_text:
+        return ()
+
+    if "set" in annotation_text:
+        return set()
+
+    if annotation_text in {"<class 'str'>", "str"}:
+        return ""
+
+    return None
+
+
 @dataclass(frozen=True)
 class FileSymbolIndex:
     """Symbol extraction result for one file."""
@@ -270,6 +546,10 @@ def extract_symbols_from_file(path: str | Path) -> FileSymbolIndex:
     This function performs static parsing only. It does not import or
     execute the analyzed file.
     """
+    bash_symbols = _extract_bash_symbols_for_symbol_index(path, None)
+    if bash_symbols is not None:
+        return _build_bash_symbol_index_result(path, bash_symbols)
+
 
     file_path = Path(path)
     file_path_str = str(file_path)
