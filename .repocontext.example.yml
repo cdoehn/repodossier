@@ -23,3 +23,9 @@ limits:
   max_total_files: 500
   max_export_bytes: 2000000
   max_line_count: 2000
+
+exports:
+  split:
+    enabled: false
+    max_chars: 200000
+    strategy: heading

@@ -28,6 +28,7 @@ RepoContext is currently in early development.
 Implemented:
 
 - configuration via `.repocontext.yml`
+- split exports for large `full.txt`, `ai.txt`, `docs.txt`, and `changed.txt` files
 - Git repository detection
 - Git-tracked file discovery via `git ls-files`
 - text and binary file detection
@@ -50,7 +51,6 @@ Implemented:
 
 Planned but not complete yet:
 
-- split exports for very large repositories
 - Bash symbol and call graph support
 
 ## Installation
@@ -215,6 +215,82 @@ repocontext changed --no-diff
 The changed export can include modified, staged, deleted, renamed, and untracked non-ignored files. Generated RepoContext export files such as `full.txt`, `ai.txt`, `docs.txt`, and `changed.txt` are kept in `.gitignore` to avoid self-reference loops.
 
 
+### Split exports
+
+Large exports can be written as additional part files next to the complete export.
+
+The main export file is always still written in full. Split files are optional companion files, for example:
+
+```text
+full.txt
+full.part01.txt
+full.part02.txt
+```
+
+Enable split output for the supported export commands:
+
+```bash
+repocontext full --split
+repocontext export-ai --split
+repocontext export-docs --split
+repocontext changed --split
+```
+
+Choose a maximum raw character count per part:
+
+```bash
+repocontext full --split --split-max-chars 200000
+```
+
+Choose the splitting strategy:
+
+```bash
+repocontext export-ai --split --split-strategy heading
+repocontext export-ai --split --split-strategy plain
+```
+
+Supported strategies:
+
+- `heading`: prefers Markdown heading boundaries where possible
+- `plain`: splits by raw character count
+
+Disable split output even when enabled in configuration:
+
+```bash
+repocontext full --no-split
+```
+
+Output file names follow the source export name:
+
+```text
+full.part01.txt
+ai.part01.txt
+docs.part01.txt
+changed.part01.txt
+```
+
+For changed exports with a custom output path, the part files follow the custom name:
+
+```bash
+repocontext changed --output review-changes.txt --split
+```
+
+```text
+review-changes.part01.txt
+review-changes.part02.txt
+```
+
+Split exports can also be enabled through `.repocontext.yml`:
+
+```yaml
+exports:
+  split:
+    enabled: true
+    max_chars: 200000
+    strategy: heading
+```
+
+CLI options override the configuration file.
 ### Repository info
 
 ```bash
@@ -574,6 +650,12 @@ limits:
   max_total_files: 500
   max_export_bytes: 2000000
   max_line_count: 2000
+
+exports:
+  split:
+    enabled: false
+    max_chars: 200000
+    strategy: heading
 ```
 
 Supported sections:
@@ -586,6 +668,9 @@ Supported sections:
 - `limits.max_total_files`: limit the number of files considered for export after filtering.
 - `limits.max_export_bytes`: limit the generated export size.
 - `limits.max_line_count`: limit the number of exported lines per file.
+- `exports.split.enabled`: write additional `.partXX` files next to complete exports.
+- `exports.split.max_chars`: maximum raw export characters per split part.
+- `exports.split.strategy`: split strategy, either `heading` or `plain`.
 
 Include rules are additive. If at least one include rule is configured, a file is selected when it matches any include path or include glob. If no include rule is configured, files are included by default.
 
