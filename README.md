@@ -23,7 +23,7 @@ RepoContext is useful when you want to:
 
 ## Current status
 
-RepoContext is currently in early development.
+RepoContext 1.0 is the first stable release line for local CLI repository exports.
 
 Implemented:
 
@@ -51,7 +51,11 @@ Implemented:
 - Bash source detection, function discovery, symbol index integration, and static Bash call graph support
 
 
+
 Planned but not complete yet:
+
+None for Release 1.0.
+
 
 ## Installation
 
@@ -788,7 +792,7 @@ Current limitations:
 
 ## Roadmap
 
-High-level roadmap:
+Completed 1.0 roadmap:
 
 1. Full Export
 2. `.gitignore` integration

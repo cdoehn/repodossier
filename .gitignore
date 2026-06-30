@@ -71,7 +71,3 @@ changed.txt
 
 # Aider
 .aider*
-
-# Projekt bundle
-bundle_project.sh
-project_bundle.txt

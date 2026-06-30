@@ -28,7 +28,7 @@ Nur Release-Härtung, Doku, Smoke Tests, pipx-Validierung, kleinere CLI-Politur 
 - repocontext export-docs --help prüfen
 - repocontext changed --help prüfen
 - Prüfen, ob argparse-Texte verständlich sind.
-- Keine alten Begriffe wie Bundled Project verwenden.
+- Use RepoContext CLI exports for final checks; do not use deprecated snapshot scripts.
 - Keine toten Optionen dokumentieren.
 - Keine falschen Beispiele stehen lassen.
 
@@ -219,7 +219,7 @@ Nur Release-Härtung, Doku, Smoke Tests, pipx-Validierung, kleinere CLI-Politur 
   - alle Tests grün
 
 18.6.b RepoContext-Exports mit RepoContext selbst erzeugen
-- Kein bundle_project.sh verwenden.
+- Use RepoContext CLI exports for final checks; do not use deprecated snapshot scripts.
 - Stattdessen:
   repocontext full
   repocontext export-ai
@@ -231,7 +231,7 @@ Nur Release-Härtung, Doku, Smoke Tests, pipx-Validierung, kleinere CLI-Politur 
   - docs.txt plausibel
   - changed.txt plausibel
   - keine Secrets sichtbar
-  - keine alten Begriffe wie Bundled Project
+  - Use RepoContext CLI exports for final checks; do not use deprecated snapshot scripts.
   - keine unnötigen riesigen Artefakte
 
 18.6.c Git-Status prüfen

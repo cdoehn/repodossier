@@ -10,7 +10,7 @@ ai.txt soll nicht den kompletten Source-Dump ersetzen, sondern eine verdichtete 
 - Welche Funktionen/Methoden rufen sich gegenseitig auf?
 
 Wichtig:
-- Keine bundle_project.sh-Aufrufe mehr.
+- Use RepoContext CLI exports for final checks; do not use deprecated snapshot scripts.
 - Milestone-Dateien nicht als Fortschrittswahrheit benutzen.
 - Fortschritt aus Code, Tests und aktuellem full.txt ableiten.
 - TASKS.md nur anfassen, wenn ausdrücklich verlangt.
@@ -395,7 +395,7 @@ Testfälle:
 - CLI-Lauf erzeugt ai.txt
 - ai.txt enthält AI CONTEXT
 - bestehende full.txt-Erzeugung bleibt erhalten
-- kein bundle_project.sh nötig
+- Use RepoContext CLI exports for final checks; do not use deprecated snapshot scripts.
 
 Akzeptanzkriterien:
 - CLI-Test grün

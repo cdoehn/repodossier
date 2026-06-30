@@ -23,7 +23,7 @@ Wichtig:
 - Nur Git-tracked Dateien berücksichtigen.
 - Binary-Datenbankdateien dürfen analysiert werden, aber nicht als Source Dump ausgegeben werden.
 - Bestehende full.txt, ai.txt und docs.txt Funktionalität darf nicht regressieren.
-- Kein bundle_project.sh verwenden.
+- Use RepoContext CLI exports for final checks; do not use deprecated snapshot scripts.
 - Tests semantisch passend einsortieren.
 
 ====================================================================

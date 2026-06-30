@@ -15,7 +15,7 @@ docs.txt soll nur dokumentationsnahe Dateien enthalten, insbesondere:
 - relevante Planungs-/Roadmap-Dateien, sofern Git-tracked
 
 Wichtig:
-- Kein bundle_project.sh mehr verwenden.
+- Use RepoContext CLI exports for final checks; do not use deprecated snapshot scripts.
 - TASKS.md nur lesen/exportieren, nicht ändern.
 - Milestone-Dateien nicht als Fortschrittswahrheit benutzen.
 - Fortschritt aus Code, Tests und aktuellem full.txt/ai.txt ableiten.

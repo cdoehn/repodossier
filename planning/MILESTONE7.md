@@ -304,7 +304,7 @@ Empfohlene Reihenfolge:
 - repocontext --version
 - repocontext info
 - repocontext full/export gegen echtes Repo testen
-- ./bundle_project.sh
+- Use RepoContext CLI exports for project snapshots and final checks.
 
 Definition of Done für Milestone 7:
 - Python-Funktionsaufrufe werden per AST erkannt.

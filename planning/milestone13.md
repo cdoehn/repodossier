@@ -335,7 +335,7 @@ Umsetzung:
   - Standardaufruf
   - Branch-Vergleich
   - Beispielausgabe
-- Keine veralteten Hinweise auf bundle_project.sh
+- Use RepoContext CLI exports for final checks; do not use deprecated snapshot scripts.
 
 Beispiel-Kommandos:
 - `repocontext changed`
@@ -345,7 +345,7 @@ Beispiel-Kommandos:
 Tests:
 - README enthält Changed Export
 - README enthält `repocontext changed`
-- README enthält keinen neuen bundle_project.sh-Hinweis
+- Use RepoContext CLI exports for final checks; do not use deprecated snapshot scripts.
 
 ---
 
@@ -416,7 +416,7 @@ Checkliste:
 - CLI-Aufruf vorhanden
 - Tests grün
 - Dokumentation aktualisiert
-- Keine bundle_project.sh-Nutzung
+- Use RepoContext CLI exports for final checks; do not use deprecated snapshot scripts.
 - Keine unnötigen Hilfsdateien
 - Git status sauber nach Commit
 

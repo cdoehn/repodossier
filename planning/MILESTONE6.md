@@ -292,7 +292,7 @@ Nicht Teil von Milestone 6:
 - repocontext info
 
 6.7.h Bundle erzeugen
-- ./bundle_project.sh
+- Use RepoContext CLI exports for project snapshots and final checks.
 
 
 Empfohlene Implementierungs-Reihenfolge:

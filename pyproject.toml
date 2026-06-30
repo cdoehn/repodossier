@@ -13,7 +13,7 @@ authors = [{ name = "RepoContext Authors", email = "team@example.com" }]
 license = { file = "LICENSE" }
 requires-python = ">=3.9"
 classifiers = [
-    "Development Status :: 2 - Pre-Alpha",
+    "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",

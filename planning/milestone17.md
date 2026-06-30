@@ -403,7 +403,7 @@ Document Bash analysis support
   - repocontext export-ai
   - repocontext export-docs
   - repocontext changed, falls sinnvoll und verfügbar
-- Kein bundle_project.sh verwenden.
+- Use RepoContext CLI exports for final checks; do not use deprecated snapshot scripts.
 
 17.8.b – Generierte Exporte prüfen
 Zu prüfen:

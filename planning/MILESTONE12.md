@@ -578,7 +578,7 @@ Milestone 12 – Important File Ranking
 
 14.1.c Exporte erzeugen
 - Wichtig:
-  - Kein bundle_project.sh mehr verwenden
+  - Use RepoContext CLI exports for final checks; do not use deprecated snapshot scripts.
 - Stattdessen:
   - repocontext full
   - repocontext export-ai
@@ -693,7 +693,7 @@ Milestone 12 – Important File Ranking
 - Gesamte Testsuite grün
 
 16.1.e Projektregeln
-- Kein bundle_project.sh verwenden
+- Use RepoContext CLI exports for final checks; do not use deprecated snapshot scripts.
 - RepoContext CLI für Abschlussprüfung verwenden
 - Keine unnötigen Konfigurationsfeatures aus Milestone 15 vorziehen
 - Keine Split-Export-Features aus Milestone 16 vorziehen

@@ -530,7 +530,7 @@ Split Export wird dokumentiert.
 - Hinweis: Originaldatei bleibt vollständig erhalten.
 - Hinweis: Part-Dateien sind Zusatzdateien für LLM-Uploads.
 - Hinweis: CLI überschreibt Config.
-- Keine Erwähnung von bundle_project.sh.
+- Use RepoContext CLI exports for final checks; do not use deprecated snapshot scripts.
 
 ### Beispiel Config
 
