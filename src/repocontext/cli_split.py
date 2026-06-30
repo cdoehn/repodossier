@@ -13,6 +13,7 @@ from .splitter import split_text
 
 
 _ORIGINAL_PATH_WRITE_TEXT: Callable[..., int] | None = None
+_ORIGINAL_PATH_REPLACE: Callable[..., Any] | None = None
 
 
 _SPLIT_OUTPUTS_BY_COMMAND: dict[str, tuple[str, ...]] = {
@@ -138,13 +139,19 @@ def _enable_split_write_interceptor(
     split_config: SplitExportConfig,
     output_names: tuple[str, ...],
 ) -> Callable[[], None]:
-    global _ORIGINAL_PATH_WRITE_TEXT
+    global _ORIGINAL_PATH_REPLACE, _ORIGINAL_PATH_WRITE_TEXT
 
     if _ORIGINAL_PATH_WRITE_TEXT is not None:
         original_write_text = _ORIGINAL_PATH_WRITE_TEXT
     else:
         original_write_text = Path.write_text
         _ORIGINAL_PATH_WRITE_TEXT = original_write_text
+
+    if _ORIGINAL_PATH_REPLACE is not None:
+        original_replace = _ORIGINAL_PATH_REPLACE
+    else:
+        original_replace = Path.replace
+        _ORIGINAL_PATH_REPLACE = original_replace
 
     def patched_write_text(self: Path, data: str, *args: Any, **kwargs: Any) -> int:
         written = original_write_text(self, data, *args, **kwargs)
@@ -160,14 +167,34 @@ def _enable_split_write_interceptor(
 
         return written
 
+    def patched_replace(self: Path, target: Any, *args: Any, **kwargs: Any) -> Any:
+        replaced_path = original_replace(self, target, *args, **kwargs)
+
+        target_path = Path(target)
+        if target_path.name in output_names and target_path.is_file():
+            rendered_text = target_path.read_text(encoding="utf-8")
+            _write_split_parts_with_original_writer(
+                output_path=target_path,
+                text=rendered_text,
+                split_config=split_config,
+                original_write_text=original_write_text,
+            )
+
+        return replaced_path
+
     Path.write_text = patched_write_text  # type: ignore[method-assign]
+    Path.replace = patched_replace  # type: ignore[method-assign]
 
     def restore() -> None:
-        global _ORIGINAL_PATH_WRITE_TEXT
+        global _ORIGINAL_PATH_REPLACE, _ORIGINAL_PATH_WRITE_TEXT
 
         if _ORIGINAL_PATH_WRITE_TEXT is not None:
             Path.write_text = _ORIGINAL_PATH_WRITE_TEXT  # type: ignore[method-assign]
             _ORIGINAL_PATH_WRITE_TEXT = None
+
+        if _ORIGINAL_PATH_REPLACE is not None:
+            Path.replace = _ORIGINAL_PATH_REPLACE  # type: ignore[method-assign]
+            _ORIGINAL_PATH_REPLACE = None
 
     return restore
 
