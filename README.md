@@ -619,6 +619,19 @@ Main modules:
 | `repocontext.exporters.docs` | documentation-only `docs.txt` context creation, rendering, and writing |
 | `repocontext.models` | shared data models |
 
+## Bash Support
+
+RepoContext includes static Bash and shell script analysis for common project scripts.
+
+Supported Bash analysis includes:
+
+- Bash source detection for `.sh`, `.bash`, and Bash or POSIX shell shebang files
+- Bash function discovery for common function forms such as `deploy() { ... }` and `function deploy { ... }`
+- Bash functions in the symbol index
+- simple internal Bash function calls in the Bash call graph
+
+The Bash analysis is intentionally static and conservative. RepoContext reads shell source text but does not execute scripts, source files, expand variables, run `eval`, or attempt to implement a complete Bash grammar.
+
 ## Configuration with `.repocontext.yml`
 
 RepoContext can read an optional `.repocontext.yml` file from the repository root. This file lets you keep common export settings in the project instead of repeating the same command-line options.
