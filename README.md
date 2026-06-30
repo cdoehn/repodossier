@@ -48,10 +48,10 @@ Implemented:
 - multi-signal important-file ranking for AI exports
 - `changed.txt` export for git diffs, changed file contents, and branch comparisons
 - CLI aliases for full and AI exports
+- Bash source detection, function discovery, symbol index integration, and static Bash call graph support
+
 
 Planned but not complete yet:
-
-- Bash symbol and call graph support
 
 ## Installation
 
