@@ -119,6 +119,21 @@ def build_ai_export_context(repository_root: Path | str) -> AIExportContext:
     return create_ai_export_context(build_full_export_context(repository_root))
 
 
+
+def _insert_ai_config_summary_after_heading(rendered: str) -> str:
+    """Insert the RepoContext config summary without replacing the AI export title."""
+
+    summary = ai_config_summary_section(get_active_config()).rstrip()
+    if not summary:
+        return rendered
+
+    heading = "# AI CONTEXT\n"
+    if rendered.startswith(heading):
+        remainder = rendered[len(heading):].lstrip("\n")
+        return f"{heading}\n{summary}\n\n{remainder}"
+
+    return f"{summary}\n\n{rendered}"
+
 def _render_ai_export_unmasked(context: AIExportContext) -> str:
     """Render the compact AI export text."""
 
@@ -134,7 +149,7 @@ def _render_ai_export_unmasked(context: AIExportContext) -> str:
     ]
 
     rendered = "\n\n".join(section.rstrip() for section in sections).rstrip() + "\n"
-    return ai_config_summary_section(get_active_config()) + "\n" + rendered
+    return _insert_ai_config_summary_after_heading(rendered)
 
 
 
