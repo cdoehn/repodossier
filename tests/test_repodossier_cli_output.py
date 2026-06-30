@@ -21,7 +21,7 @@ def test_repodossier_help_uses_repodossier_branding():
 
     assert "RepoDossier" in combined
     assert "repodossier" in combined
-    assert "RepoDossier" not in combined
+    assert "RepoContext" not in combined
 
 
 def test_repodossier_module_help_uses_current_command_examples():
@@ -45,9 +45,9 @@ def test_legacy_repodossier_console_script_is_still_declared():
     assert scripts["repodossier"] == "repodossier.cli:main"
 
 
-def test_legacy_repodossier_module_help_still_runs():
+def test_legacy_repocontext_module_help_still_runs():
     result = subprocess.run(
-        [sys.executable, "-m", "repodossier", "--help"],
+        [sys.executable, "-m", "repocontext", "--help"],
         check=False,
         capture_output=True,
         text=True,
@@ -57,4 +57,4 @@ def test_legacy_repodossier_module_help_still_runs():
     combined = result.stdout + result.stderr
 
     assert "RepoDossier" in combined
-    assert "RepoDossier" not in combined
+    assert "RepoContext" not in combined

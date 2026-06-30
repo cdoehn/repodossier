@@ -35,6 +35,7 @@ ALLOWED_LEGACY_TEXT_PATHS = {
     "src/repocontext/cli.py",
     "src/repodossier/config.py",
     "tests/test_repodossier_cli_alias.py",
+    "tests/test_repodossier_cli_output.py",
     "tests/test_repodossier_legacy_boundaries.py",
     "tests/test_repodossier_legacy_config.py",
     "tests/test_repodossier_naming_guard.py",
