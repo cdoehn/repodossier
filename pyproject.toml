@@ -6,10 +6,10 @@ build-backend = "setuptools.build_meta"
 dependencies = [
     "PyYAML>=6.0",
 ]
-name = "repocontext"
+name = "repodossier"
 version = "1.0.0"
 description = "AI-friendly exports of Git repositories for large language models."
-authors = [{ name = "RepoContext Authors", email = "team@example.com" }]
+authors = [{ name = "RepoDossier Authors", email = "team@example.com" }]
 license = { file = "LICENSE" }
 requires-python = ">=3.9"
 classifiers = [
@@ -26,8 +26,8 @@ classifiers = [
 keywords = ["git", "export", "ai", "context"]
 
 [project.scripts]
-repocontext = "repocontext.cli:main"
-
+repodossier = "repodossier.cli:main"
+repocontext = "repodossier.cli:main"
 [project.optional-dependencies]
 dev = [
     "pytest>=7.4",
@@ -38,7 +38,7 @@ package-dir = {"" = "src"}
 
 [tool.setuptools.packages.find]
 where = ["src"]
-include = ["repocontext*"]
+include = ["repocontext*", "repodossier*"]
 
 [tool.pytest.ini_options]
 testpaths = [
