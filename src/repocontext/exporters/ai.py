@@ -1040,10 +1040,15 @@ def _ai_symbol_source_path_is_allowed(file_info: object, config: object) -> bool
     """Return whether a file may be used as AI symbol analysis input."""
 
     size_bytes = getattr(file_info, "size_bytes", None)
-    if size_bytes is None:
-        return True
+    if size_bytes is not None and not is_file_size_allowed(size_bytes, config):
+        return False
 
-    return is_file_size_allowed(size_bytes, config)
+    max_line_count = getattr(getattr(config, "limits", None), "max_line_count", None)
+    line_count = getattr(file_info, "line_count", None)
+    if max_line_count is not None and line_count is not None and line_count > max_line_count:
+        return False
+
+    return True
 
 def _symbol_index_source_paths(context: AIExportContext) -> tuple[Path, ...]:
     """Return Python source paths from scanned export data."""
