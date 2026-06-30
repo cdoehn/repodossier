@@ -339,7 +339,10 @@ def render_changed_export(*args: object, **kwargs: object) -> str:
     rendered = _render_changed_export_unmasked(*args, **kwargs)
     masked_text, findings = mask_secrets_in_text(rendered, "changed.txt")
     secret_section = _format_changed_secret_detection_section(findings)
-    return _append_changed_secret_detection_section(masked_text, secret_section)
+    return _append_bash_call_graph_section_to_export(
+        _append_changed_secret_detection_section(masked_text, secret_section),
+        locals(),
+    )
 def _write_changed_export_without_export_secret_safety_net(
     repo_path: str | Path = ".",
     output_path: str | Path = "changed.txt",
@@ -500,3 +503,222 @@ def render_changed_export(*args: object, **kwargs: object) -> str:
     )
     return _apply_changed_max_export_bytes_limit(rendered)
 
+
+def _append_bash_call_graph_section_to_export(export_text: object, context: dict[str, object]) -> object:
+    """Append Bash call graph information to text exports when shell files are present."""
+
+    if not isinstance(export_text, str):
+        return export_text
+
+    if "Bash Call Graph" in export_text:
+        return export_text
+
+    bash_files = _collect_bash_call_graph_files_from_export_context(context)
+    if not bash_files:
+        return export_text
+
+    from .bash_call_graph import discover_bash_call_graph_for_files
+
+    edges = discover_bash_call_graph_for_files(bash_files)
+    if not edges:
+        return export_text
+
+    lines = ["## Bash Call Graph", ""]
+
+    for edge in edges:
+        caller = _format_bash_call_endpoint(edge.caller_path, edge.caller)
+        callee = _format_bash_call_endpoint(edge.callee_path, edge.callee)
+        lines.append(f"- {caller} -> {callee}")
+
+    return export_text.rstrip() + "\n\n" + "\n".join(lines) + "\n"
+
+
+def _format_bash_call_endpoint(path: object, name: str) -> str:
+    if path:
+        return f"{path}:{name}"
+
+    return name
+
+
+def _collect_bash_call_graph_files_from_export_context(context: dict[str, object]) -> dict[str, str]:
+    collected: dict[str, str] = {}
+    seen: set[int] = set()
+
+    for value in context.values():
+        _collect_bash_call_graph_files_from_value(value, collected, seen, depth=0)
+
+    return collected
+
+
+def _collect_bash_call_graph_files_from_value(
+    value: object,
+    collected: dict[str, str],
+    seen: set[int],
+    depth: int,
+) -> None:
+    if depth > 5:
+        return
+
+    if value is None:
+        return
+
+    if isinstance(value, (str, bytes, int, float, bool)):
+        return
+
+    value_id = id(value)
+    if value_id in seen:
+        return
+    seen.add(value_id)
+
+    path_text, content = _bash_call_graph_path_and_content_from_object(value)
+    if path_text is not None and content is not None and _is_bash_call_graph_source(path_text, content):
+        collected.setdefault(path_text, content)
+        return
+
+    if isinstance(value, dict):
+        path_text, content = _bash_call_graph_path_and_content_from_mapping(value)
+        if path_text is not None and content is not None and _is_bash_call_graph_source(path_text, content):
+            collected.setdefault(path_text, content)
+
+        for key, item in value.items():
+            if isinstance(key, (str, bytes)) and isinstance(item, (str, bytes)):
+                key_text = key.decode("utf-8", errors="ignore") if isinstance(key, bytes) else key
+                item_text = item.decode("utf-8", errors="ignore") if isinstance(item, bytes) else item
+                if _is_bash_call_graph_source(key_text, item_text):
+                    collected.setdefault(key_text, item_text)
+                    continue
+
+            _collect_bash_call_graph_files_from_value(item, collected, seen, depth + 1)
+
+        return
+
+    if isinstance(value, (list, tuple, set, frozenset)):
+        for item in value:
+            _collect_bash_call_graph_files_from_value(item, collected, seen, depth + 1)
+
+        return
+
+    if hasattr(value, "__dict__"):
+        for item in vars(value).values():
+            _collect_bash_call_graph_files_from_value(item, collected, seen, depth + 1)
+
+
+def _bash_call_graph_path_and_content_from_mapping(mapping: dict[object, object]) -> tuple[str | None, str | None]:
+    path_value = None
+    content_value = None
+
+    for key, value in mapping.items():
+        key_text = str(key).lower()
+
+        if path_value is None and key_text in {
+            "path",
+            "file",
+            "filepath",
+            "file_path",
+            "relative_path",
+            "source_path",
+        }:
+            path_value = value
+
+        if content_value is None and key_text in {
+            "content",
+            "text",
+            "source",
+            "source_text",
+            "raw_text",
+            "body",
+        }:
+            content_value = value
+
+    return _normalize_bash_call_graph_path_and_content(path_value, content_value)
+
+
+def _bash_call_graph_path_and_content_from_object(value: object) -> tuple[str | None, str | None]:
+    path_value = None
+    content_value = None
+
+    for attr in ("path", "file", "filepath", "file_path", "relative_path", "source_path"):
+        if hasattr(value, attr):
+            path_value = getattr(value, attr)
+            break
+
+    for attr in ("content", "text", "source", "source_text", "raw_text", "body"):
+        if hasattr(value, attr):
+            content_value = getattr(value, attr)
+            break
+
+    if content_value is None and isinstance(path_value, (str, bytes)):
+        path_text = path_value.decode("utf-8", errors="ignore") if isinstance(path_value, bytes) else path_value
+        path_obj = Path(path_text)
+        if path_obj.is_file() and _is_bash_call_graph_source(str(path_obj), ""):
+            try:
+                content_value = path_obj.read_text(encoding="utf-8", errors="ignore")
+            except OSError:
+                content_value = None
+
+    if content_value is None and isinstance(value, Path) and value.is_file():
+        path_value = value
+        if _is_bash_call_graph_source(str(value), ""):
+            try:
+                content_value = value.read_text(encoding="utf-8", errors="ignore")
+            except OSError:
+                content_value = None
+
+    return _normalize_bash_call_graph_path_and_content(path_value, content_value)
+
+
+def _normalize_bash_call_graph_path_and_content(
+    path_value: object,
+    content_value: object,
+) -> tuple[str | None, str | None]:
+    if path_value is None or content_value is None:
+        return None, None
+
+    if isinstance(path_value, bytes):
+        path_text = path_value.decode("utf-8", errors="ignore")
+    else:
+        path_text = str(path_value)
+
+    if isinstance(content_value, bytes):
+        content = content_value.decode("utf-8", errors="ignore")
+    else:
+        content = str(content_value)
+
+    return path_text, content
+
+
+def _is_bash_call_graph_source(path: str, content: str | bytes | None = None) -> bool:
+    lowered = path.lower()
+    if lowered.endswith((".sh", ".bash")):
+        return True
+
+    if isinstance(content, bytes):
+        content = content.decode("utf-8", errors="ignore")
+
+    if not content:
+        return False
+
+    lines = content.splitlines()
+    if not lines:
+        return False
+
+    first_line = lines[0].strip()
+    if not first_line.startswith("#!"):
+        return False
+
+    parts = first_line[2:].strip().lower().replace("\t", " ").split()
+    if not parts:
+        return False
+
+    executable = parts[0].rsplit("/", 1)[-1]
+    if executable in {"bash", "sh"}:
+        return True
+
+    if executable == "env":
+        for part in parts[1:]:
+            if part.startswith("-"):
+                continue
+            if part.rsplit("/", 1)[-1] in {"bash", "sh"}:
+                return True
+
+    return False
