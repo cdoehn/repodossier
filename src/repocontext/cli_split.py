@@ -18,6 +18,7 @@ _ORIGINAL_PATH_WRITE_TEXT: Callable[..., int] | None = None
 _SPLIT_OUTPUTS_BY_COMMAND: dict[str, tuple[str, ...]] = {
     "full": ("full.txt",),
     "export-ai": ("ai.txt",),
+    "export-docs": ("docs.txt",),
 }
 
 
@@ -94,6 +95,7 @@ def enable_split_write_interceptor_for_args(
 
     - ``full`` -> ``full.partXX.txt``
     - ``export-ai`` -> ``ai.partXX.txt``
+    - ``export-docs`` -> ``docs.partXX.txt``
     """
 
     resolved_output_names = output_names
