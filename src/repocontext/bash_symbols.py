@@ -66,7 +66,7 @@ def discover_bash_functions(
     """Discover Bash function definitions without executing shell code."""
 
     path_text = str(path) if path is not None else None
-    lines = content.splitlines()
+    lines = _mask_bash_heredoc_lines(content.splitlines())
     functions: list[BashFunction] = []
 
     line_index = 0
@@ -193,3 +193,60 @@ def _iter_code_chars(line: str):
             continue
 
         yield char
+
+
+def _mask_bash_heredoc_lines(lines: list[str]) -> list[str]:
+    """Blank heredoc bodies so fake functions inside heredocs are ignored."""
+
+    masked: list[str] = []
+    active_delimiter: str | None = None
+
+    for line in lines:
+        if active_delimiter is not None:
+            if line.strip() == active_delimiter:
+                active_delimiter = None
+            masked.append("")
+            continue
+
+        delimiter = _extract_bash_heredoc_delimiter(line)
+        masked.append(line)
+
+        if delimiter is not None:
+            active_delimiter = delimiter
+
+    return masked
+
+
+def _extract_bash_heredoc_delimiter(line: str) -> str | None:
+    code_line = _strip_unquoted_comment(line)
+    index = code_line.find("<<")
+
+    if index == -1:
+        return None
+
+    index += 2
+    if index < len(code_line) and code_line[index] == "-":
+        index += 1
+
+    while index < len(code_line) and code_line[index].isspace():
+        index += 1
+
+    if index >= len(code_line):
+        return None
+
+    quote = code_line[index] if code_line[index] in {"'", '"'} else ""
+    if quote:
+        index += 1
+        end = code_line.find(quote, index)
+        if end == -1:
+            return None
+        delimiter = code_line[index:end]
+    else:
+        end = index
+        while end < len(code_line) and not code_line[end].isspace() and code_line[end] not in ";|&":
+            end += 1
+        delimiter = code_line[index:end]
+
+    delimiter = delimiter.strip()
+    return delimiter or None
+

@@ -115,3 +115,61 @@ def test_extract_bash_functions_alias_matches_discovery():
 """
 
     assert extract_bash_functions(script) == discover_bash_functions(script)
+
+
+def test_ignores_function_like_text_inside_heredocs():
+    script = """real_func() {
+  cat <<EOF
+fake_func() {
+  echo fake
+}
+EOF
+  echo done
+}
+
+after_func() {
+  echo after
+}
+"""
+
+    functions = discover_bash_functions(script)
+
+    assert [function.name for function in functions] == ["real_func", "after_func"]
+
+
+def test_tolerates_subshells_and_grouping_inside_functions():
+    script = """grouped_func() {
+  (
+    echo in subshell
+  )
+  {
+    echo in group
+  }
+}
+
+after_grouped_func() {
+  echo after
+}
+"""
+
+    functions = discover_bash_functions(script)
+
+    assert [(function.name, function.start_line, function.end_line) for function in functions] == [
+        ("grouped_func", 1, 8),
+        ("after_grouped_func", 10, 12),
+    ]
+
+
+def test_rejects_invalid_bash_function_names():
+    script = """123_invalid() {
+  echo nope
+}
+
+valid_function() {
+  echo ok
+}
+"""
+
+    functions = discover_bash_functions(script)
+
+    assert [function.name for function in functions] == ["valid_function"]

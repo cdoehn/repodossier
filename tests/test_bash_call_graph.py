@@ -134,3 +134,48 @@ def test_ignores_unknown_external_commands_even_when_they_look_like_calls():
     edges = discover_bash_call_graph(script)
 
     assert edges == []
+
+
+def test_ignores_calls_inside_heredocs():
+    script = """main() {
+  cat <<EOF
+deploy_app
+EOF
+  echo done
+}
+
+deploy_app() {
+  echo deploy
+}
+"""
+
+    edges = discover_bash_call_graph(script)
+
+    assert edges == []
+
+
+def test_detects_calls_inside_subshells_and_groups():
+    script = """main() {
+  (
+    build_assets
+  )
+  {
+    deploy_app
+  }
+}
+
+build_assets() {
+  echo build
+}
+
+deploy_app() {
+  echo deploy
+}
+"""
+
+    edges = discover_bash_call_graph(script)
+
+    assert _edge_set(edges) == {
+        ("main", "build_assets"),
+        ("main", "deploy_app"),
+    }
