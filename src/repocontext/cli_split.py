@@ -19,6 +19,7 @@ _SPLIT_OUTPUTS_BY_COMMAND: dict[str, tuple[str, ...]] = {
     "full": ("full.txt",),
     "export-ai": ("ai.txt",),
     "export-docs": ("docs.txt",),
+    "changed": ("changed.txt",),
 }
 
 
@@ -96,6 +97,7 @@ def enable_split_write_interceptor_for_args(
     - ``full`` -> ``full.partXX.txt``
     - ``export-ai`` -> ``ai.partXX.txt``
     - ``export-docs`` -> ``docs.partXX.txt``
+    - ``changed`` -> ``changed.partXX.txt`` or custom ``--output`` parts
     """
 
     resolved_output_names = output_names
@@ -123,6 +125,10 @@ def _output_names_for_args(args: argparse.Namespace) -> tuple[str, ...] | None:
     command_name = _selected_command_name(args)
     if command_name is None:
         return None
+
+    if command_name == "changed":
+        output = getattr(args, "output", None) or "changed.txt"
+        return (Path(str(output)).name,)
 
     return _SPLIT_OUTPUTS_BY_COMMAND.get(command_name)
 
