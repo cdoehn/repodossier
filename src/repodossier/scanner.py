@@ -129,6 +129,32 @@ def detect_language_from_filename(path: Path | str) -> Optional[str]:
 
     return _FILENAME_LANGUAGE_MAP.get(filename)
 
+def detect_language(
+    path: Path | str,
+    content_sample: str | bytes | None = None,
+) -> Optional[str]:
+    """
+    Infer a file's language from filename, extension, and optional text content.
+
+    This is the central language-detection API used by the scanner. The older
+    ``detect_language_from_extension`` and ``detect_language_from_filename``
+    helpers remain available as compatibility wrappers for existing callers and
+    tests.
+
+    The first implementation keeps the existing conservative language labels
+    and only uses ``content_sample`` for already-supported Bash/shebang
+    detection. Broader content heuristics are added in later Milestone 2
+    patches.
+    """
+    if is_bash_source_file(path, content_sample):
+        return "bash"
+
+    extension_language = detect_language_from_extension(path)
+    if extension_language is not None:
+        return extension_language
+
+    return detect_language_from_filename(path)
+
 
 def is_text_file(path: Path | str, sample_size: int = 1024) -> bool:
     """
@@ -385,9 +411,7 @@ def scan_single_file(repository_root: Path | str, relative_path: Path | str) -> 
 
     is_binary = is_binary_file(absolute_file_path)
     is_text = is_text_file(absolute_file_path)
-    detected_language = detect_language_from_extension(relative_file_path)
-    if detected_language is None:
-        detected_language = detect_language_from_filename(relative_file_path)
+    detected_language = detect_language(relative_file_path)
 
     if not is_text and not is_binary:
         return FileInfo(
@@ -412,6 +436,7 @@ def scan_single_file(repository_root: Path | str, relative_path: Path | str) -> 
             empty_line_count = count_empty_lines(absolute_file_path)
             estimated_token_count = estimate_tokens(absolute_file_path)
             content = load_text_content(absolute_file_path)
+            detected_language = detect_language(relative_file_path, content)
             if detected_language == "python":
                 comment_line_count = count_python_comment_lines(absolute_file_path)
             elif detected_language == "bash":
