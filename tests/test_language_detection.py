@@ -10,6 +10,7 @@ from repodossier.scanner import (
     detect_language,
     detect_language_from_extension,
     detect_language_from_filename,
+    detect_language_from_shebang,
     scan_single_file,
 )
 
@@ -93,3 +94,90 @@ def test_compatibility_language_helpers_remain_available() -> None:
     assert detect_language_from_filename("README") == "markdown"
     assert detect_language_from_filename("LICENSE") == "text"
     assert detect_language_from_filename("README.md") is None
+
+
+@pytest.mark.parametrize(
+    ("content", "expected"),
+    [
+        ("#!/usr/bin/env python\nprint('ok')\n", "python"),
+        ("#!/usr/bin/env python3\nprint('ok')\n", "python"),
+        ("#!/usr/bin/python\nprint('ok')\n", "python"),
+        ("#!/usr/bin/python3\nprint('ok')\n", "python"),
+        ("#!/usr/bin/env python3.12\nprint('ok')\n", "python"),
+        ("#!/usr/bin/env bash\necho ok\n", "bash"),
+        ("#!/bin/bash\necho ok\n", "bash"),
+        ("#!/usr/bin/bash\necho ok\n", "bash"),
+        ("#!/bin/sh\necho ok\n", "bash"),
+        ("#!/usr/bin/env sh\necho ok\n", "bash"),
+        ("#!/usr/bin/env node\nconsole.log('ok')\n", "javascript"),
+        ("#!/usr/bin/node\nconsole.log('ok')\n", "javascript"),
+    ],
+)
+def test_detect_language_from_shebang_recognizes_supported_interpreters(
+    content: str,
+    expected: str,
+) -> None:
+    assert detect_language_from_shebang(content) == expected
+
+
+def test_detect_language_from_shebang_accepts_bytes() -> None:
+    assert detect_language_from_shebang(b"#!/usr/bin/env python3\nprint('ok')\n") == "python"
+
+
+@pytest.mark.parametrize(
+    "content",
+    [
+        "",
+        "print('ok')\n",
+        " #!/usr/bin/env python3\nprint('ok')\n",
+        "#!/usr/bin/env ruby\nputs 'ok'\n",
+        "#!/usr/bin/env\n",
+    ],
+)
+def test_detect_language_from_shebang_stays_conservative_for_unknown_or_invalid_shebangs(
+    content: str,
+) -> None:
+    assert detect_language_from_shebang(content) is None
+
+
+@pytest.mark.parametrize(
+    ("path", "content", "expected"),
+    [
+        ("bin/tool", "#!/usr/bin/env python3\nprint('ok')\n", "python"),
+        ("bin/deploy", "#!/bin/bash\necho ok\n", "bash"),
+        ("bin/cli", "#!/usr/bin/env node\nconsole.log('ok')\n", "javascript"),
+        ("notes.txt", "#!/usr/bin/env python3\nprint('ok')\n", "python"),
+        ("script.sh", "#!/usr/bin/env python3\nprint('ok')\n", "python"),
+    ],
+)
+def test_detect_language_prioritizes_clear_shebang_over_filename_or_extension(
+    path: str,
+    content: str,
+    expected: str,
+) -> None:
+    assert detect_language(path, content) == expected
+
+
+@pytest.mark.parametrize(
+    ("filename", "content", "expected"),
+    [
+        ("tool", "#!/usr/bin/env python3\nprint('ok')\n", "python"),
+        ("deploy", "#!/usr/bin/env bash\necho ok\n", "bash"),
+        ("cli", "#!/usr/bin/env node\nconsole.log('ok')\n", "javascript"),
+    ],
+)
+def test_scan_single_file_uses_central_language_detection_for_supported_shebangs(
+    tmp_path: Path,
+    filename: str,
+    content: str,
+    expected: str,
+) -> None:
+    script = tmp_path / filename
+    script.write_text(content, encoding="utf-8")
+
+    info = scan_single_file(tmp_path, script.relative_to(tmp_path))
+
+    assert info.is_text is True
+    assert info.is_binary is False
+    assert info.language == expected
+

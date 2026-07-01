@@ -129,6 +129,66 @@ def detect_language_from_filename(path: Path | str) -> Optional[str]:
 
     return _FILENAME_LANGUAGE_MAP.get(filename)
 
+def _content_sample_as_text(content_sample: str | bytes | None) -> str | None:
+    """Return a text representation of a language-detection content sample."""
+
+    if content_sample is None:
+        return None
+
+    if isinstance(content_sample, bytes):
+        return content_sample.decode("utf-8", errors="ignore")
+
+    return content_sample
+
+
+def _split_shebang_parts(content_sample: str | bytes | None) -> list[str]:
+    """Return normalized shebang command parts from the first line only."""
+
+    text = _content_sample_as_text(content_sample)
+    if not text:
+        return []
+
+    first_line = text.splitlines()[0] if text.splitlines() else ""
+    if not first_line.startswith("#!"):
+        return []
+
+    return first_line[2:].strip().lower().replace("\t", " ").split()
+
+
+def detect_language_from_shebang(content_sample: str | bytes | None) -> Optional[str]:
+    """
+    Infer a language from a script shebang.
+
+    Only the first line is inspected. Leading whitespace before ``#!`` is not
+    treated as a valid shebang, which keeps the behavior conservative.
+    """
+
+    parts = _split_shebang_parts(content_sample)
+    if not parts:
+        return None
+
+    executable = parts[0].rsplit("/", 1)[-1]
+
+    if executable == "env":
+        command_parts = [
+            part.rsplit("/", 1)[-1]
+            for part in parts[1:]
+            if part and not part.startswith("-")
+        ]
+    else:
+        command_parts = [executable]
+
+    for command in command_parts:
+        if command in {"python", "python3"} or command.startswith("python3."):
+            return "python"
+        if command in {"bash", "sh"}:
+            return "bash"
+        if command == "node":
+            return "javascript"
+
+    return None
+
+
 def detect_language(
     path: Path | str,
     content_sample: str | bytes | None = None,
@@ -146,7 +206,11 @@ def detect_language(
     detection. Broader content heuristics are added in later Milestone 2
     patches.
     """
-    if is_bash_source_file(path, content_sample):
+    shebang_language = detect_language_from_shebang(content_sample)
+    if shebang_language is not None:
+        return shebang_language
+
+    if is_bash_source_file(path, None):
         return "bash"
 
     extension_language = detect_language_from_extension(path)
