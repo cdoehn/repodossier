@@ -1,5 +1,9 @@
 # RepoDossier
 
+[![CI](https://github.com/cdoehn/repodossier/actions/workflows/ci.yml/badge.svg)](https://github.com/cdoehn/repodossier/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue.svg)](pyproject.toml)
+
 RepoDossier creates AI-friendly exports of Git repositories.
 
 It scans Git-tracked files, builds a structured repository overview, and writes `full.txt`, a compact `ai.txt` export, an explicit documentation-only `docs.txt` export, and a focused `changed.txt` export that can be pasted into large language models such as ChatGPT, Claude, Gemini, Aider, and other coding assistants.
@@ -69,6 +73,7 @@ This repository includes supporting files for public GitHub collaboration:
 Recommended GitHub repository metadata:
 
 - Description: AI-friendly repository exports for coding assistants
+- Website: https://github.com/cdoehn/repodossier
 - Topics: python, cli, ai, llm, static-analysis, repository, context-export, developer-tools
 
 ## Installation
