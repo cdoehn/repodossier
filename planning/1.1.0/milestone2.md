@@ -39,7 +39,6 @@ Nach diesem Milestone soll RepoDossier mindestens diese Sprachen zuverlässig er
 - C++
 - C#
 
-- NACHTRÄGLICH PER HAND EINGETRAGEN: Vorbereitung mit platzhalter für : Kotlin, Go, Rust, aber mit "not yet implemented" hinweis und skip im test
 
 Unsichere Dateien sollen nicht aggressiv falsch klassifiziert werden. Wenn die Erkennung nicht ausreichend sicher ist, soll die Sprache konservativ `text` oder `unknown` bleiben.
 
