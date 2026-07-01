@@ -1073,25 +1073,34 @@ def _choose_code_fence(content: str) -> str:
 
 
 def _code_fence_language(language: str | None) -> str:
-    """Return a Markdown code fence language identifier."""
-    if language is None:
-        return "text"
+    """Return a Markdown code fence language for a scanner language label."""
 
-    language_identifiers = {
-        "bash": "bash",
-        "dockerfile": "dockerfile",
-        "ini": "ini",
-        "json": "json",
-        "makefile": "makefile",
-        "markdown": "markdown",
+    code_fence_languages = {
         "python": "python",
-        "text": "text",
+        "bash": "bash",
+        "shell": "bash",
+        "markdown": "markdown",
         "toml": "toml",
         "yaml": "yaml",
+        "json": "json",
+        "ini": "ini",
+        "typescript": "typescript",
+        "tsx": "tsx",
+        "javascript": "javascript",
+        "jsx": "jsx",
+        "html": "html",
+        "css": "css",
+        "java": "java",
+        "c": "c",
+        "cpp": "cpp",
+        "csharp": "csharp",
+        "text": "text",
+        "makefile": "makefile",
+        "dockerfile": "dockerfile",
     }
 
-    return language_identifiers.get(language.lower(), "text")
-
+    normalized_language = (language or "").lower()
+    return code_fence_languages.get(normalized_language, "text")
 
 def _render_warnings(context: FullExportContext) -> str:
     """Render collected Full Export warnings."""

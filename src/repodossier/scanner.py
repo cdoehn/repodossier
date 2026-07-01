@@ -81,28 +81,42 @@ _FILENAME_LANGUAGE_MAP: dict[str, str] = {
 
 
 def detect_language_from_extension(path: Path | str) -> Optional[str]:
-    """
-    Infer a file's language based on its extension.
+    """Infer a language from a file extension only."""
 
-    Parameters
-    ----------
-    path:
-        Filesystem path or filename whose extension will be inspected.
+    extension_languages = {
+        ".py": "python",
+        ".sh": "bash",
+        ".bash": "bash",
+        ".md": "markdown",
+        ".markdown": "markdown",
+        ".txt": "text",
+        ".json": "json",
+        ".yaml": "yaml",
+        ".yml": "yaml",
+        ".toml": "toml",
+        ".ini": "ini",
+        ".cfg": "ini",
+        ".ts": "typescript",
+        ".tsx": "tsx",
+        ".js": "javascript",
+        ".jsx": "jsx",
+        ".mjs": "javascript",
+        ".cjs": "javascript",
+        ".html": "html",
+        ".htm": "html",
+        ".css": "css",
+        ".java": "java",
+        ".c": "c",
+        ".cpp": "cpp",
+        ".cc": "cpp",
+        ".cxx": "cpp",
+        ".hpp": "cpp",
+        ".hh": "cpp",
+        ".hxx": "cpp",
+        ".cs": "csharp",
+    }
 
-    Returns
-    -------
-    Optional[str]
-        The detected language name in lowercase if the extension is known,
-        otherwise ``None``.
-    """
-    if is_bash_source_file(path, None):
-        return "bash"
-
-    suffix = Path(path).suffix.lower()
-    if not suffix:
-        return None
-    return _EXTENSION_LANGUAGE_MAP.get(suffix)
-
+    return extension_languages.get(Path(path).suffix.lower())
 
 def detect_language_from_filename(path: Path | str) -> Optional[str]:
     """

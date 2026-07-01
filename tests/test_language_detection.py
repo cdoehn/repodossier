@@ -181,3 +181,80 @@ def test_scan_single_file_uses_central_language_detection_for_supported_shebangs
     assert info.is_binary is False
     assert info.language == expected
 
+
+@pytest.mark.parametrize(
+    ("path", "expected"),
+    [
+        ("src/app.ts", "typescript"),
+        ("src/App.tsx", "tsx"),
+        ("src/main.js", "javascript"),
+        ("src/Component.jsx", "jsx"),
+        ("src/module.mjs", "javascript"),
+        ("src/common.cjs", "javascript"),
+        ("web/index.html", "html"),
+        ("web/index.htm", "html"),
+        ("web/styles.css", "css"),
+        ("src/App.java", "java"),
+        ("src/main.c", "c"),
+        ("src/main.cpp", "cpp"),
+        ("src/main.cc", "cpp"),
+        ("src/main.cxx", "cpp"),
+        ("include/app.hpp", "cpp"),
+        ("include/app.hh", "cpp"),
+        ("include/app.hxx", "cpp"),
+        ("src/App.cs", "csharp"),
+    ],
+)
+def test_detect_language_recognizes_new_language_extensions(
+    path: str,
+    expected: str,
+) -> None:
+    assert detect_language(path) == expected
+    assert detect_language_from_extension(path) == expected
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "include/ambiguous.h",
+        "src/header.h",
+    ],
+)
+def test_detect_language_keeps_plain_h_headers_conservative_until_content_heuristics(
+    path: str,
+) -> None:
+    assert detect_language(path) is None
+    assert detect_language_from_extension(path) is None
+
+
+@pytest.mark.parametrize(
+    ("path", "content", "expected"),
+    [
+        ("src/app.ts", "const value: string = 'ok';\n", "typescript"),
+        ("src/App.tsx", "export const App = () => <main />;\n", "tsx"),
+        ("src/main.js", "console.log('ok');\n", "javascript"),
+        ("src/Component.jsx", "export const Component = () => <div />;\n", "jsx"),
+        ("web/index.html", "<!DOCTYPE html>\n<html></html>\n", "html"),
+        ("web/styles.css", "body { margin: 0; }\n", "css"),
+        ("src/App.java", "public class App {}\n", "java"),
+        ("src/main.c", "int main(void) { return 0; }\n", "c"),
+        ("src/main.cpp", "#include <iostream>\nint main() { return 0; }\n", "cpp"),
+        ("src/App.cs", "namespace Demo { public class App {} }\n", "csharp"),
+    ],
+)
+def test_scan_single_file_recognizes_new_language_extensions(
+    tmp_path: Path,
+    path: str,
+    content: str,
+    expected: str,
+) -> None:
+    source_file = tmp_path / path
+    source_file.parent.mkdir(parents=True, exist_ok=True)
+    source_file.write_text(content, encoding="utf-8")
+
+    info = scan_single_file(tmp_path, source_file.relative_to(tmp_path))
+
+    assert info.is_text is True
+    assert info.is_binary is False
+    assert info.language == expected
+
