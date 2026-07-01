@@ -57,6 +57,20 @@ Planned but not complete yet:
 None for Release 1.0.
 
 
+## Public project support
+
+This repository includes supporting files for public GitHub collaboration:
+
+- CONTRIBUTING.md for local development, tests, generated-file rules, and pull-request expectations
+- SECURITY.md for vulnerability reporting and export-safety scope
+- GitHub Actions CI for running the Python test suite and CLI smoke checks
+- GitHub issue templates for bug reports and feature requests
+
+Recommended GitHub repository metadata:
+
+- Description: AI-friendly repository exports for coding assistants
+- Topics: python, cli, ai, llm, static-analysis, repository, context-export, developer-tools
+
 ## Installation
 
 ### Install from the local repository during development
