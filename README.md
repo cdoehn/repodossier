@@ -78,34 +78,36 @@ Recommended GitHub repository metadata:
 
 ## Installation
 
-### Install from the local repository during development
+### Install from a local checkout with pipx
 
 From the repository root:
 
 ```bash
-pipx install .
+python3 -m pipx uninstall repodossier 2>/dev/null || true
+python3 -m pipx install "$PWD"
+export PATH="$HOME/.local/bin:$PATH"
 ```
 
-Or reinstall after local changes:
+Verify both CLI names:
 
 ```bash
-pipx uninstall repodossier
-pipx install .
+repodossier --help
+repodossier --version
+repocontext --help
+repocontext --version
 ```
 
+`repodossier` is the current command. `repocontext` is kept as a temporary legacy compatibility alias.
+
 ### Editable development install
+
+Use a virtual environment for development work:
 
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
 python3 -m pip install -e ".[dev]"
-```
-
-### Verify installation
-
-```bash
-repodossier --version
-repodossier info
+python3 -m pytest --color=yes
 ```
 
 ## Secret Detection
@@ -773,11 +775,13 @@ git status --short
 For local pipx testing:
 
 ```bash
-pipx uninstall repodossier
-pipx install .
+python3 -m pipx uninstall repodossier 2>/dev/null || true
+python3 -m pipx install "$PWD"
+export PATH="$HOME/.local/bin:$PATH"
 repodossier --version
-repodossier info
-repodossier full
+repodossier --help
+repocontext --version
+repocontext --help
 ```
 
 ## Design principles
@@ -939,8 +943,15 @@ The 1.0 release focuses on stable local CLI usage:
 
 For normal CLI usage from a local checkout, pipx is the recommended installation method:
 
-    pipx install .
+    python3 -m pipx uninstall repodossier 2>/dev/null || true
+    python3 -m pipx install "$PWD"
+    export PATH="$HOME/.local/bin:$PATH"
     repodossier --help
+    repodossier --version
+    repocontext --help
+    repocontext --version
+
+`repodossier` is the current command. `repocontext` is kept as a temporary legacy compatibility alias.
 
 For a regular local Python installation:
 
@@ -952,7 +963,7 @@ For development work:
     python3 -m venv .venv
     source .venv/bin/activate
     python3 -m pip install -e ".[dev]"
-    python3 -m pytest
+    python3 -m pytest --color=yes
 
 ### Quick start
 
@@ -1112,9 +1123,13 @@ The script installs RepoDossier into a temporary pipx home, runs CLI help checks
 
 For pipx validation from a local checkout:
 
-    pipx uninstall repodossier || true
-    pipx install .
+    python3 -m pipx uninstall repodossier 2>/dev/null || true
+    python3 -m pipx install "$PWD"
+    export PATH="$HOME/.local/bin:$PATH"
     repodossier --help
+    repodossier --version
+    repocontext --help
+    repocontext --version
 
 <!-- repodossier-release-usage:end -->
 

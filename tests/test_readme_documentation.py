@@ -195,3 +195,30 @@ def test_readme_lists_secret_detection_as_implemented_not_planned():
     assert "## Secret Detection" in readme
     assert "- secret detection" not in readme
     assert "Planned but not complete yet:" in readme
+
+def test_readme_documents_robust_local_pipx_installation() -> None:
+    readme = Path("README.md").read_text(encoding="utf-8")
+
+    assert 'python3 -m pipx uninstall repodossier 2>/dev/null || true' in readme
+    assert 'python3 -m pipx install "$PWD"' in readme
+    assert 'export PATH="$HOME/.local/bin:$PATH"' in readme
+    assert "repodossier --help" in readme
+    assert "repodossier --version" in readme
+
+
+def test_readme_does_not_recommend_old_pipx_installation_patterns() -> None:
+    readme = Path("README.md").read_text(encoding="utf-8")
+
+    assert "pipx install -e ." not in readme
+    assert "python3 -m pipx install -e ." not in readme
+    assert "\npipx install .\n" not in readme
+
+
+def test_readme_keeps_development_install_separate_from_pipx() -> None:
+    readme = Path("README.md").read_text(encoding="utf-8")
+
+    assert "python3 -m venv .venv" in readme
+    assert "source .venv/bin/activate" in readme
+    assert 'python3 -m pip install -e ".[dev]"' in readme
+    assert "python3 -m pytest --color=yes" in readme
+

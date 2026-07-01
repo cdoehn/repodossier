@@ -103,6 +103,15 @@ def test_setuptools_package_discovery_include_patterns_are_unique():
 
     assert len(include) == len(set(include))
 
+
+def test_readme_documents_legacy_cli_alias_for_pipx_verification():
+    readme = (PROJECT_ROOT / "README.md").read_text(encoding="utf-8")
+
+    assert "repocontext --help" in readme
+    assert "repocontext --version" in readme
+    assert "`repodossier` is the current command." in readme
+    assert "`repocontext` is kept as a temporary legacy compatibility alias." in readme
+
 def test_old_name_tokens_only_appear_in_legacy_boundary_files():
     offenders = []
 
