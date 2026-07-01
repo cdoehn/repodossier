@@ -39,6 +39,7 @@ OLD_NAME_TOKENS = (
 ALLOWED_LEGACY_NAME_PATHS = {
     "README.md",
     "pyproject.toml",
+    "scripts/validate_pipx_release.sh",
     "src/repocontext/__init__.py",
     "src/repocontext/__main__.py",
     "src/repocontext/cli.py",

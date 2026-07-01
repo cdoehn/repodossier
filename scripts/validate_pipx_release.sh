@@ -1,16 +1,12 @@
 #!/usr/bin/env bash
-set -u
+set -euo pipefail
 
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PYTHON_BIN="${PYTHON:-python3}"
 
-if command -v pipx >/dev/null 2>&1; then
-  PIPX_RUNNER=(pipx)
-elif "$PYTHON_BIN" -m pipx --version >/dev/null 2>&1; then
-  PIPX_RUNNER=("$PYTHON_BIN" -m pipx)
-else
-  echo "Fehler: pipx ist nicht installiert."
-  echo "Installiere pipx und starte dieses Release-Validierungsskript erneut."
+if ! "$PYTHON_BIN" -m pipx --version >/dev/null 2>&1; then
+  echo "Fehler: pipx ist für ${PYTHON_BIN} nicht verfügbar."
+  echo "Installiere pipx für diesen Python-Kontext und starte die Release-Validierung erneut."
   exit 2
 fi
 
@@ -22,6 +18,7 @@ fi
 WORK_DIR="$(mktemp -d)"
 export PIPX_HOME="$WORK_DIR/pipx-home"
 export PIPX_BIN_DIR="$WORK_DIR/pipx-bin"
+export PATH="$PIPX_BIN_DIR:$PATH"
 mkdir -p "$PIPX_HOME" "$PIPX_BIN_DIR"
 
 cleanup() {
@@ -29,118 +26,132 @@ cleanup() {
 }
 trap cleanup EXIT
 
-echo "== pipx release validation =="
-echo "Project: $ROOT_DIR"
+echo "== Build checkout path =="
+echo "Repository: $REPO_ROOT"
+echo "Python: $PYTHON_BIN"
 echo "PIPX_HOME: $PIPX_HOME"
 echo "PIPX_BIN_DIR: $PIPX_BIN_DIR"
 
 echo
-echo "== Install package with isolated pipx home =="
-"${PIPX_RUNNER[@]}" install "$ROOT_DIR"
+echo "== Install with isolated pipx =="
+"$PYTHON_BIN" -m pipx uninstall repodossier 2>/dev/null || true
+"$PYTHON_BIN" -m pipx install "$REPO_ROOT"
 
-CLI="$PIPX_BIN_DIR/repodossier"
-if [ ! -x "$CLI" ]; then
+REPODOSSIER_CLI="$PIPX_BIN_DIR/repodossier"
+REPOCONTEXT_CLI="$PIPX_BIN_DIR/repocontext"
+
+if [ ! -x "$REPODOSSIER_CLI" ]; then
   echo "Fehler: repodossier wurde nicht im temporären pipx bin dir gefunden."
-  find "$WORK_DIR" -maxdepth 4 -type f -name "repodossier" -print || true
+  find "$WORK_DIR" -maxdepth 5 -type f -name "repodossier" -print || true
+  exit 1
+fi
+
+if [ ! -x "$REPOCONTEXT_CLI" ]; then
+  echo "Fehler: repocontext wurde nicht im temporären pipx bin dir gefunden."
+  find "$WORK_DIR" -maxdepth 5 -type f -name "repocontext" -print || true
   exit 1
 fi
 
 echo
-echo "== CLI help checks =="
-"$CLI" --help
-"$CLI" full --help
-"$CLI" export-ai --help
-"$CLI" export-docs --help
-"$CLI" changed --help
+echo "== Check repodossier CLI =="
+repodossier --help
+repodossier --version
 
 echo
-echo "== Optional version check =="
-if "$CLI" --version >/dev/null 2>&1; then
-  "$CLI" --version
-else
-  echo "Hinweis: repodossier --version ist noch nicht verfügbar. Das wird im Release-Version-Schritt geprüft."
-fi
+echo "== Check repocontext legacy CLI =="
+repocontext --help
+repocontext --version
 
-SMOKE_REPO="$WORK_DIR/smoke-repo"
-mkdir -p "$SMOKE_REPO/src" "$SMOKE_REPO/scripts" "$SMOKE_REPO/docs"
+echo
+echo "== Create sample git repository =="
+SAMPLE_REPO="$WORK_DIR/sample_repo"
+mkdir -p "$SAMPLE_REPO/src" "$SAMPLE_REPO/scripts" "$SAMPLE_REPO/docs"
+cd "$SAMPLE_REPO"
 
-cat > "$SMOKE_REPO/README.md" <<'EOF'
-# pipx smoke repo
+git init
+git config user.email "test@example.invalid"
+git config user.name "RepoDossier Test"
 
-This repository validates RepoDossier from a pipx-installed command.
+cat > README.md <<'EOF'
+# Sample Repository
+
+This repository validates RepoDossier from an isolated pipx installation.
 EOF
 
-cat > "$SMOKE_REPO/pyproject.toml" <<'EOF'
+cat > pyproject.toml <<'EOF'
 [project]
-name = "pipx-smoke-repo"
+name = "sample-repository"
 version = "0.1.0"
+dependencies = [
+    "PyYAML>=6.0",
+]
 EOF
 
-cat > "$SMOKE_REPO/src/example.py" <<'EOF'
+cat > src/demo.py <<'EOF'
 import math
 
-class PipxGreeter:
+
+class Demo:
     def greet(self, name: str) -> str:
         return f"Hello, {name}"
+
 
 def circle_area(radius: float) -> float:
     return math.pi * radius * radius
 EOF
 
-cat > "$SMOKE_REPO/scripts/build.sh" <<'EOF'
+cat > scripts/demo.sh <<'EOF'
 #!/usr/bin/env bash
 
 say_hello() {
-  echo "hello from pipx smoke"
+  echo "hello"
 }
 
-main() {
-  say_hello
-}
-
-main "$@"
+say_hello
 EOF
 
-cat > "$SMOKE_REPO/docs/SPEC.md" <<'EOF'
-# pipx smoke spec
+cat > docs/usage.md <<'EOF'
+# Usage
 
-This spec should be included in documentation exports.
+Run the sample command.
 EOF
 
-cd "$SMOKE_REPO" || exit 1
-
-git init
-git config user.email "pipx-smoke@example.invalid"
-git config user.name "RepoDossier pipx Smoke"
-git add .
-git commit -m "Initial pipx smoke repo"
+git add README.md pyproject.toml src/demo.py scripts/demo.sh docs/usage.md
+git commit -m "Initial sample project"
 
 echo
-echo "== Export checks from pipx-installed CLI =="
-"$CLI" full
+echo "== Smoke full export =="
+repodossier full
 test -s full.txt
+grep -q "AI Quick Start" full.txt
+grep -q "Repository Statistics" full.txt
 
-"$CLI" export-ai
+echo
+echo "== Smoke AI export =="
+repodossier export-ai
 test -s ai.txt
+grep -q "Project summary" ai.txt
 
-"$CLI" export-docs
+echo
+echo "== Smoke docs export =="
+repodossier export-docs
 test -s docs.txt
+grep -q "Documentation" docs.txt
 
-cat >> src/example.py <<'EOF'
-
-def changed_by_pipx_validation() -> str:
-    return "changed"
-EOF
-
-"$CLI" changed
+echo
+echo "== Smoke changed export =="
+printf '\n# changed\n' >> README.md
+repodossier changed
 test -s changed.txt
-grep -q "changed_by_pipx_validation" changed.txt
+grep -q "Changed" changed.txt
+grep -q "README.md" changed.txt
 
 echo
-echo "== Reinstall check =="
-"${PIPX_RUNNER[@]}" uninstall repodossier
-"${PIPX_RUNNER[@]}" install "$ROOT_DIR"
-"$CLI" --help
+echo "== Smoke legacy alias export =="
+rm -f ai.txt
+repocontext export-ai
+test -s ai.txt
+grep -q "Project summary" ai.txt
 
 echo
-echo "pipx release validation passed."
+echo "pipx release validation completed successfully."
