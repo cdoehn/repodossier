@@ -389,3 +389,104 @@ def test_scan_single_file_uses_content_heuristics_for_unknown_paths(
     assert info.is_binary is False
     assert info.language == expected
 
+
+def test_markdown_with_code_blocks_stays_markdown_for_unknown_path() -> None:
+    fence = "`" * 3
+    content = (
+        "# Developer Notes\n\n"
+        "This document includes an example.\n\n"
+        f"{fence}python\n"
+        "def main():\n"
+        "    return 0\n"
+        f"{fence}\n"
+    )
+
+    assert detect_language("notes", content) == "markdown"
+
+
+def test_markdown_with_html_example_stays_markdown_for_unknown_path() -> None:
+    fence = "`" * 3
+    content = (
+        "# HTML Example\n\n"
+        f"{fence}html\n"
+        "<!DOCTYPE html>\n"
+        "<html><body>Example</body></html>\n"
+        f"{fence}\n"
+    )
+
+    assert detect_language("html-example", content) == "markdown"
+
+
+@pytest.mark.parametrize(
+    "content",
+    [
+        '{ "module.exports": "not JavaScript" }\n',
+        '{ "import": "not JavaScript", "export": "not JavaScript" }\n',
+        '[{ "function": "not JavaScript" }]\n',
+    ],
+)
+def test_json_like_content_does_not_become_javascript(content: str) -> None:
+    assert detect_language("config", content) == "json"
+    assert detect_language("config", content) != "javascript"
+
+
+@pytest.mark.parametrize(
+    "content",
+    [
+        "name: string\nage: number\nactive: boolean\n",
+        "on: push\njobs:\n  test: true\n",
+        "env:\n  NODE_ENV: production\n",
+    ],
+)
+def test_yaml_like_content_does_not_become_typescript(content: str) -> None:
+    result = detect_language("workflow", content)
+
+    assert result != "typescript"
+    assert result in {"yaml", None}
+
+
+@pytest.mark.parametrize(
+    "content",
+    [
+        "<note><to>User</to><body>Hello</body></note>\n",
+        "<tag>small inline example</tag>\n",
+        "Use <html> as an example tag in prose.\n",
+    ],
+)
+def test_short_xml_or_tag_like_text_does_not_become_html(content: str) -> None:
+    assert detect_language("snippet", content) is None
+
+
+@pytest.mark.parametrize(
+    "content",
+    [
+        '{ "color": "red", "margin": "0" }\n',
+        "theme:\n  color: red\n  margin: 0\n",
+        "body: text\nmargin: zero\n",
+    ],
+)
+def test_json_or_yaml_like_content_does_not_become_css(content: str) -> None:
+    assert detect_language("style-data", content) != "css"
+
+
+@pytest.mark.parametrize(
+    "content",
+    [
+        "key: value\n",
+        "name = value\n",
+        "# just one heading\n",
+        "class\n",
+    ],
+)
+def test_weak_or_ambiguous_content_stays_unknown(content: str) -> None:
+    assert detect_language("ambiguous", content) is None
+
+
+def test_toml_project_table_wins_over_generic_ini_section() -> None:
+    content = "[project]\nname = \"demo\"\n"
+
+    scores = detect_language_content_scores("project", content)
+
+    assert scores["toml"] > scores.get("ini", 0)
+    assert detect_language("project", content) == "toml"
+

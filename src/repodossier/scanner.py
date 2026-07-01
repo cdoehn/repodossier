@@ -219,6 +219,38 @@ def _content_language_sample(content_sample: str | bytes | None) -> str:
     return text[:CONTENT_LANGUAGE_SAMPLE_MAX_CHARS]
 
 
+def _looks_like_markdown_document(text: str) -> bool:
+    """Return whether text looks like a real Markdown document, not just code."""
+
+    has_heading = bool(re.search(r"(?m)^#{1,6}\s+\S+", text))
+    has_fence = "```" in text or "~~~" in text
+    has_list = bool(re.search(r"(?m)^\s*[-*+]\s+\S+", text))
+    has_blank_line = "\n\n" in text
+    return has_heading and (has_fence or has_list or has_blank_line)
+
+
+def _apply_false_positive_guards(scores: dict[str, int], text: str) -> None:
+    """Reduce known false positives without hiding strong positive signals."""
+
+    markdown_like = _looks_like_markdown_document(text)
+
+    if markdown_like:
+        _score_language(scores, "markdown", 60)
+        for language in ("python", "javascript", "typescript", "html", "css"):
+            scores[language] = max(0, scores.get(language, 0) - 80)
+
+    if scores.get("json", 0) >= 35:
+        for language in ("javascript", "typescript", "css"):
+            scores[language] = max(0, scores.get(language, 0) - 25)
+
+    if scores.get("yaml", 0) >= 20:
+        scores["typescript"] = max(0, scores.get("typescript", 0) - 25)
+        scores["css"] = max(0, scores.get("css", 0) - 15)
+
+    if scores.get("toml", 0) >= 35:
+        scores["ini"] = max(0, scores.get("ini", 0) - 15)
+
+
 def detect_language_content_scores(
     path: Path | str,
     content_sample: str | bytes | None,
@@ -302,7 +334,7 @@ def detect_language_content_scores(
 
     if "<!doctype html" in lower_text:
         _score_language(scores, "html", 50)
-    if re.search(r"<html\b", lower_text):
+    if re.search(r"(?s)^\s*<html\b|<html\b.*</html>", lower_text):
         _score_language(scores, "html", 40)
     if re.search(r"<head\b", lower_text) and re.search(r"<body\b", lower_text):
         _score_language(scores, "html", 25)
@@ -362,14 +394,13 @@ def detect_language_content_scores(
         _score_language(scores, "csharp", 20)
 
     # Conflict guards for common false positives.
-    if scores.get("json", 0) >= 35:
-        scores["javascript"] = max(0, scores.get("javascript", 0) - 20)
-        scores["css"] = max(0, scores.get("css", 0) - 20)
+    _apply_false_positive_guards(scores, text)
 
-    if scores.get("yaml", 0) >= 20:
-        scores["typescript"] = max(0, scores.get("typescript", 0) - 20)
-
-    return {language: scores[language] for language in sorted(scores)}
+    return {
+        language: scores[language]
+        for language in sorted(scores)
+        if scores[language] > 0
+    }
 
 
 def detect_language_from_content(
