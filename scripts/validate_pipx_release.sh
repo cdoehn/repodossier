@@ -2,13 +2,54 @@
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-PYTHON_BIN="${PYTHON:-python3}"
+BUILD_PYTHON="${BUILD_PYTHON:-python3}"
 
-if ! "$PYTHON_BIN" -m pipx --version >/dev/null 2>&1; then
-  echo "Fehler: pipx ist für ${PYTHON_BIN} nicht verfügbar."
-  echo "Installiere pipx für diesen Python-Kontext und starte die Release-Validierung erneut."
-  exit 2
-fi
+_has_pipx_module() {
+  local python_bin="$1"
+  "$python_bin" -m pipx --version >/dev/null 2>&1
+}
+
+_find_pipx_python() {
+  if [ -n "${PIPX_PYTHON:-}" ]; then
+    if _has_pipx_module "$PIPX_PYTHON"; then
+      printf '%s\n' "$PIPX_PYTHON"
+      return 0
+    fi
+
+    echo "Fehler: pipx ist für PIPX_PYTHON=$PIPX_PYTHON nicht verfügbar." >&2
+    return 1
+  fi
+
+  local candidate
+  for candidate in /usr/bin/python3 python3 python; do
+    if command -v "$candidate" >/dev/null 2>&1 && _has_pipx_module "$candidate"; then
+      printf '%s\n' "$candidate"
+      return 0
+    fi
+  done
+
+  echo "Fehler: pipx ist in keinem geprüften Python-Kontext verfügbar." >&2
+  echo "Installiere pipx z. B. mit: sudo apt install pipx" >&2
+  echo "Oder setze PIPX_PYTHON auf einen Python mit pipx-Modul, z. B. PIPX_PYTHON=/usr/bin/python3." >&2
+  return 1
+}
+
+_check_python_module() {
+  local python_bin="$1"
+  local module_name="$2"
+  local install_hint="$3"
+
+  if ! "$python_bin" -m "$module_name" --version >/dev/null 2>&1; then
+    echo "Fehler: Python-Modul '$module_name' ist für BUILD_PYTHON=$python_bin nicht verfügbar."
+    echo "$install_hint"
+    exit 2
+  fi
+}
+
+PIPX_PYTHON="$(_find_pipx_python)"
+
+_check_python_module "$BUILD_PYTHON" build "Installiere die Release-Tools im aktiven Development-Environment mit: python3 -m pip install -e \".[dev]\""
+_check_python_module "$BUILD_PYTHON" twine "Installiere die Release-Tools im aktiven Development-Environment mit: python3 -m pip install -e \".[dev]\""
 
 if ! command -v git >/dev/null 2>&1; then
   echo "Fehler: git ist für die pipx Release Validation erforderlich."
@@ -28,14 +69,25 @@ trap cleanup EXIT
 
 echo "== Build checkout path =="
 echo "Repository: $REPO_ROOT"
-echo "Python: $PYTHON_BIN"
+echo "Build Python: $BUILD_PYTHON"
+echo "Pipx Python: $PIPX_PYTHON"
 echo "PIPX_HOME: $PIPX_HOME"
 echo "PIPX_BIN_DIR: $PIPX_BIN_DIR"
 
 echo
+echo "== Build distribution =="
+cd "$REPO_ROOT"
+rm -rf dist build src/*.egg-info
+"$BUILD_PYTHON" -m build
+
+echo
+echo "== Check distribution metadata =="
+"$BUILD_PYTHON" -m twine check dist/*
+
+echo
 echo "== Install with isolated pipx =="
-"$PYTHON_BIN" -m pipx uninstall repodossier 2>/dev/null || true
-"$PYTHON_BIN" -m pipx install "$REPO_ROOT"
+"$PIPX_PYTHON" -m pipx uninstall repodossier 2>/dev/null || true
+"$PIPX_PYTHON" -m pipx install "$REPO_ROOT"
 
 REPODOSSIER_CLI="$PIPX_BIN_DIR/repodossier"
 REPOCONTEXT_CLI="$PIPX_BIN_DIR/repocontext"
@@ -130,7 +182,7 @@ echo
 echo "== Smoke AI export =="
 repodossier export-ai
 test -s ai.txt
-grep -q "Project summary" ai.txt
+grep -q "Architecture Summary" ai.txt
 
 echo
 echo "== Smoke docs export =="
@@ -151,7 +203,7 @@ echo "== Smoke legacy alias export =="
 rm -f ai.txt
 repocontext export-ai
 test -s ai.txt
-grep -q "Project summary" ai.txt
+grep -q "Architecture Summary" ai.txt
 
 echo
 echo "pipx release validation completed successfully."

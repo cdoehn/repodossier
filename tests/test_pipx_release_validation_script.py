@@ -25,10 +25,20 @@ def test_pipx_release_validation_script_uses_isolated_pipx_home() -> None:
     assert 'export PATH="$PIPX_BIN_DIR:$PATH"' in text
 
 
+def test_pipx_release_validation_script_separates_build_python_from_pipx_python() -> None:
+    text = _script_text()
+
+    assert 'BUILD_PYTHON="${BUILD_PYTHON:-python3}"' in text
+    assert 'PIPX_PYTHON="$(_find_pipx_python)"' in text
+    assert "/usr/bin/python3 python3 python" in text
+    assert "Pipx Python:" in text
+    assert "Build Python:" in text
+
+
 def test_pipx_release_validation_script_installs_local_checkout_with_python_module_pipx() -> None:
     text = _script_text()
 
-    assert '"$PYTHON_BIN" -m pipx install "$REPO_ROOT"' in text
+    assert '"$PIPX_PYTHON" -m pipx install "$REPO_ROOT"' in text
     assert "pipx install -e" not in text
     assert "python3 -m pipx install -e" not in text
 
@@ -69,3 +79,19 @@ def test_pipx_release_validation_script_checks_legacy_alias_export() -> None:
     legacy_command = _legacy_command()
 
     assert f"{legacy_command} export-ai" in text
+
+
+def test_pipx_release_validation_script_builds_and_checks_distribution_metadata() -> None:
+    text = _script_text()
+
+    assert 'rm -rf dist build src/*.egg-info' in text
+    assert '"$BUILD_PYTHON" -m build' in text
+    assert '"$BUILD_PYTHON" -m twine check dist/*' in text
+    assert "python3 -m pip install -e" in text
+
+def test_pipx_release_validation_script_uses_stable_ai_export_smoke_marker() -> None:
+    text = _script_text()
+
+    assert 'grep -q "Architecture Summary" ai.txt' in text
+    assert 'grep -q "Project summary" ai.txt' not in text
+

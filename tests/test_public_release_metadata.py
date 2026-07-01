@@ -25,3 +25,14 @@ def test_pyproject_contains_public_project_urls():
     assert 'Issues = "https://github.com/cdoehn/repodossier/issues"' in text
     assert 'Documentation = "https://github.com/cdoehn/repodossier#readme"' in text
     assert 'Changelog = "https://github.com/cdoehn/repodossier/releases"' in text
+
+def test_dev_dependencies_include_release_validation_tools() -> None:
+    import tomllib
+    from pathlib import Path
+
+    data = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))
+    dev_dependencies = data["project"]["optional-dependencies"]["dev"]
+
+    assert "build>=1.2" in dev_dependencies
+    assert "twine>=5.0" in dev_dependencies
+
