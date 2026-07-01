@@ -87,6 +87,22 @@ def _iter_text_files():
             yield candidate
 
 
+
+def test_setuptools_package_discovery_includes_current_and_legacy_packages():
+    data = tomllib.loads((PROJECT_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+
+    include = data["tool"]["setuptools"]["packages"]["find"]["include"]
+
+    assert include == ["repodossier*", "repocontext*"]
+
+
+def test_setuptools_package_discovery_include_patterns_are_unique():
+    data = tomllib.loads((PROJECT_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+
+    include = data["tool"]["setuptools"]["packages"]["find"]["include"]
+
+    assert len(include) == len(set(include))
+
 def test_old_name_tokens_only_appear_in_legacy_boundary_files():
     offenders = []
 
