@@ -8,6 +8,8 @@ import pytest
 
 from repodossier.scanner import (
     detect_language,
+    detect_language_content_scores,
+    detect_language_from_content,
     detect_language_from_extension,
     detect_language_from_filename,
     detect_language_from_shebang,
@@ -243,6 +245,135 @@ def test_detect_language_keeps_plain_h_headers_conservative_until_content_heuris
     ],
 )
 def test_scan_single_file_recognizes_new_language_extensions(
+    tmp_path: Path,
+    path: str,
+    content: str,
+    expected: str,
+) -> None:
+    source_file = tmp_path / path
+    source_file.parent.mkdir(parents=True, exist_ok=True)
+    source_file.write_text(content, encoding="utf-8")
+
+    info = scan_single_file(tmp_path, source_file.relative_to(tmp_path))
+
+    assert info.is_text is True
+    assert info.is_binary is False
+    assert info.language == expected
+
+
+@pytest.mark.parametrize(
+    ("path", "content", "expected"),
+    [
+        ("tool", "def main():\n    return 0\n", "python"),
+        ("deploy", "set -euo pipefail\nrun() {\n  echo ok\n}\n", "bash"),
+        ("doc", "# Title\n\n- item\n\n```python\nprint('ok')\n```\n", "markdown"),
+        ("config", '{ "scripts": { "build": "vite" } }\n', "json"),
+        ("workflow", "name: CI\non: push\njobs:\n  test: true\n", "yaml"),
+        ("project", "[project]\nname = \"demo\"\n", "toml"),
+        ("settings", "[main]\nkey=value\n", "ini"),
+        ("app", "interface User {\n  id: string;\n}\n", "typescript"),
+        ("main", "const run = () => console.log('ok');\nexport default run;\n", "javascript"),
+        ("index", "<!DOCTYPE html>\n<html><head></head><body></body></html>\n", "html"),
+        ("style", "body { margin: 0; color: black; }\n", "css"),
+        ("App", "package com.example;\npublic class App { public static void main(String[] args) {} }\n", "java"),
+        ("main", "#include <stdio.h>\nint main(void) { return 0; }\n", "c"),
+        ("main", "#include <iostream>\nnamespace demo { class App {}; }\n", "cpp"),
+        ("App", "using System;\nnamespace Demo { public class App {} }\n", "csharp"),
+    ],
+)
+def test_detect_language_uses_content_heuristics_for_unknown_paths(
+    path: str,
+    content: str,
+    expected: str,
+) -> None:
+    assert detect_language(path, content) == expected
+    assert detect_language_from_content(path, content) == expected
+
+
+@pytest.mark.parametrize(
+    ("path", "content", "expected"),
+    [
+        ("include/user.h", "typedef struct User {\n  int id;\n} User;\n", "c"),
+        ("include/user.h", "namespace demo {\nclass User {};\n}\n", "cpp"),
+        ("include/user.h", "#ifndef USER_H\n#define USER_H\n#endif\n", None),
+    ],
+)
+def test_detect_language_handles_h_headers_conservatively(
+    path: str,
+    content: str,
+    expected: str | None,
+) -> None:
+    assert detect_language(path, content) == expected
+
+
+def test_content_scores_are_deterministic_and_sorted() -> None:
+    scores = detect_language_content_scores(
+        "app",
+        "interface User {\n  id: string;\n}\n",
+    )
+
+    assert scores == dict(sorted(scores.items()))
+    assert scores["typescript"] >= 20
+
+
+@pytest.mark.parametrize(
+    ("path", "content", "expected"),
+    [
+        ("README.md", "# README\n\n```python\ndef main(): pass\n```\n", "markdown"),
+        ("package.json", '{ "scripts": { "build": "vite" } }\n', "json"),
+        (".github/workflows/ci.yml", "name: CI\non: push\njobs:\n  test: true\n", "yaml"),
+        ("styles.css", '{ "color": "red" }\n', "css"),
+    ],
+)
+def test_known_extensions_stay_stable_before_content_heuristics(
+    path: str,
+    content: str,
+    expected: str,
+) -> None:
+    assert detect_language(path, content) == expected
+
+
+@pytest.mark.parametrize(
+    ("path", "content", "not_expected"),
+    [
+        ("package", '{ "scripts": { "build": "vite" } }\n', "javascript"),
+        ("workflow", "name: CI\non: push\njobs:\n  test: true\n", "typescript"),
+        ("config", '{ "color": "red" }\n', "css"),
+    ],
+)
+def test_content_heuristics_avoid_common_false_positives(
+    path: str,
+    content: str,
+    not_expected: str,
+) -> None:
+    assert detect_language(path, content) != not_expected
+
+
+@pytest.mark.parametrize(
+    "content",
+    [
+        "",
+        "short note\n",
+        "key: value\n",
+        "<tag>example</tag>\n",
+        "name = value\n",
+    ],
+)
+def test_content_heuristics_keep_unclear_content_unknown(content: str) -> None:
+    assert detect_language("unknown", content) is None
+    assert detect_language_from_content("unknown", content) is None
+
+
+@pytest.mark.parametrize(
+    ("path", "content", "expected"),
+    [
+        ("bin/app", "interface User {\n  id: string;\n}\n", "typescript"),
+        ("bin/main", "const run = () => console.log('ok');\nexport default run;\n", "javascript"),
+        ("include/user.h", "typedef struct User {\n  int id;\n} User;\n", "c"),
+        ("include/user.h", "namespace demo {\nclass User {};\n}\n", "cpp"),
+    ],
+)
+def test_scan_single_file_uses_content_heuristics_for_unknown_paths(
     tmp_path: Path,
     path: str,
     content: str,

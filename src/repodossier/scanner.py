@@ -7,6 +7,7 @@ scanning features without altering module layout.
 """
 
 from pathlib import Path
+import re
 from typing import Iterable, Optional
 
 from .git import list_tracked_files
@@ -202,37 +203,231 @@ def detect_language_from_shebang(content_sample: str | bytes | None) -> Optional
 
     return None
 
+CONTENT_LANGUAGE_SAMPLE_MAX_CHARS = 8192
+CONTENT_LANGUAGE_MIN_SCORE = 20
+CONTENT_LANGUAGE_MIN_MARGIN = 10
+
+
+def _score_language(scores: dict[str, int], language: str, points: int) -> None:
+    scores[language] = scores.get(language, 0) + points
+
+
+def _content_language_sample(content_sample: str | bytes | None) -> str:
+    text = _content_sample_as_text(content_sample)
+    if not text:
+        return ""
+    return text[:CONTENT_LANGUAGE_SAMPLE_MAX_CHARS]
+
+
+def detect_language_content_scores(
+    path: Path | str,
+    content_sample: str | bytes | None,
+) -> dict[str, int]:
+    """
+    Return deterministic language scores from content heuristics only.
+
+    The scoring is intentionally conservative. It does not parse, compile, or
+    execute project code. Known file extensions and known filenames are handled
+    by ``detect_language`` before these heuristics are allowed to decide.
+    """
+
+    text = _content_language_sample(content_sample)
+    if not text.strip():
+        return {}
+
+    scores: dict[str, int] = {}
+    stripped = text.lstrip()
+    lower_text = text.lower()
+
+    # Existing languages.
+    if re.search(r"(?m)^\s*(?:async\s+def|def|class)\s+[A-Za-z_]\w*", text):
+        _score_language(scores, "python", 30)
+    if re.search(r"(?m)^\s*(?:from\s+[\w.]+\s+import\s+\w+|import\s+[\w.]+)", text):
+        _score_language(scores, "python", 12)
+    if '__name__ == "__main__"' in text or "__name__ == '__main__'" in text:
+        _score_language(scores, "python", 25)
+
+    if "set -euo pipefail" in text or re.search(r"(?m)^\s*set\s+-eu\b", text):
+        _score_language(scores, "bash", 25)
+    if re.search(r"(?m)^\s*(?:function\s+)?[A-Za-z_][\w-]*\s*\(\s*\)\s*\{", text):
+        _score_language(scores, "bash", 25)
+
+    if re.search(r"(?m)^#{1,6}\s+\S+", text):
+        _score_language(scores, "markdown", 12)
+    if "```" in text:
+        _score_language(scores, "markdown", 12)
+
+    if stripped.startswith("{") or stripped.startswith("["):
+        if re.search(r'"[^"]+"\s*:', stripped):
+            _score_language(scores, "json", 35)
+
+    yaml_key_lines = re.findall(r"(?m)^[A-Za-z_][\w.-]*:\s+\S+", text)
+    if len(yaml_key_lines) >= 2:
+        _score_language(scores, "yaml", 22)
+    if re.search(r"(?m)^\s*-\s+\S+", text) and yaml_key_lines:
+        _score_language(scores, "yaml", 8)
+
+    if re.search(r"(?m)^\s*\[(?:project|tool\.[^\]]+)\]\s*$", text):
+        _score_language(scores, "toml", 35)
+    if re.search(r'(?m)^[A-Za-z_][\w.-]*\s*=\s*"[^"]*"\s*$', text):
+        _score_language(scores, "toml", 10)
+
+    if re.search(r"(?m)^\s*\[[A-Za-z_][\w.-]*\]\s*$", text):
+        _score_language(scores, "ini", 18)
+    if re.search(r"(?m)^[A-Za-z_][\w.-]*\s*=\s*[^#;\n]+$", text):
+        _score_language(scores, "ini", 8)
+
+    # Web languages.
+    if re.search(r"\binterface\s+[A-Za-z_]\w*\s*\{", text):
+        _score_language(scores, "typescript", 30)
+    if re.search(r"\btype\s+[A-Za-z_]\w*\s*=", text):
+        _score_language(scores, "typescript", 25)
+    if re.search(r"\benum\s+[A-Za-z_]\w*", text):
+        _score_language(scores, "typescript", 20)
+    if re.search(r"\b(?:const|let|var)\s+[A-Za-z_]\w*\s*:\s*[A-Za-z_][\w<>[\]|& ]*\s*=", text):
+        _score_language(scores, "typescript", 30)
+    if re.search(r"\b[A-Za-z_]\w*\s*:\s*(?:string|number|boolean|unknown|any)\b", text):
+        _score_language(scores, "typescript", 15)
+
+    if re.search(r"\bmodule\.exports\b|\brequire\s*\(", text):
+        _score_language(scores, "javascript", 25)
+    if re.search(r"\bexport\s+default\b", text):
+        _score_language(scores, "javascript", 25)
+    if re.search(r"\bimport\s+.+?\s+from\s+['\"][^'\"]+['\"]", text):
+        _score_language(scores, "javascript", 15)
+    if re.search(r"\bfunction\s+[A-Za-z_]\w*\s*\(", text):
+        _score_language(scores, "javascript", 15)
+    if re.search(r"\bconst\s+[A-Za-z_]\w*\s*=\s*(?:\([^)]*\)|[A-Za-z_]\w*)\s*=>", text):
+        _score_language(scores, "javascript", 20)
+
+    if "<!doctype html" in lower_text:
+        _score_language(scores, "html", 50)
+    if re.search(r"<html\b", lower_text):
+        _score_language(scores, "html", 40)
+    if re.search(r"<head\b", lower_text) and re.search(r"<body\b", lower_text):
+        _score_language(scores, "html", 25)
+
+    if re.search(r"(?m)^\s*@(media|import|keyframes)\b", text):
+        _score_language(scores, "css", 30)
+    if re.search(
+        r"(?s)[.#]?[A-Za-z][\w\s.,:#>*+\-\[\]='\"]*\{\s*"
+        r"(?:display|margin|padding|color|font-size|background|border)\s*:",
+        text,
+    ):
+        _score_language(scores, "css", 35)
+
+    # Java, C, C++, C#.
+    if re.search(r"(?m)^\s*package\s+[A-Za-z_][\w.]*\s*;", text):
+        _score_language(scores, "java", 20)
+    if re.search(r"(?m)^\s*import\s+java[\w.]*\s*;", text):
+        _score_language(scores, "java", 20)
+    if re.search(r"\bpublic\s+(?:final\s+)?class\s+[A-Za-z_]\w*", text):
+        _score_language(scores, "java", 30)
+    if "public static void main" in text:
+        _score_language(scores, "java", 25)
+
+    if re.search(r"(?m)^\s*#\s*include\s+<stdio\.h>", text):
+        _score_language(scores, "c", 30)
+    if re.search(r"(?m)^\s*#\s*include\s+[<\"][^>\"]+[>\"]", text):
+        _score_language(scores, "c", 10)
+    if re.search(r"\bint\s+main\s*\(", text):
+        _score_language(scores, "c", 30)
+    if re.search(r"\btypedef\s+struct\b", text):
+        _score_language(scores, "c", 30)
+    if re.search(r"\bstruct\s+[A-Za-z_]\w*", text):
+        _score_language(scores, "c", 12)
+
+    if re.search(r"(?m)^\s*#\s*include\s+<(?:iostream|vector|string|map|memory)>", text):
+        _score_language(scores, "cpp", 30)
+    if re.search(r"\bnamespace\s+[A-Za-z_]\w*", text):
+        _score_language(scores, "cpp", 30)
+    if re.search(r"\btemplate\s*<", text):
+        _score_language(scores, "cpp", 30)
+    if "std::" in text:
+        _score_language(scores, "cpp", 30)
+    if re.search(r"\busing\s+namespace\s+[A-Za-z_]\w*", text):
+        _score_language(scores, "cpp", 25)
+    if re.search(r"\bclass\s+[A-Za-z_]\w*", text):
+        _score_language(scores, "cpp", 15)
+
+    if re.search(r"(?m)^\s*using\s+System(?:\.[A-Za-z_][\w.]*)?\s*;", text):
+        _score_language(scores, "csharp", 30)
+    if re.search(r"\bnamespace\s+[A-Za-z_][\w.]*\s*\{", text):
+        _score_language(scores, "csharp", 20)
+    if re.search(r"\bpublic\s+class\s+[A-Za-z_]\w*", text):
+        _score_language(scores, "csharp", 15)
+    if re.search(r"\basync\s+Task\b", text):
+        _score_language(scores, "csharp", 25)
+    if re.search(r"(?m)^\s*\[(?:Serializable|Test|Fact)\]", text):
+        _score_language(scores, "csharp", 20)
+
+    # Conflict guards for common false positives.
+    if scores.get("json", 0) >= 35:
+        scores["javascript"] = max(0, scores.get("javascript", 0) - 20)
+        scores["css"] = max(0, scores.get("css", 0) - 20)
+
+    if scores.get("yaml", 0) >= 20:
+        scores["typescript"] = max(0, scores.get("typescript", 0) - 20)
+
+    return {language: scores[language] for language in sorted(scores)}
+
+
+def detect_language_from_content(
+    path: Path | str,
+    content_sample: str | bytes | None,
+) -> Optional[str]:
+    """Infer a language from conservative content scores."""
+
+    scores = detect_language_content_scores(path, content_sample)
+    if not scores:
+        return None
+
+    ranked = sorted(scores.items(), key=lambda item: (-item[1], item[0]))
+    best_language, best_score = ranked[0]
+
+    if best_score < CONTENT_LANGUAGE_MIN_SCORE:
+        return None
+
+    if len(ranked) > 1:
+        _, second_score = ranked[1]
+        if best_score - second_score < CONTENT_LANGUAGE_MIN_MARGIN:
+            return None
+
+    return best_language
+
 
 def detect_language(
     path: Path | str,
     content_sample: str | bytes | None = None,
 ) -> Optional[str]:
     """
-    Infer a file's language from filename, extension, and optional text content.
+    Infer a file's language from shebang, extension, filename, and content.
 
-    This is the central language-detection API used by the scanner. The older
-    ``detect_language_from_extension`` and ``detect_language_from_filename``
-    helpers remain available as compatibility wrappers for existing callers and
-    tests.
-
-    The first implementation keeps the existing conservative language labels
-    and only uses ``content_sample`` for already-supported Bash/shebang
-    detection. Broader content heuristics are added in later Milestone 2
-    patches.
+    Clear shebangs win first. Known extensions and known extensionless
+    filenames stay stable to avoid reclassifying Markdown, JSON, YAML, or
+    project metadata because of embedded examples. Content heuristics decide
+    only when filename/extension are unknown or intentionally ambiguous.
     """
     shebang_language = detect_language_from_shebang(content_sample)
     if shebang_language is not None:
         return shebang_language
 
-    if is_bash_source_file(path, None):
-        return "bash"
-
     extension_language = detect_language_from_extension(path)
     if extension_language is not None:
         return extension_language
 
-    return detect_language_from_filename(path)
+    filename_language = detect_language_from_filename(path)
+    if filename_language is not None:
+        return filename_language
 
+    content_language = detect_language_from_content(path, content_sample)
+    if content_language is not None:
+        return content_language
+
+    if is_bash_source_file(path, None):
+        return "bash"
+
+    return None
 
 def is_text_file(path: Path | str, sample_size: int = 1024) -> bool:
     """
