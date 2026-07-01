@@ -9,13 +9,14 @@ dependencies = [
 name = "repodossier"
 version = "1.0.0"
 description = "AI-friendly exports of Git repositories for large language models."
+readme = "README.md"
 authors = [{ name = "RepoDossier Authors", email = "team@example.com" }]
-license = { file = "LICENSE" }
+license = "MIT"
+license-files = ["LICENSE"]
 requires-python = ">=3.9"
 classifiers = [
     "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",
-    "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3 :: Only",
     "Programming Language :: Python :: 3.9",
