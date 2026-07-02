@@ -301,3 +301,44 @@ def test_export_model_api_exposes_compare_helpers():
         before.files[0],
         after.files[1],
     ) == ("content",)
+
+
+def test_export_model_api_exposes_manifest_helpers():
+    export = api.repository_export_from_file_mappings(
+        mode="full",
+        root_path="/repo",
+        root_name="repo",
+        mappings=(
+            {
+                "path": "src/app.py",
+                "language": "python",
+                "content": "print(1)\n",
+            },
+            {
+                "path": "README.md",
+                "language": "markdown",
+                "content": "# Hello\n",
+            },
+        ),
+    )
+
+    manifest = api.repository_export_manifest(export)
+    data = api.repository_export_manifest_to_dict(manifest)
+    lines = api.repository_export_manifest_lines(export)
+
+    assert isinstance(manifest, api.RepositoryExportManifest)
+    assert manifest.mode == "full"
+    assert manifest.title == "Full Repository Export"
+    assert manifest.file_count == 2
+    assert manifest.omitted_file_count == 0
+    assert manifest.truncated_file_count == 0
+    assert len(manifest.fingerprint) == 64
+    assert data["mode"] == "full"
+    assert data["file_count"] == 2
+    assert data["languages"] == {
+        "markdown": 1,
+        "python": 1,
+    }
+    assert lines[0] == "mode: full"
+    assert "files: 2" in lines
+    assert "languages: markdown=1, python=1" in lines

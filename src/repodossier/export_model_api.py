@@ -100,6 +100,12 @@ from repodossier.export_model_index import (
     language_counts_from_export,
     status_counts_from_export,
 )
+from repodossier.export_model_manifest import (
+    RepositoryExportManifest,
+    repository_export_manifest,
+    repository_export_manifest_lines,
+    repository_export_manifest_to_dict,
+)
 from repodossier.export_model_modes import (
     MODE_DEFAULT_SECTIONS,
     MODE_TITLES,
@@ -375,6 +381,18 @@ __all__ = tuple(
             "compare_repository_exports",
             "repository_export_path_delta",
             "repository_exports_have_same_paths",
+        }
+    )
+)
+
+__all__ = tuple(
+    sorted(
+        set(__all__)
+        | {
+            "RepositoryExportManifest",
+            "repository_export_manifest",
+            "repository_export_manifest_lines",
+            "repository_export_manifest_to_dict",
         }
     )
 )
