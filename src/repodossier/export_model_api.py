@@ -196,6 +196,14 @@ from repodossier.export_model_sections import (
     repository_export_section_presence,
     repository_export_sections,
 )
+from repodossier.export_model_selftest import (
+    ExportModelSelfTestError,
+    ExportModelSelfTestResult,
+    assert_export_model_selftest,
+    export_model_selftest_lines,
+    make_export_model_selftest_export,
+    run_export_model_selftest,
+)
 from repodossier.export_model_serialization import (
     repository_export_to_dict,
     to_plain_data,
@@ -511,6 +519,20 @@ __all__ = tuple(
             "assert_repository_export_ready",
             "repository_export_readiness_lines",
             "repository_export_readiness_status",
+        }
+    )
+)
+
+__all__ = tuple(
+    sorted(
+        set(__all__)
+        | {
+            "ExportModelSelfTestError",
+            "ExportModelSelfTestResult",
+            "assert_export_model_selftest",
+            "export_model_selftest_lines",
+            "make_export_model_selftest_export",
+            "run_export_model_selftest",
         }
     )
 )

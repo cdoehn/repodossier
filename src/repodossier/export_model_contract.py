@@ -285,3 +285,32 @@ REQUIRED_EXPORT_MODEL_API_SYMBOLS = tuple(
         | set(READINESS_EXPORT_MODEL_API_SYMBOLS)
     )
 )
+
+SELFTEST_EXPORT_MODEL_API_SYMBOLS = tuple(
+    sorted(
+        {
+            "ExportModelSelfTestError",
+            "ExportModelSelfTestResult",
+            "assert_export_model_selftest",
+            "export_model_selftest_lines",
+            "make_export_model_selftest_export",
+            "run_export_model_selftest",
+        }
+    )
+)
+
+
+CONTRACT_HELPER_API_SYMBOLS = tuple(
+    sorted(
+        set(globals().get("CONTRACT_HELPER_API_SYMBOLS", ()))
+        | set(SELFTEST_EXPORT_MODEL_API_SYMBOLS)
+    )
+)
+
+
+REQUIRED_EXPORT_MODEL_API_SYMBOLS = tuple(
+    sorted(
+        set(REQUIRED_EXPORT_MODEL_API_SYMBOLS)
+        | set(SELFTEST_EXPORT_MODEL_API_SYMBOLS)
+    )
+)

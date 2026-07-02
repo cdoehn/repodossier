@@ -666,3 +666,34 @@ def test_export_model_api_exposes_readiness_helpers():
         assert "RepositoryExport is not ready:" in str(exc)
     else:
         raise AssertionError("expected RepositoryExportReadinessError")
+
+
+def test_export_model_api_exposes_selftest_helpers():
+    export = api.make_export_model_selftest_export()
+    result = api.run_export_model_selftest()
+    lines = api.export_model_selftest_lines()
+
+    assert isinstance(export, api.RepositoryExport)
+    assert isinstance(result, api.ExportModelSelfTestResult)
+    assert result.valid
+    assert result.issues == ()
+    assert result.contract_valid is True
+    assert result.audit_valid is True
+    assert result.readiness_valid is True
+    assert result.round_trip_valid is True
+
+    assert lines == (
+        "valid=True",
+        "contract_valid=True",
+        "audit_valid=True",
+        "readiness_valid=True",
+        "round_trip_valid=True",
+        "files=2",
+        "omitted_files=1",
+        "truncated_files=1",
+        "warnings=2",
+    )
+
+    api.assert_export_model_selftest()
+
+    assert api.ExportModelSelfTestError
