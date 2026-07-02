@@ -37,6 +37,13 @@ from repodossier.export_model import (
     empty_repository_export,
     validate_repository_export,
 )
+from repodossier.export_model_audit import (
+    RepositoryExportAuditError,
+    RepositoryExportAuditResult,
+    assert_repository_export_audit,
+    audit_repository_export,
+    repository_export_audit_lines,
+)
 from repodossier.export_model_collector import (
     FileEntryPartitions,
     partition_file_entries,
@@ -471,6 +478,19 @@ __all__ = tuple(
             "repository_export_canonical_dict",
             "repository_export_round_trip",
             "repository_export_round_trip_status",
+        }
+    )
+)
+
+__all__ = tuple(
+    sorted(
+        set(__all__)
+        | {
+            "RepositoryExportAuditError",
+            "RepositoryExportAuditResult",
+            "assert_repository_export_audit",
+            "audit_repository_export",
+            "repository_export_audit_lines",
         }
     )
 )

@@ -547,3 +547,62 @@ def test_export_model_api_exposes_roundtrip_helpers():
         assert "RepositoryExport does not round-trip cleanly:" in str(exc)
     else:
         raise AssertionError("expected RepositoryExportRoundTripError")
+
+
+def test_export_model_api_exposes_audit_helpers():
+    export = api.repository_export_from_file_mappings(
+        mode="full",
+        root_path="/repo",
+        root_name="repo",
+        mappings=(
+            {
+                "path": "src/app.py",
+                "language": "python",
+                "content": "print(1)\n",
+            },
+            {
+                "path": "assets/logo.png",
+                "language": "binary",
+                "binary": True,
+                "skipped": True,
+                "size": 123,
+            },
+        ),
+    )
+
+    result = api.audit_repository_export(export)
+    lines = api.repository_export_audit_lines(export)
+
+    assert isinstance(result, api.RepositoryExportAuditResult)
+    assert result.valid
+    assert result.issues == ()
+    assert result.summary_matches is True
+    assert result.tree_matches is True
+    assert result.inventory_matches is True
+    assert result.round_trip_matches is True
+    assert lines == (
+        "valid=True",
+        "summary_matches=True",
+        "tree_matches=True",
+        "inventory_matches=True",
+        "round_trip_matches=True",
+    )
+
+    api.assert_repository_export_audit(export)
+
+    stale = api.RepositoryExport(
+        mode="full",
+        repository=api.RepositoryMetadata(root_path="", root_name="repo"),
+    )
+
+    stale_result = api.audit_repository_export(stale)
+
+    assert not stale_result.valid
+    assert stale_result.issues
+
+    try:
+        api.assert_repository_export_audit(stale)
+    except api.RepositoryExportAuditError as exc:
+        assert "RepositoryExport audit failed:" in str(exc)
+    else:
+        raise AssertionError("expected RepositoryExportAuditError")

@@ -229,3 +229,31 @@ REQUIRED_EXPORT_MODEL_API_SYMBOLS = tuple(
         | set(CONTRACT_HELPER_API_SYMBOLS)
     )
 )
+
+AUDIT_EXPORT_MODEL_API_SYMBOLS = tuple(
+    sorted(
+        {
+            "RepositoryExportAuditError",
+            "RepositoryExportAuditResult",
+            "assert_repository_export_audit",
+            "audit_repository_export",
+            "repository_export_audit_lines",
+        }
+    )
+)
+
+
+CONTRACT_HELPER_API_SYMBOLS = tuple(
+    sorted(
+        set(globals().get("CONTRACT_HELPER_API_SYMBOLS", ()))
+        | set(AUDIT_EXPORT_MODEL_API_SYMBOLS)
+    )
+)
+
+
+REQUIRED_EXPORT_MODEL_API_SYMBOLS = tuple(
+    sorted(
+        set(REQUIRED_EXPORT_MODEL_API_SYMBOLS)
+        | set(AUDIT_EXPORT_MODEL_API_SYMBOLS)
+    )
+)
