@@ -187,6 +187,13 @@ from repodossier.export_model_tree import (
     flatten_file_tree,
     tree_paths,
 )
+from repodossier.export_model_view import (
+    RepositoryExportView,
+    repository_export_files_for_section,
+    repository_export_section_titles,
+    repository_export_view,
+    repository_export_warning_lines,
+)
 from repodossier.export_model_warnings import (
     append_export_warnings,
     make_export_warning,
@@ -393,6 +400,19 @@ __all__ = tuple(
             "repository_export_manifest",
             "repository_export_manifest_lines",
             "repository_export_manifest_to_dict",
+        }
+    )
+)
+
+__all__ = tuple(
+    sorted(
+        set(__all__)
+        | {
+            "RepositoryExportView",
+            "repository_export_files_for_section",
+            "repository_export_section_titles",
+            "repository_export_view",
+            "repository_export_warning_lines",
         }
     )
 )

@@ -342,3 +342,57 @@ def test_export_model_api_exposes_manifest_helpers():
     assert lines[0] == "mode: full"
     assert "files: 2" in lines
     assert "languages: markdown=1, python=1" in lines
+
+
+def test_export_model_api_exposes_view_helpers():
+    export = api.repository_export_from_file_mappings(
+        mode="full",
+        root_path="/repo",
+        root_name="repo",
+        mappings=(
+            {
+                "path": "src/app.py",
+                "language": "python",
+                "content": "print(1)\n",
+            },
+            {
+                "path": "assets/logo.png",
+                "language": "binary",
+                "binary": True,
+                "skipped": True,
+            },
+        ),
+        warnings=(
+            api.make_export_warning(
+                "Binary file skipped",
+                path="assets/logo.png",
+                code="binary",
+            ),
+        ),
+    )
+
+    view = api.repository_export_view(export)
+
+    assert isinstance(view, api.RepositoryExportView)
+    assert view.export is export
+    assert view.manifest.mode == "full"
+    assert view.section_title("repository-metadata") == "Repository Metadata"
+
+    assert [entry.path for entry in view.files_for_section("source_export")] == [
+        "src/app.py",
+    ]
+    assert [entry.path for entry in api.repository_export_files_for_section(
+        export,
+        "omitted_files",
+    )] == ["assets/logo.png"]
+
+    assert api.repository_export_warning_lines(export) == (
+        "assets/logo.png [binary] Binary file skipped",
+    )
+    assert view.warning_lines() == (
+        "assets/logo.png [binary] Binary file skipped",
+    )
+
+    titles = api.repository_export_section_titles(export)
+    assert ("repository_metadata", "Repository Metadata") in titles
+    assert ("summary", "Summary") in titles
