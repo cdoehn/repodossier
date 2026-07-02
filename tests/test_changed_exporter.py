@@ -280,3 +280,92 @@ def test_write_changed_export_accepts_branch_argument(
 
     assert "Compare Mode: Against branch: main" in output_path.read_text(encoding="utf-8")
 
+
+def test_render_changed_export_uses_language_code_fence_for_changed_contents(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src/app.ts").write_text(
+        "const value: string = 'changed';\n",
+        encoding="utf-8",
+    )
+    scans = [
+        make_scan(
+            "src/app.ts",
+            "modified",
+            file_info=DummyFileInfo(
+                language="typescript",
+                line_count=1,
+                token_estimate=5,
+            ),
+        )
+    ]
+
+    output = render_changed_export(tmp_path, scans=scans)
+    fence = "`" * 3
+
+    assert "- Language: typescript" in output
+    assert f"{fence}typescript\nconst value: string = 'changed';\n{fence}" in output
+    assert f"{fence}text\nconst value: string = 'changed';" not in output
+
+
+def test_render_changed_export_falls_back_to_text_fence_for_unknown_language(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "data.custom").write_text("custom content\n", encoding="utf-8")
+    scans = [
+        make_scan(
+            "data.custom",
+            "modified",
+            file_info=DummyFileInfo(
+                language="unknown-custom",
+                line_count=1,
+                token_estimate=3,
+            ),
+        )
+    ]
+
+    output = render_changed_export(tmp_path, scans=scans)
+    fence = "`" * 3
+
+    assert "- Language: unknown-custom" in output
+    assert f"{fence}text\ncustom content\n{fence}" in output
+
+
+def test_render_changed_export_maps_new_language_labels_to_code_fences(
+    tmp_path: Path,
+) -> None:
+    cases = [
+        ("src/main.js", "javascript", "console.log('changed');\n"),
+        ("web/index.html", "html", "<!DOCTYPE html>\n<html></html>\n"),
+        ("web/style.css", "css", "body { margin: 0; }\n"),
+        ("src/App.java", "java", "public class App {}\n"),
+        ("src/main.c", "c", "int main(void) { return 0; }\n"),
+        ("src/main.cpp", "cpp", "#include <iostream>\nint main() { return 0; }\n"),
+        ("src/App.cs", "csharp", "using System;\npublic class App {}\n"),
+    ]
+
+    scans = []
+    for path, language, content in cases:
+        source_file = tmp_path / path
+        source_file.parent.mkdir(parents=True, exist_ok=True)
+        source_file.write_text(content, encoding="utf-8")
+        scans.append(
+            make_scan(
+                path,
+                "modified",
+                file_info=DummyFileInfo(
+                    language=language,
+                    line_count=1,
+                    token_estimate=5,
+                ),
+            )
+        )
+
+    output = render_changed_export(tmp_path, scans=scans)
+    fence = "`" * 3
+
+    for _path, language, content in cases:
+        assert f"- Language: {language}" in output
+        assert f"{fence}{language}\n{content.rstrip()}\n{fence}" in output
+

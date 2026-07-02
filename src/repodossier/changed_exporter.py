@@ -184,6 +184,37 @@ def _append_git_diff(
             lines.extend(["No git diff available for this file.", ""])
 
 
+def _changed_code_fence_language(scan: ChangedFileScan) -> str:
+    """Return a Markdown code fence language for changed file contents."""
+
+    code_fence_languages = {
+        "python": "python",
+        "bash": "bash",
+        "shell": "bash",
+        "markdown": "markdown",
+        "toml": "toml",
+        "yaml": "yaml",
+        "json": "json",
+        "ini": "ini",
+        "typescript": "typescript",
+        "tsx": "tsx",
+        "javascript": "javascript",
+        "jsx": "jsx",
+        "html": "html",
+        "css": "css",
+        "java": "java",
+        "c": "c",
+        "cpp": "cpp",
+        "csharp": "csharp",
+        "text": "text",
+        "makefile": "makefile",
+        "dockerfile": "dockerfile",
+    }
+
+    normalized_language = _language_for(scan).lower()
+    return code_fence_languages.get(normalized_language, "text")
+
+
 def _append_changed_file_contents(
     lines: list[str],
     repo_path: Path,
@@ -211,9 +242,9 @@ def _append_changed_file_contents(
                 f"- Lines: {_line_count_for(scan)}",
                 f"- Estimated tokens: {_token_estimate_for(scan)}",
                 "",
-                "```text",
+                "`" * 3 + _changed_code_fence_language(scan),
                 _read_changed_file_content(repo_path, scan).rstrip(),
-                "```",
+                "`" * 3,
                 "",
             ]
         )
