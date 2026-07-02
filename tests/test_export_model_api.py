@@ -84,3 +84,52 @@ def test_export_model_api_all_is_sorted_and_matches_public_names():
 
     for name in public_names:
         assert hasattr(api, name), name
+
+
+def test_export_model_api_exposes_adapter_helpers():
+    entry = api.file_entry_from_mapping(
+        {
+            "relative_path": "./src\\app.py",
+            "lang": "python",
+            "text": "print(1)",
+        }
+    )
+
+    entries = api.file_entries_from_mappings(
+        (
+            {"path": "b.py", "language": "python"},
+            {"path": "a.py", "language": "python"},
+        )
+    )
+
+    assert entry.path == "src/app.py"
+    assert entry.language == "python"
+    assert entry.content == "print(1)"
+    assert [item.path for item in entries] == ["a.py", "b.py"]
+
+
+def test_export_model_api_exposes_snapshot_helpers():
+    export = api.make_repository_export(
+        mode="full",
+        root_path="/repo",
+        root_name="repo",
+        files=(
+            api.make_file_entry_from_content(
+                path="src/app.py",
+                language="python",
+                content="print(1)\n",
+            ),
+        ),
+    )
+
+    json_text = api.repository_export_to_json(export)
+    fingerprint = api.repository_export_fingerprint(export)
+    header = api.repository_export_snapshot_header(export)
+    lines = api.repository_export_snapshot_lines(export)
+
+    assert '"mode": "full"' in json_text
+    assert len(fingerprint) == 64
+    assert header["fingerprint"] == fingerprint
+    assert header["file_count"] == 1
+    assert lines[0] == "{"
+    assert lines[-1] == "}"

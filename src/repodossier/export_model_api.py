@@ -6,6 +6,12 @@ import surface while the internal helper modules remain small and focused.
 
 from __future__ import annotations
 
+from repodossier.export_model_adapters import (
+    file_entries_from_mappings,
+    file_entries_from_objects,
+    file_entry_from_mapping,
+    file_entry_from_object,
+)
 from repodossier.export_model import (
     CallGraphReport,
     DatabaseSchemaReport,
@@ -115,6 +121,12 @@ from repodossier.export_model_reports import (
 from repodossier.export_model_serialization import (
     repository_export_to_dict,
     to_plain_data,
+)
+from repodossier.export_model_snapshot import (
+    repository_export_fingerprint,
+    repository_export_snapshot_header,
+    repository_export_snapshot_lines,
+    repository_export_to_json,
 )
 from repodossier.export_model_summary import (
     build_export_summary,
@@ -250,3 +262,19 @@ __all__ = (
 )
 
 __all__ = tuple(sorted(__all__))
+
+__all__ = tuple(
+    sorted(
+        set(__all__)
+        | {
+            "file_entries_from_mappings",
+            "file_entries_from_objects",
+            "file_entry_from_mapping",
+            "file_entry_from_object",
+            "repository_export_fingerprint",
+            "repository_export_snapshot_header",
+            "repository_export_snapshot_lines",
+            "repository_export_to_json",
+        }
+    )
+)
