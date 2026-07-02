@@ -219,3 +219,142 @@ def empty_repository_export(
         mode=mode,
         repository=RepositoryMetadata(root_path=root_path, root_name=root_name),
     )
+
+class ExportModelValidationError(ValueError):
+    """Raised when a structured export model is internally inconsistent."""
+
+
+def validate_repository_export(export: RepositoryExport) -> tuple[str, ...]:
+    """Return validation issues for a structured repository export.
+
+    This deliberately checks model consistency only. It does not perform any
+    scanning, Git calls, file reads or rendering work.
+    """
+
+    issues: list[str] = []
+
+    valid_modes = {"full", "ai", "docs", "changed"}
+    valid_text_statuses = {"text", "binary"}
+    valid_file_statuses = {"included", "skipped", "truncated", "error"}
+
+    if export.mode not in valid_modes:
+        issues.append(f"mode must be one of {sorted(valid_modes)}")
+
+    if not export.repository.root_path.strip():
+        issues.append("repository.root_path must not be empty")
+
+    if not export.repository.root_name.strip():
+        issues.append("repository.root_name must not be empty")
+
+    _validate_file_group(
+        group_name="files",
+        files=export.files,
+        valid_text_statuses=valid_text_statuses,
+        valid_file_statuses=valid_file_statuses,
+        issues=issues,
+    )
+    _validate_file_group(
+        group_name="omitted_files",
+        files=export.omitted_files,
+        valid_text_statuses=valid_text_statuses,
+        valid_file_statuses=valid_file_statuses,
+        issues=issues,
+    )
+    _validate_file_group(
+        group_name="truncated_files",
+        files=export.truncated_files,
+        valid_text_statuses=valid_text_statuses,
+        valid_file_statuses=valid_file_statuses,
+        issues=issues,
+    )
+
+    for tree_issue in _validate_tree_entries(export.tree):
+        issues.append(tree_issue)
+
+    return tuple(issues)
+
+
+def assert_valid_repository_export(export: RepositoryExport) -> None:
+    """Raise ExportModelValidationError if an export model is invalid."""
+
+    issues = validate_repository_export(export)
+    if issues:
+        formatted = "\n".join(f"- {issue}" for issue in issues)
+        raise ExportModelValidationError(
+            f"Invalid repository export model:\n{formatted}"
+        )
+
+
+def _validate_file_group(
+    *,
+    group_name: str,
+    files: tuple[FileEntry, ...],
+    valid_text_statuses: set[str],
+    valid_file_statuses: set[str],
+    issues: list[str],
+) -> None:
+    seen_paths: set[str] = set()
+
+    for index, file in enumerate(files):
+        prefix = f"{group_name}[{index}]"
+
+        if not file.path.strip():
+            issues.append(f"{prefix}.path must not be empty")
+        elif file.path in seen_paths:
+            issues.append(f"{group_name} contains duplicate path: {file.path}")
+        else:
+            seen_paths.add(file.path)
+
+        if not file.language.strip():
+            issues.append(f"{prefix}.language must not be empty")
+
+        if file.size_bytes < 0:
+            issues.append(f"{prefix}.size_bytes must not be negative")
+
+        if file.line_count < 0:
+            issues.append(f"{prefix}.line_count must not be negative")
+
+        if file.estimated_tokens < 0:
+            issues.append(f"{prefix}.estimated_tokens must not be negative")
+
+        if file.text_status not in valid_text_statuses:
+            issues.append(
+                f"{prefix}.text_status must be one of {sorted(valid_text_statuses)}"
+            )
+
+        if file.status not in valid_file_statuses:
+            issues.append(
+                f"{prefix}.status must be one of {sorted(valid_file_statuses)}"
+            )
+
+
+def _validate_tree_entries(
+    entries: tuple[FileTreeEntry, ...],
+    *,
+    prefix: str = "tree",
+) -> tuple[str, ...]:
+    issues: list[str] = []
+    seen_paths: set[str] = set()
+
+    for index, entry in enumerate(entries):
+        entry_prefix = f"{prefix}[{index}]"
+
+        if not entry.path.strip():
+            issues.append(f"{entry_prefix}.path must not be empty")
+        elif entry.path in seen_paths:
+            issues.append(f"{prefix} contains duplicate path: {entry.path}")
+        else:
+            seen_paths.add(entry.path)
+
+        if entry.entry_type not in {"file", "directory"}:
+            issues.append(
+                f"{entry_prefix}.entry_type must be one of ['directory', 'file']"
+            )
+
+        child_issues = _validate_tree_entries(
+            entry.children,
+            prefix=f"{entry_prefix}.children",
+        )
+        issues.extend(child_issues)
+
+    return tuple(issues)
