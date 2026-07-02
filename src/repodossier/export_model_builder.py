@@ -9,18 +9,30 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from dataclasses import dataclass, field
-from pathlib import PurePosixPath
+from pathlib import Path, PurePosixPath
 
 from repodossier.export_model import (
     ExportConfigurationSummary,
     ExportMode,
     ExportSummary,
+    ExportWarning,
     FileEntry,
+    FileStatus,
     FileTreeEntry,
     LanguageStatistics,
     RepositoryExport,
     RepositoryMetadata,
+    TextStatus,
 )
+from repodossier.export_model_factory import make_repository_export
+from repodossier.git import (
+    get_current_branch,
+    get_current_commit_hash,
+    get_repository_name,
+    is_working_tree_dirty,
+)
+from repodossier.models import FileInfo
+from repodossier.scanner import RepositoryScanner
 
 
 NO_EXTENSION_LABEL = "[no extension]"
@@ -121,6 +133,181 @@ def _freeze_children(parent_path: str, node: _MutableTreeNode) -> tuple[FileTree
             )
 
     return tuple(entries)
+
+
+
+def file_entry_from_scan_info(
+    file_info: FileInfo,
+    *,
+    include_content: bool = True,
+) -> FileEntry:
+    """Convert a real scanner FileInfo object into a structured FileEntry."""
+
+    path = _normalize_export_path(str(file_info.relative_path))
+    language = (file_info.language or "unknown").strip() or "unknown"
+    status = _file_status_from_scan_info(file_info)
+    text_status = _text_status_from_scan_info(file_info)
+    reason = _reason_from_scan_info(file_info)
+
+    content = None
+    if include_content and status == "included" and text_status == "text":
+        content = file_info.content
+
+    return FileEntry(
+        path=path,
+        language=language,
+        size_bytes=_non_negative_int(file_info.size_bytes),
+        line_count=_non_negative_int(file_info.line_count),
+        estimated_tokens=_non_negative_int(file_info.estimated_tokens),
+        text_status=text_status,
+        status=status,
+        content=content,
+        reason=reason,
+    )
+
+
+def file_entries_from_scan_infos(
+    file_infos: Iterable[FileInfo],
+    *,
+    include_content: bool = True,
+) -> tuple[FileEntry, ...]:
+    """Build deterministic FileEntry objects from scanner results."""
+
+    entries = tuple(
+        file_entry_from_scan_info(
+            file_info,
+            include_content=include_content,
+        )
+        for file_info in file_infos
+    )
+
+    return tuple(sorted(entries, key=lambda entry: entry.path))
+
+
+def build_repository_export_from_scan(
+    root_path: Path | str,
+    *,
+    mode: ExportMode = "full",
+    scanner: RepositoryScanner | None = None,
+    file_infos: Iterable[FileInfo] | None = None,
+    configuration: ExportConfigurationSummary | None = None,
+    include_content: bool = True,
+    include_git_metadata: bool = True,
+    validate: bool = True,
+) -> RepositoryExport:
+    """Scan a repository and assemble a finalized RepositoryExport model.
+
+    This is the first real bridge from the existing scanner layer into the
+    structured Milestone 3 export model. It intentionally does not render
+    Markdown, XML or any other output format.
+    """
+
+    resolved_root = Path(root_path).resolve()
+
+    if file_infos is None:
+        active_scanner = scanner or RepositoryScanner()
+        scanned_infos = tuple(active_scanner.scan(resolved_root))
+    else:
+        scanned_infos = tuple(file_infos)
+
+    entries = file_entries_from_scan_infos(
+        scanned_infos,
+        include_content=include_content,
+    )
+
+    git_branch: str | None = None
+    git_commit: str | None = None
+    git_dirty: bool | None = None
+
+    if include_git_metadata:
+        git_branch = _safe_git_value(get_current_branch, resolved_root)
+        git_commit = _safe_git_value(get_current_commit_hash, resolved_root)
+        git_dirty = _safe_git_value(is_working_tree_dirty, resolved_root)
+
+    return make_repository_export(
+        mode=mode,
+        root_path=str(resolved_root),
+        root_name=get_repository_name(resolved_root) or resolved_root.name or ".",
+        git_branch=git_branch,
+        git_commit=git_commit,
+        git_dirty=git_dirty,
+        configuration=configuration,
+        files=tuple(entry for entry in entries if entry.status == "included"),
+        omitted_files=tuple(
+            entry
+            for entry in entries
+            if entry.status in {"skipped", "error"}
+            or entry.text_status == "binary"
+        ),
+        truncated_files=tuple(
+            entry for entry in entries if entry.status == "truncated"
+        ),
+        warnings=_warnings_from_scan_infos(scanned_infos),
+        validate=validate,
+    )
+
+
+def _file_status_from_scan_info(file_info: FileInfo) -> FileStatus:
+    if file_info.error:
+        return "error"
+
+    if file_info.is_binary:
+        return "skipped"
+
+    if file_info.is_text is False:
+        return "skipped"
+
+    return "included"
+
+
+def _text_status_from_scan_info(file_info: FileInfo) -> TextStatus:
+    if file_info.is_binary:
+        return "binary"
+
+    return "text"
+
+
+def _reason_from_scan_info(file_info: FileInfo) -> str | None:
+    if file_info.error:
+        return str(file_info.error)
+
+    if file_info.is_binary:
+        return "binary file"
+
+    if file_info.is_text is False:
+        return "non-text file"
+
+    return None
+
+
+def _warnings_from_scan_infos(
+    file_infos: Iterable[FileInfo],
+) -> tuple[ExportWarning, ...]:
+    warnings = [
+        ExportWarning(
+            path=_normalize_export_path(str(file_info.relative_path)),
+            code="scan-error",
+            message=str(file_info.error),
+        )
+        for file_info in file_infos
+        if file_info.error
+    ]
+
+    return tuple(sorted(warnings, key=lambda warning: warning.path or ""))
+
+
+def _non_negative_int(value: int | None) -> int:
+    if value is None:
+        return 0
+
+    return max(0, int(value))
+
+
+def _safe_git_value(callback, root_path: Path):
+    try:
+        return callback(root_path)
+    except Exception:
+        return None
 
 
 def create_repository_export(

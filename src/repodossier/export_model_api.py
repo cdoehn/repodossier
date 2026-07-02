@@ -12,6 +12,11 @@ from repodossier.export_model_adapters import (
     file_entry_from_mapping,
     file_entry_from_object,
 )
+from repodossier.export_model_builder import (
+    build_repository_export_from_scan,
+    file_entries_from_scan_infos,
+    file_entry_from_scan_info,
+)
 from repodossier.export_model import (
     CallGraphReport,
     DatabaseSchemaReport,
@@ -355,6 +360,19 @@ __all__ = (
 )
 
 __all__ = tuple(sorted(__all__))
+
+
+__all__ = tuple(
+    sorted(
+        set(__all__)
+        | {
+            "build_repository_export_from_scan",
+            "file_entries_from_scan_infos",
+            "file_entry_from_scan_info",
+        }
+    )
+)
+
 
 __all__ = tuple(
     sorted(
