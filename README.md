@@ -1166,3 +1166,28 @@ Legacy config names are still accepted as fallbacks:
 
 If both current and legacy config values are present, the RepoDossier config
 takes precedence.
+
+## Language Detection
+
+RepoDossier uses a central, deterministic language detector for scans and exports. The detector combines shebangs, known filenames, extension mapping, and conservative content heuristics.
+
+Detection order:
+
+1. Clear shebangs win first, including Python, Bash, POSIX shell, and Node.js scripts.
+2. Known extensions and known filenames stay stable, so documentation, config files, and project metadata are not reclassified because they contain embedded examples.
+3. Conservative content heuristics classify extensionless or otherwise unknown files when the signal is strong enough.
+4. Ambiguous files stay unknown instead of guessing.
+
+Supported extension labels include Python, Bash, Markdown, text, JSON, YAML, TOML, INI, TypeScript, TSX, JavaScript, JSX, HTML, CSS, Java, C, C++, and C#.
+
+New extension mappings include .ts, .tsx, .js, .jsx, .mjs, .cjs, .html, .htm, .css, .java, .c, .cpp, .cc, .cxx, .hpp, .hh, .hxx, and .cs.
+
+C and C++ headers are intentionally conservative. C++-specific header extensions such as .hpp, .hh, and .hxx map to C++. The ambiguous .h extension is not mapped by extension alone; content heuristics may classify it as C or C++ only when the file has a clear signal.
+
+Exports use these labels consistently:
+
+- full.txt groups files by readable language names such as TypeScript, JavaScript, C++, and C#.
+- full.txt source sections use language-aware Markdown code fences.
+- changed.txt uses language-aware Markdown code fences for changed file contents.
+- ai.txt and docs.txt keep their existing scope while tolerating the new language labels.
+
