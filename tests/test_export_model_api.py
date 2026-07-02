@@ -241,3 +241,63 @@ def test_export_model_api_exposes_collector_helpers():
     assert [entry.path for entry in export.files] == ["src/app.py"]
     assert [entry.path for entry in export.truncated_files] == ["README.md"]
     assert export.summary.total_tracked_files == 2
+
+
+def test_export_model_api_exposes_compare_helpers():
+    before = api.repository_export_from_file_mappings(
+        mode="full",
+        root_path="/repo",
+        root_name="repo",
+        mappings=(
+            {
+                "path": "src/app.py",
+                "language": "python",
+                "content": "print(1)\n",
+            },
+        ),
+    )
+    after = api.repository_export_from_file_mappings(
+        mode="full",
+        root_path="/repo",
+        root_name="repo",
+        mappings=(
+            {
+                "path": "src/app.py",
+                "language": "python",
+                "content": "print(2)\n",
+            },
+            {
+                "path": "README.md",
+                "language": "markdown",
+                "content": "# Hello\n",
+            },
+        ),
+    )
+
+    comparison = api.compare_repository_exports(before, after)
+
+    assert api.FILE_COMPARE_FIELDS
+    assert isinstance(comparison, api.RepositoryExportComparison)
+    assert not comparison.same
+    assert comparison.added_paths == ("README.md",)
+    assert comparison.removed_paths == ()
+    assert comparison.changed_files == (
+        api.FileEntryChange(path="src/app.py", changed_fields=("content",)),
+    )
+    assert comparison.changed_paths() == ("README.md", "src/app.py")
+
+    assert not api.repository_exports_have_same_paths(before, after)
+    assert api.repository_export_path_delta(before, after) == (
+        ("README.md",),
+        (),
+    )
+
+    assert api.compare_file_entries(
+        before.files[0],
+        after.files[1],
+        include_content=False,
+    ) == ()
+    assert api.compare_file_entries(
+        before.files[0],
+        after.files[1],
+    ) == ("content",)

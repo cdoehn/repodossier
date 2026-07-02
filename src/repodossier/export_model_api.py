@@ -44,6 +44,15 @@ from repodossier.export_model_collector import (
     repository_export_from_file_mappings,
     repository_export_from_file_objects,
 )
+from repodossier.export_model_compare import (
+    FILE_COMPARE_FIELDS,
+    FileEntryChange,
+    RepositoryExportComparison,
+    compare_file_entries,
+    compare_repository_exports,
+    repository_export_path_delta,
+    repository_exports_have_same_paths,
+)
 from repodossier.export_model_configuration import (
     make_export_configuration_summary,
     merge_configuration_summaries,
@@ -351,6 +360,21 @@ __all__ = tuple(
             "repository_export_from_file_entries",
             "repository_export_from_file_mappings",
             "repository_export_from_file_objects",
+        }
+    )
+)
+
+__all__ = tuple(
+    sorted(
+        set(__all__)
+        | {
+            "FILE_COMPARE_FIELDS",
+            "FileEntryChange",
+            "RepositoryExportComparison",
+            "compare_file_entries",
+            "compare_repository_exports",
+            "repository_export_path_delta",
+            "repository_exports_have_same_paths",
         }
     )
 )
