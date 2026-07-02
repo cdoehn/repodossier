@@ -700,3 +700,58 @@ def test_docs_export_masks_secret_values_and_reports_summary(monkeypatch):
     assert "Potential secrets masked: 1" in rendered
     assert "- TOKEN: 1" in rendered
     assert "This line is safe documentation." in rendered
+
+
+def test_docs_export_ignores_new_source_language_files(tmp_path: Path):
+    context = make_docs_context(
+        tmp_path,
+        [
+            make_file(tmp_path, "README.md", content="# Readme\nBody\n"),
+            make_file(tmp_path, "src/app.ts", content="export const value: string = 'no';\n"),
+            make_file(tmp_path, "src/main.js", content="console.log('no');\n"),
+            make_file(tmp_path, "web/index.html", content="<!DOCTYPE html>\n<html></html>\n"),
+            make_file(tmp_path, "web/style.css", content="body { margin: 0; }\n"),
+            make_file(tmp_path, "src/App.java", content="public class App {}\n"),
+            make_file(tmp_path, "src/main.c", content="int main(void) { return 0; }\n"),
+            make_file(tmp_path, "src/main.cpp", content="#include <iostream>\nint main() { return 0; }\n"),
+            make_file(tmp_path, "src/App.cs", content="using System;\npublic class App {}\n"),
+        ],
+    )
+
+    rendered = render_docs_export(context)
+
+    assert "Documentation files: 1" in rendered
+    assert "### File: README.md" in rendered
+    assert "```markdown\n# Readme\nBody\n```" in rendered
+    assert "### File: src/app.ts" not in rendered
+    assert "### File: src/main.js" not in rendered
+    assert "### File: web/index.html" not in rendered
+    assert "### File: web/style.css" not in rendered
+    assert "### File: src/App.java" not in rendered
+    assert "### File: src/main.c" not in rendered
+    assert "### File: src/main.cpp" not in rendered
+    assert "### File: src/App.cs" not in rendered
+    assert "export const value" not in rendered
+    assert "console.log('no')" not in rendered
+    assert "<!DOCTYPE html>" not in rendered
+    assert "public class App" not in rendered
+
+
+def test_docs_context_filters_new_source_languages_from_exportable_docs(tmp_path: Path):
+    readme = make_file(tmp_path, "README.md", content="# Readme\n")
+    source_files = [
+        make_file(tmp_path, "src/app.ts", content="export const value: string = 'no';\n"),
+        make_file(tmp_path, "src/main.js", content="console.log('no');\n"),
+        make_file(tmp_path, "web/index.html", content="<!DOCTYPE html>\n<html></html>\n"),
+        make_file(tmp_path, "web/style.css", content="body { margin: 0; }\n"),
+        make_file(tmp_path, "src/App.java", content="public class App {}\n"),
+        make_file(tmp_path, "src/main.c", content="int main(void) { return 0; }\n"),
+        make_file(tmp_path, "src/main.cpp", content="#include <iostream>\nint main() { return 0; }\n"),
+        make_file(tmp_path, "src/App.cs", content="using System;\npublic class App {}\n"),
+    ]
+
+    context = make_docs_context(tmp_path, [readme, *source_files])
+
+    assert [doc.relative_path for doc in context.documentation_files] == [Path("README.md")]
+    assert context.skipped_files == ()
+

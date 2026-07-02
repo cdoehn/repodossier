@@ -899,3 +899,49 @@ def test_ai_export_masks_secret_values_and_reports_summary(monkeypatch):
     assert "Potential secrets masked: 1" in rendered
     assert "- API_KEY: 1" in rendered
     assert "def safe_function()" in rendered
+
+
+def test_ai_export_handles_new_language_file_types_without_expanding_scope(
+    tmp_path: Path,
+) -> None:
+    context = make_ai_export_context_from_files(
+        tmp_path,
+        {
+            "README.md": "# Example\n",
+            "src/app.ts": "export const value: string = 'ok';\n",
+            "src/main.js": "console.log('ok');\n",
+            "web/index.html": "<!DOCTYPE html>\n<html></html>\n",
+            "web/style.css": "body { margin: 0; }\n",
+            "src/App.java": "public class App {}\n",
+            "src/main.c": "int main(void) { return 0; }\n",
+            "src/main.cpp": "#include <iostream>\nint main() { return 0; }\n",
+            "src/App.cs": "using System;\npublic class App {}\n",
+        },
+    )
+
+    rendered = render_ai_export(context)
+
+    assert "# AI CONTEXT" in rendered
+    assert "## Important Files" in rendered
+    assert "## Symbol Index" in rendered
+    assert "## Import Graph" in rendered
+    assert "## Call Graph" in rendered
+    assert "Traceback" not in rendered
+    assert "Exception" not in rendered
+
+
+def test_ai_export_with_new_language_files_is_deterministic(tmp_path: Path) -> None:
+    context = make_ai_export_context_from_files(
+        tmp_path,
+        {
+            "src/app.ts": "interface User {\n  id: string;\n}\n",
+            "src/main.cpp": "namespace demo { class App {}; }\n",
+            "src/App.cs": "using System;\nnamespace Demo { public class App {} }\n",
+        },
+    )
+
+    first_render = render_ai_export(context)
+    second_render = render_ai_export(context)
+
+    assert first_render == second_render
+
