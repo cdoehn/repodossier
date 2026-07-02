@@ -163,3 +163,34 @@ def test_export_model_api_exposes_contract_helpers():
     assert api.missing_export_model_api_symbols() == ()
 
     api.assert_export_model_contract(export)
+
+
+def test_export_model_api_exposes_section_helpers():
+    export = api.make_repository_export(
+        mode="full",
+        root_path="/repo",
+        root_name="repo",
+        files=(
+            api.make_file_entry_from_content(
+                path="src/app.py",
+                language="python",
+                content="print(1)\n",
+            ),
+        ),
+    )
+
+    assert api.normalize_export_section("repository-tree") == "repository_tree"
+    assert api.export_section_title("source-export") == "Source Export"
+    assert "summary" in api.known_export_sections()
+    assert api.SECTION_TITLES["repository_tree"] == "Repository Tree"
+
+    assert api.repository_export_sections(export) == api.export_mode_sections("full")
+
+    presence = api.repository_export_section_presence(export)
+    populated = api.repository_export_populated_sections(export)
+
+    assert presence["repository_metadata"] is True
+    assert presence["summary"] is True
+    assert "repository_metadata" in populated
+    assert "summary" in populated
+    assert api.repository_export_has_section(export, "repository-metadata")

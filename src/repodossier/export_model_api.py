@@ -129,6 +129,17 @@ from repodossier.export_model_reports import (
     normalize_report_items,
     normalize_report_mapping,
 )
+from repodossier.export_model_sections import (
+    SECTION_TITLES,
+    export_mode_sections,
+    export_section_title,
+    known_export_sections,
+    normalize_export_section,
+    repository_export_has_section,
+    repository_export_populated_sections,
+    repository_export_section_presence,
+    repository_export_sections,
+)
 from repodossier.export_model_serialization import (
     repository_export_to_dict,
     to_plain_data,
@@ -303,6 +314,23 @@ __all__ = tuple(
             "export_model_section_presence",
             "missing_export_model_api_symbols",
             "missing_export_model_sections",
+        }
+    )
+)
+
+__all__ = tuple(
+    sorted(
+        set(__all__)
+        | {
+            "SECTION_TITLES",
+            "export_mode_sections",
+            "export_section_title",
+            "known_export_sections",
+            "normalize_export_section",
+            "repository_export_has_section",
+            "repository_export_populated_sections",
+            "repository_export_section_presence",
+            "repository_export_sections",
         }
     )
 )
