@@ -21,9 +21,15 @@ def finalize_repository_export(
 
     This helper composes the pure model helpers introduced for Milestone 3.
     It does not scan files, call Git, render output or mutate the input model.
+
+    Validation intentionally runs before tree building. That way invalid model
+    paths produce ExportModelValidationError instead of lower-level path errors.
     """
 
     finalized = export
+
+    if validate:
+        assert_valid_repository_export(finalized)
 
     if rebuild_summary:
         finalized = replace(
@@ -41,7 +47,6 @@ def finalize_repository_export(
         assert_valid_repository_export(finalized)
 
     return finalized
-
 
 def repository_export_with_files(
     *,
