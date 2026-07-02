@@ -79,6 +79,10 @@ from repodossier.export_model_content import (
     file_entry_has_exportable_content,
     make_file_entry_from_content,
 )
+from repodossier.export_model_deserialization import (
+    repository_export_from_dict,
+    repository_export_from_json,
+)
 from repodossier.export_model_factory import (
     make_minimal_repository_export,
     make_repository_export,
@@ -435,6 +439,16 @@ __all__ = tuple(
             "repository_export_file_inventory_by_group",
             "repository_export_file_inventory_lines",
             "repository_export_file_inventory_to_dicts",
+        }
+    )
+)
+
+__all__ = tuple(
+    sorted(
+        set(__all__)
+        | {
+            "repository_export_from_dict",
+            "repository_export_from_json",
         }
     )
 )

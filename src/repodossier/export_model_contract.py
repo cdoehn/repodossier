@@ -160,3 +160,13 @@ def assert_export_model_contract(export: RepositoryExport) -> None:
     )
 
 REQUIRED_EXPORT_MODEL_API_SYMBOLS = tuple(sorted(REQUIRED_EXPORT_MODEL_API_SYMBOLS))
+
+REQUIRED_EXPORT_MODEL_API_SYMBOLS = tuple(
+    sorted(
+        set(REQUIRED_EXPORT_MODEL_API_SYMBOLS)
+        | {
+            "repository_export_from_dict",
+            "repository_export_from_json",
+        }
+    )
+)

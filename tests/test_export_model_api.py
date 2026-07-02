@@ -455,3 +455,42 @@ def test_export_model_api_exposes_file_inventory_helpers():
     )
     assert "reason=too large" in lines[1]
     assert lines[2].startswith("src/app.py | group=files | language=python")
+
+
+def test_export_model_api_exposes_deserialization_helpers():
+    original = api.repository_export_from_file_mappings(
+        mode="full",
+        root_path="/repo",
+        root_name="repo",
+        mappings=(
+            {
+                "path": "src/app.py",
+                "language": "python",
+                "content": "print(1)\n",
+            },
+            {
+                "path": "assets/logo.png",
+                "language": "binary",
+                "binary": True,
+                "skipped": True,
+                "size": 123,
+            },
+        ),
+        warnings=(
+            api.make_export_warning(
+                "Binary file skipped",
+                path="assets/logo.png",
+                code="binary",
+            ),
+        ),
+    )
+
+    data = api.repository_export_to_dict(original)
+    json_text = api.repository_export_to_json(original)
+
+    from_dict = api.repository_export_from_dict(data)
+    from_json = api.repository_export_from_json(json_text)
+
+    assert from_dict == original
+    assert from_json == original
+    assert api.repository_export_fingerprint(from_dict) == api.repository_export_fingerprint(original)
