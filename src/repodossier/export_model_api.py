@@ -163,6 +163,14 @@ from repodossier.export_model_reports import (
     normalize_report_items,
     normalize_report_mapping,
 )
+from repodossier.export_model_roundtrip import (
+    RepositoryExportRoundTripError,
+    RepositoryExportRoundTripStatus,
+    assert_repository_export_round_trips,
+    repository_export_canonical_dict,
+    repository_export_round_trip,
+    repository_export_round_trip_status,
+)
 from repodossier.export_model_sections import (
     SECTION_TITLES,
     export_mode_sections,
@@ -449,6 +457,20 @@ __all__ = tuple(
         | {
             "repository_export_from_dict",
             "repository_export_from_json",
+        }
+    )
+)
+
+__all__ = tuple(
+    sorted(
+        set(__all__)
+        | {
+            "RepositoryExportRoundTripError",
+            "RepositoryExportRoundTripStatus",
+            "assert_repository_export_round_trips",
+            "repository_export_canonical_dict",
+            "repository_export_round_trip",
+            "repository_export_round_trip_status",
         }
     )
 )

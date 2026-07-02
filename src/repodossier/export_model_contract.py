@@ -170,3 +170,17 @@ REQUIRED_EXPORT_MODEL_API_SYMBOLS = tuple(
         }
     )
 )
+
+REQUIRED_EXPORT_MODEL_API_SYMBOLS = tuple(
+    sorted(
+        set(REQUIRED_EXPORT_MODEL_API_SYMBOLS)
+        | {
+            "RepositoryExportRoundTripError",
+            "RepositoryExportRoundTripStatus",
+            "assert_repository_export_round_trips",
+            "repository_export_canonical_dict",
+            "repository_export_round_trip",
+            "repository_export_round_trip_status",
+        }
+    )
+)

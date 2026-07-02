@@ -494,3 +494,56 @@ def test_export_model_api_exposes_deserialization_helpers():
     assert from_dict == original
     assert from_json == original
     assert api.repository_export_fingerprint(from_dict) == api.repository_export_fingerprint(original)
+
+
+def test_export_model_api_exposes_roundtrip_helpers():
+    export = api.repository_export_from_file_mappings(
+        mode="full",
+        root_path="/repo",
+        root_name="repo",
+        mappings=(
+            {
+                "path": "src/app.py",
+                "language": "python",
+                "content": "print(1)\n",
+            },
+            {
+                "path": "large.log",
+                "language": "text",
+                "content": "partial",
+                "truncated": True,
+            },
+        ),
+    )
+
+    restored = api.repository_export_round_trip(export)
+    canonical = api.repository_export_canonical_dict(export)
+    status = api.repository_export_round_trip_status(export)
+
+    assert restored == export
+    assert canonical == api.repository_export_to_dict(export)
+    assert isinstance(status, api.RepositoryExportRoundTripStatus)
+    assert status.valid
+    assert status.issues == ()
+    assert status.same_fingerprint is True
+    assert len(status.before_fingerprint) == 64
+
+    api.assert_repository_export_round_trips(export)
+
+    invalid = api.RepositoryExport(
+        mode="full",
+        repository=api.RepositoryMetadata(root_path="", root_name="repo"),
+    )
+
+    invalid_status = api.repository_export_round_trip_status(invalid)
+
+    assert not invalid_status.valid
+    assert invalid_status.issues
+    assert invalid_status.issues[0].startswith("deserialization failed:")
+
+    try:
+        api.assert_repository_export_round_trips(invalid)
+    except api.RepositoryExportRoundTripError as exc:
+        assert "RepositoryExport does not round-trip cleanly:" in str(exc)
+    else:
+        raise AssertionError("expected RepositoryExportRoundTripError")
