@@ -194,3 +194,50 @@ def test_export_model_api_exposes_section_helpers():
     assert "repository_metadata" in populated
     assert "summary" in populated
     assert api.repository_export_has_section(export, "repository-metadata")
+
+
+def test_export_model_api_exposes_collector_helpers():
+    partitions = api.partition_file_entries(
+        (
+            api.FileEntry(path="src/app.py", language="python"),
+            api.FileEntry(
+                path="src/large.py",
+                language="python",
+                status="truncated",
+            ),
+            api.FileEntry(
+                path="assets/logo.png",
+                language="binary",
+                text_status="binary",
+                status="skipped",
+            ),
+        )
+    )
+
+    assert isinstance(partitions, api.FileEntryPartitions)
+    assert [entry.path for entry in partitions.files] == ["src/app.py"]
+    assert [entry.path for entry in partitions.truncated_files] == ["src/large.py"]
+    assert [entry.path for entry in partitions.omitted_files] == ["assets/logo.png"]
+
+    export = api.repository_export_from_file_mappings(
+        mode="full",
+        root_path="/repo",
+        root_name="repo",
+        mappings=(
+            {
+                "path": "src/app.py",
+                "language": "python",
+                "content": "print(1)\n",
+            },
+            {
+                "path": "README.md",
+                "language": "markdown",
+                "truncated": True,
+                "content": "# Partial",
+            },
+        ),
+    )
+
+    assert [entry.path for entry in export.files] == ["src/app.py"]
+    assert [entry.path for entry in export.truncated_files] == ["README.md"]
+    assert export.summary.total_tracked_files == 2

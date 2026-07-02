@@ -37,6 +37,13 @@ from repodossier.export_model import (
     empty_repository_export,
     validate_repository_export,
 )
+from repodossier.export_model_collector import (
+    FileEntryPartitions,
+    partition_file_entries,
+    repository_export_from_file_entries,
+    repository_export_from_file_mappings,
+    repository_export_from_file_objects,
+)
 from repodossier.export_model_configuration import (
     make_export_configuration_summary,
     merge_configuration_summaries,
@@ -331,6 +338,19 @@ __all__ = tuple(
             "repository_export_populated_sections",
             "repository_export_section_presence",
             "repository_export_sections",
+        }
+    )
+)
+
+__all__ = tuple(
+    sorted(
+        set(__all__)
+        | {
+            "FileEntryPartitions",
+            "partition_file_entries",
+            "repository_export_from_file_entries",
+            "repository_export_from_file_mappings",
+            "repository_export_from_file_objects",
         }
     )
 )
