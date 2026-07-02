@@ -1124,3 +1124,123 @@ def test_full_secret_detection_section_is_inserted_before_complete_source_export
     assert "API_KEY: 1" in output
     assert "sk-live-1234567890abcdefSECRET" not in output
 
+
+def test_full_export_file_summary_uses_readable_new_language_group_names(
+    tmp_path: Path,
+) -> None:
+    from repodossier.exporters.full import create_full_export_context, render_full_export
+    from repodossier.git import RepositoryInfo, TrackedFile
+    from repodossier.models import FileInfo
+
+    cases = [
+        ("src/app.ts", "typescript", "export const value: string = 'ok';\n", "TypeScript"),
+        ("src/main.js", "javascript", "console.log('ok');\n", "JavaScript"),
+        ("web/index.html", "html", "<!DOCTYPE html>\n<html></html>\n", "HTML"),
+        ("web/style.css", "css", "body { margin: 0; }\n", "CSS"),
+        ("src/App.java", "java", "public class App {}\n", "Java"),
+        ("src/main.c", "c", "int main(void) { return 0; }\n", "C"),
+        ("src/main.cpp", "cpp", "#include <iostream>\nint main() { return 0; }\n", "C++"),
+        ("src/App.cs", "csharp", "using System;\npublic class App {}\n", "C#"),
+    ]
+
+    file_infos = []
+    tracked_files = []
+    for path_text, language, content, _display in cases:
+        file_path = tmp_path / path_text
+        file_path.parent.mkdir(parents=True, exist_ok=True)
+        file_path.write_text(content, encoding="utf-8")
+        relative_path = Path(path_text)
+        tracked_files.append(TrackedFile(path=relative_path))
+        file_infos.append(
+            FileInfo(
+                relative_path=relative_path,
+                absolute_path=file_path,
+                is_text=True,
+                is_binary=False,
+                language=language,
+                line_count=content.count("\n"),
+                estimated_tokens=5,
+                content=content,
+            )
+        )
+
+    repository_info = RepositoryInfo(
+        name="example",
+        root_path=tmp_path,
+        is_current_directory_root=True,
+        branch="main",
+        commit_hash="a" * 40,
+        short_commit_hash="aaaaaaa",
+        remote_url=None,
+        is_dirty=False,
+        tracked_files=tracked_files,
+        commit_metadata=None,
+    )
+
+    context = create_full_export_context(repository_info, file_infos)
+    rendered = render_full_export(context)
+
+    for _path_text, _language, _content, display in cases:
+        assert f"## {display} (1 file)" in rendered
+
+
+def test_full_export_source_dump_uses_new_language_code_fences(
+    tmp_path: Path,
+) -> None:
+    from repodossier.exporters.full import create_full_export_context, render_full_export
+    from repodossier.git import RepositoryInfo, TrackedFile
+    from repodossier.models import FileInfo
+
+    cases = [
+        ("src/app.ts", "typescript", "export const value: string = 'ok';\n"),
+        ("src/main.js", "javascript", "console.log('ok');\n"),
+        ("web/index.html", "html", "<!DOCTYPE html>\n<html></html>\n"),
+        ("web/style.css", "css", "body { margin: 0; }\n"),
+        ("src/App.java", "java", "public class App {}\n"),
+        ("src/main.c", "c", "int main(void) { return 0; }\n"),
+        ("src/main.cpp", "cpp", "#include <iostream>\nint main() { return 0; }\n"),
+        ("src/App.cs", "csharp", "using System;\npublic class App {}\n"),
+    ]
+
+    file_infos = []
+    tracked_files = []
+    for path_text, language, content in cases:
+        file_path = tmp_path / path_text
+        file_path.parent.mkdir(parents=True, exist_ok=True)
+        file_path.write_text(content, encoding="utf-8")
+        relative_path = Path(path_text)
+        tracked_files.append(TrackedFile(path=relative_path))
+        file_infos.append(
+            FileInfo(
+                relative_path=relative_path,
+                absolute_path=file_path,
+                is_text=True,
+                is_binary=False,
+                language=language,
+                line_count=content.count("\n"),
+                estimated_tokens=5,
+                content=content,
+            )
+        )
+
+    repository_info = RepositoryInfo(
+        name="example",
+        root_path=tmp_path,
+        is_current_directory_root=True,
+        branch="main",
+        commit_hash="a" * 40,
+        short_commit_hash="aaaaaaa",
+        remote_url=None,
+        is_dirty=False,
+        tracked_files=tracked_files,
+        commit_metadata=None,
+    )
+
+    context = create_full_export_context(repository_info, file_infos)
+    rendered = render_full_export(context)
+    fence = "`" * 3
+
+    for path_text, language, content in cases:
+        assert f"## File: {path_text}" in rendered
+        assert f"{fence}{language}\n{content.rstrip()}\n{fence}" in rendered
+

@@ -516,7 +516,7 @@ def _format_language_name(language: str) -> str:
         "toml": "TOML",
         "yaml": "YAML",
     }
-    return language_names.get(language.lower(), language.title())
+    return language_names.get(language.lower(), _display_language_name(language))
 
 
 def _lowercase_scanned_paths(context: FullExportContext) -> set[str]:
@@ -1070,6 +1070,38 @@ def _choose_code_fence(content: str) -> str:
         fence += backtick
 
     return fence
+
+
+def _display_language_name(language: str | None) -> str:
+    """Return a human-readable language group name for file summaries."""
+
+    display_names = {
+        "python": "Python",
+        "bash": "Bash",
+        "shell": "Bash",
+        "markdown": "Markdown",
+        "toml": "TOML",
+        "yaml": "YAML",
+        "json": "JSON",
+        "ini": "INI",
+        "typescript": "TypeScript",
+        "tsx": "TSX",
+        "javascript": "JavaScript",
+        "jsx": "JSX",
+        "html": "HTML",
+        "css": "CSS",
+        "java": "Java",
+        "c": "C",
+        "cpp": "C++",
+        "csharp": "C#",
+        "text": "Text",
+        "unknown": "Unknown",
+        "makefile": "Makefile",
+        "dockerfile": "Dockerfile",
+    }
+
+    normalized_language = (language or "unknown").lower()
+    return display_names.get(normalized_language, normalized_language.title())
 
 
 def _code_fence_language(language: str | None) -> str:
