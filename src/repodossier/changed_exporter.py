@@ -1,4 +1,6 @@
 from __future__ import annotations
+from repodossier.languages import code_fence_language as _shared_code_fence_language
+
 from repodossier.secrets import SecretFinding, mask_secrets_in_text
 
 from collections import Counter
@@ -187,32 +189,7 @@ def _append_git_diff(
 def _changed_code_fence_language(scan: ChangedFileScan) -> str:
     """Return a Markdown code fence language for changed file contents."""
 
-    code_fence_languages = {
-        "python": "python",
-        "bash": "bash",
-        "shell": "bash",
-        "markdown": "markdown",
-        "toml": "toml",
-        "yaml": "yaml",
-        "json": "json",
-        "ini": "ini",
-        "typescript": "typescript",
-        "tsx": "tsx",
-        "javascript": "javascript",
-        "jsx": "jsx",
-        "html": "html",
-        "css": "css",
-        "java": "java",
-        "c": "c",
-        "cpp": "cpp",
-        "csharp": "csharp",
-        "text": "text",
-        "makefile": "makefile",
-        "dockerfile": "dockerfile",
-    }
-
-    normalized_language = _language_for(scan).lower()
-    return code_fence_languages.get(normalized_language, "text")
+    return _shared_code_fence_language(_language_for(scan))
 
 
 def _append_changed_file_contents(

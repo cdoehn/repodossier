@@ -1,6 +1,9 @@
 """Foundational structures and orchestration for the Full Export MVP."""
 
 from __future__ import annotations
+from repodossier.languages import code_fence_language as _shared_code_fence_language
+from repodossier.languages import display_language_name as _shared_display_language_name
+
 from repodossier.secrets import SecretFinding, mask_secrets_in_text
 
 from collections import Counter
@@ -1075,64 +1078,14 @@ def _choose_code_fence(content: str) -> str:
 def _display_language_name(language: str | None) -> str:
     """Return a human-readable language group name for file summaries."""
 
-    display_names = {
-        "python": "Python",
-        "bash": "Bash",
-        "shell": "Bash",
-        "markdown": "Markdown",
-        "toml": "TOML",
-        "yaml": "YAML",
-        "json": "JSON",
-        "ini": "INI",
-        "typescript": "TypeScript",
-        "tsx": "TSX",
-        "javascript": "JavaScript",
-        "jsx": "JSX",
-        "html": "HTML",
-        "css": "CSS",
-        "java": "Java",
-        "c": "C",
-        "cpp": "C++",
-        "csharp": "C#",
-        "text": "Text",
-        "unknown": "Unknown",
-        "makefile": "Makefile",
-        "dockerfile": "Dockerfile",
-    }
-
-    normalized_language = (language or "unknown").lower()
-    return display_names.get(normalized_language, normalized_language.title())
+    return _shared_display_language_name(language)
 
 
 def _code_fence_language(language: str | None) -> str:
-    """Return a Markdown code fence language for a scanner language label."""
+    """Return a Markdown code fence language for source blocks."""
 
-    code_fence_languages = {
-        "python": "python",
-        "bash": "bash",
-        "shell": "bash",
-        "markdown": "markdown",
-        "toml": "toml",
-        "yaml": "yaml",
-        "json": "json",
-        "ini": "ini",
-        "typescript": "typescript",
-        "tsx": "tsx",
-        "javascript": "javascript",
-        "jsx": "jsx",
-        "html": "html",
-        "css": "css",
-        "java": "java",
-        "c": "c",
-        "cpp": "cpp",
-        "csharp": "csharp",
-        "text": "text",
-        "makefile": "makefile",
-        "dockerfile": "dockerfile",
-    }
+    return _shared_code_fence_language(language)
 
-    normalized_language = (language or "").lower()
-    return code_fence_languages.get(normalized_language, "text")
 
 def _render_warnings(context: FullExportContext) -> str:
     """Render collected Full Export warnings."""
@@ -1769,4 +1722,3 @@ def render_full_export(*args, **kwargs):
 
     separator = "\n\n" if output and not output.endswith("\n\n") else ""
     return f"{output}{separator}{chr(10).join(chr(10) + section if index else section for index, section in enumerate(sections))}\n"
-
