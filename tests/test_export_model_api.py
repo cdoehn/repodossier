@@ -606,3 +606,63 @@ def test_export_model_api_exposes_audit_helpers():
         assert "RepositoryExport audit failed:" in str(exc)
     else:
         raise AssertionError("expected RepositoryExportAuditError")
+
+
+def test_export_model_api_exposes_readiness_helpers():
+    export = api.repository_export_from_file_mappings(
+        mode="full",
+        root_path="/repo",
+        root_name="repo",
+        mappings=(
+            {
+                "path": "src/app.py",
+                "language": "python",
+                "content": "print(1)\n",
+            },
+            {
+                "path": "assets/logo.png",
+                "language": "binary",
+                "binary": True,
+                "skipped": True,
+                "size": 123,
+            },
+        ),
+    )
+
+    status = api.repository_export_readiness_status(export)
+    lines = api.repository_export_readiness_lines(export)
+
+    assert isinstance(status, api.RepositoryExportReadinessStatus)
+    assert status.valid
+    assert status.issues == ()
+    assert status.title == "Full Repository Export"
+    assert status.contract_valid is True
+    assert status.audit_valid is True
+    assert len(status.fingerprint) == 64
+    assert lines[:4] == (
+        "title=Full Repository Export",
+        "valid=True",
+        "contract_valid=True",
+        "audit_valid=True",
+    )
+
+    api.assert_repository_export_ready(export)
+
+    invalid = api.RepositoryExport(
+        mode="invalid",
+        repository=api.RepositoryMetadata(root_path="", root_name=""),
+    )
+
+    invalid_status = api.repository_export_readiness_status(invalid)
+
+    assert not invalid_status.valid
+    assert invalid_status.issues
+    assert any(issue.startswith("contract:") for issue in invalid_status.issues)
+    assert any(issue.startswith("audit:") for issue in invalid_status.issues)
+
+    try:
+        api.assert_repository_export_ready(invalid)
+    except api.RepositoryExportReadinessError as exc:
+        assert "RepositoryExport is not ready:" in str(exc)
+    else:
+        raise AssertionError("expected RepositoryExportReadinessError")

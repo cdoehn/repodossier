@@ -170,6 +170,13 @@ from repodossier.export_model_reports import (
     normalize_report_items,
     normalize_report_mapping,
 )
+from repodossier.export_model_readiness import (
+    RepositoryExportReadinessError,
+    RepositoryExportReadinessStatus,
+    assert_repository_export_ready,
+    repository_export_readiness_lines,
+    repository_export_readiness_status,
+)
 from repodossier.export_model_roundtrip import (
     RepositoryExportRoundTripError,
     RepositoryExportRoundTripStatus,
@@ -491,6 +498,19 @@ __all__ = tuple(
             "assert_repository_export_audit",
             "audit_repository_export",
             "repository_export_audit_lines",
+        }
+    )
+)
+
+__all__ = tuple(
+    sorted(
+        set(__all__)
+        | {
+            "RepositoryExportReadinessError",
+            "RepositoryExportReadinessStatus",
+            "assert_repository_export_ready",
+            "repository_export_readiness_lines",
+            "repository_export_readiness_status",
         }
     )
 )
