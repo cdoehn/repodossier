@@ -100,6 +100,14 @@ from repodossier.export_model_index import (
     language_counts_from_export,
     status_counts_from_export,
 )
+from repodossier.export_model_inventory import (
+    FileInventoryEntry,
+    FileInventoryGroup,
+    repository_export_file_inventory,
+    repository_export_file_inventory_by_group,
+    repository_export_file_inventory_lines,
+    repository_export_file_inventory_to_dicts,
+)
 from repodossier.export_model_manifest import (
     RepositoryExportManifest,
     repository_export_manifest,
@@ -413,6 +421,20 @@ __all__ = tuple(
             "repository_export_section_titles",
             "repository_export_view",
             "repository_export_warning_lines",
+        }
+    )
+)
+
+__all__ = tuple(
+    sorted(
+        set(__all__)
+        | {
+            "FileInventoryEntry",
+            "FileInventoryGroup",
+            "repository_export_file_inventory",
+            "repository_export_file_inventory_by_group",
+            "repository_export_file_inventory_lines",
+            "repository_export_file_inventory_to_dicts",
         }
     )
 )

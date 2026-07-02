@@ -396,3 +396,62 @@ def test_export_model_api_exposes_view_helpers():
     titles = api.repository_export_section_titles(export)
     assert ("repository_metadata", "Repository Metadata") in titles
     assert ("summary", "Summary") in titles
+
+
+def test_export_model_api_exposes_file_inventory_helpers():
+    export = api.repository_export_from_file_mappings(
+        mode="full",
+        root_path="/repo",
+        root_name="repo",
+        mappings=(
+            {
+                "path": "src/app.py",
+                "language": "python",
+                "content": "print(1)\n",
+            },
+            {
+                "path": "assets/logo.png",
+                "language": "binary",
+                "binary": True,
+                "skipped": True,
+                "size": 123,
+                "skip_reason": "binary file",
+            },
+            {
+                "path": "large.log",
+                "language": "text",
+                "content": "partial",
+                "truncated": True,
+                "skip_reason": "too large",
+            },
+        ),
+    )
+
+    inventory = api.repository_export_file_inventory(export)
+    grouped = api.repository_export_file_inventory_by_group(export)
+    data = api.repository_export_file_inventory_to_dicts(export)
+    lines = api.repository_export_file_inventory_lines(export)
+
+    assert isinstance(inventory[0], api.FileInventoryEntry)
+    assert [entry.path for entry in inventory] == [
+        "assets/logo.png",
+        "large.log",
+        "src/app.py",
+    ]
+    assert [entry.path for entry in grouped["files"]] == ["src/app.py"]
+    assert [entry.path for entry in grouped["omitted_files"]] == [
+        "assets/logo.png",
+    ]
+    assert [entry.path for entry in grouped["truncated_files"]] == [
+        "large.log",
+    ]
+
+    assert data[0]["path"] == "assets/logo.png"
+    assert data[0]["group"] == "omitted_files"
+    assert data[0]["reason"] == "binary file"
+
+    assert lines[0].startswith(
+        "assets/logo.png | group=omitted_files | language=binary"
+    )
+    assert "reason=too large" in lines[1]
+    assert lines[2].startswith("src/app.py | group=files | language=python")
