@@ -173,3 +173,21 @@ def test_export_model_contract_fingerprint_can_include_or_omit_content():
     assert metadata_only.valid
     assert with_content.valid
     assert metadata_only.fingerprint != with_content.fingerprint
+
+
+def test_contract_helper_api_symbols_are_required_and_exported():
+    import repodossier.export_model_api as api
+    from repodossier.export_model_contract import (
+        CONTRACT_HELPER_API_SYMBOLS,
+        REQUIRED_EXPORT_MODEL_API_SYMBOLS,
+        missing_export_model_api_symbols,
+    )
+
+    assert CONTRACT_HELPER_API_SYMBOLS == tuple(sorted(CONTRACT_HELPER_API_SYMBOLS))
+    assert set(CONTRACT_HELPER_API_SYMBOLS) <= set(REQUIRED_EXPORT_MODEL_API_SYMBOLS)
+
+    for symbol in CONTRACT_HELPER_API_SYMBOLS:
+        assert symbol in api.__all__
+        assert hasattr(api, symbol)
+
+    assert missing_export_model_api_symbols() == ()

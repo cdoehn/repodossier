@@ -184,3 +184,48 @@ REQUIRED_EXPORT_MODEL_API_SYMBOLS = tuple(
         }
     )
 )
+
+CONTRACT_HELPER_API_SYMBOLS = tuple(
+    sorted(
+        {
+            "FILE_COMPARE_FIELDS",
+            "FileEntryChange",
+            "FileInventoryEntry",
+            "FileInventoryGroup",
+            "RepositoryExportComparison",
+            "RepositoryExportManifest",
+            "RepositoryExportRoundTripError",
+            "RepositoryExportRoundTripStatus",
+            "RepositoryExportView",
+            "assert_repository_export_round_trips",
+            "compare_file_entries",
+            "compare_repository_exports",
+            "repository_export_canonical_dict",
+            "repository_export_file_inventory",
+            "repository_export_file_inventory_by_group",
+            "repository_export_file_inventory_lines",
+            "repository_export_file_inventory_to_dicts",
+            "repository_export_files_for_section",
+            "repository_export_from_dict",
+            "repository_export_from_json",
+            "repository_export_manifest",
+            "repository_export_manifest_lines",
+            "repository_export_manifest_to_dict",
+            "repository_export_path_delta",
+            "repository_export_round_trip",
+            "repository_export_round_trip_status",
+            "repository_export_section_titles",
+            "repository_export_view",
+            "repository_export_warning_lines",
+            "repository_exports_have_same_paths",
+        }
+    )
+)
+
+
+REQUIRED_EXPORT_MODEL_API_SYMBOLS = tuple(
+    sorted(
+        set(REQUIRED_EXPORT_MODEL_API_SYMBOLS)
+        | set(CONTRACT_HELPER_API_SYMBOLS)
+    )
+)
