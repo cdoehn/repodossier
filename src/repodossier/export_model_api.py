@@ -44,6 +44,17 @@ from repodossier.export_model_configuration import (
     normalize_configuration_paths,
     normalize_configuration_patterns,
 )
+from repodossier.export_model_contract import (
+    REQUIRED_EXPORT_MODEL_API_SYMBOLS,
+    REQUIRED_EXPORT_MODEL_SECTIONS,
+    ExportModelContractError,
+    ExportModelContractStatus,
+    assert_export_model_contract,
+    export_model_contract_status,
+    export_model_section_presence,
+    missing_export_model_api_symbols,
+    missing_export_model_sections,
+)
 from repodossier.export_model_content import (
     content_line_count,
     content_size_bytes,
@@ -275,6 +286,23 @@ __all__ = tuple(
             "repository_export_snapshot_header",
             "repository_export_snapshot_lines",
             "repository_export_to_json",
+        }
+    )
+)
+
+__all__ = tuple(
+    sorted(
+        set(__all__)
+        | {
+            "REQUIRED_EXPORT_MODEL_API_SYMBOLS",
+            "REQUIRED_EXPORT_MODEL_SECTIONS",
+            "ExportModelContractError",
+            "ExportModelContractStatus",
+            "assert_export_model_contract",
+            "export_model_contract_status",
+            "export_model_section_presence",
+            "missing_export_model_api_symbols",
+            "missing_export_model_sections",
         }
     )
 )

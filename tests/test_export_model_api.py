@@ -133,3 +133,33 @@ def test_export_model_api_exposes_snapshot_helpers():
     assert header["file_count"] == 1
     assert lines[0] == "{"
     assert lines[-1] == "}"
+
+
+def test_export_model_api_exposes_contract_helpers():
+    export = api.make_repository_export(
+        mode="full",
+        root_path="/repo",
+        root_name="repo",
+        files=(
+            api.make_file_entry_from_content(
+                path="src/app.py",
+                language="python",
+                content="print(1)\n",
+            ),
+        ),
+    )
+
+    status = api.export_model_contract_status(export)
+    presence = api.export_model_section_presence(export)
+
+    assert api.REQUIRED_EXPORT_MODEL_SECTIONS
+    assert api.REQUIRED_EXPORT_MODEL_API_SYMBOLS
+    assert isinstance(status, api.ExportModelContractStatus)
+    assert status.valid
+    assert status.issues == ()
+    assert presence["mode"] is True
+    assert presence["repository"] is True
+    assert api.missing_export_model_sections(export) == ()
+    assert api.missing_export_model_api_symbols() == ()
+
+    api.assert_export_model_contract(export)
