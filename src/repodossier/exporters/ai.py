@@ -2241,3 +2241,29 @@ def write_ai_export_from_model(export, output_path) -> None:
         encoding="utf-8",
     )
 
+
+
+def render_ai_export_with_optional_model(
+    export_or_context: object,
+    *,
+    use_model_renderer: bool = False,
+    legacy_renderer: object | None = None,
+) -> str:
+    """Render an AI export through legacy behavior or explicit model opt-in."""
+
+    if use_model_renderer:
+        from repodossier.export_model import RepositoryExport
+
+        if not isinstance(export_or_context, RepositoryExport):
+            raise TypeError(
+                "use_model_renderer=True requires a RepositoryExport instance."
+            )
+
+        return render_ai_export_from_model(export_or_context)
+
+    if not callable(legacy_renderer):
+        raise TypeError(
+            "legacy_renderer must be callable when use_model_renderer=False."
+        )
+
+    return legacy_renderer(export_or_context)
