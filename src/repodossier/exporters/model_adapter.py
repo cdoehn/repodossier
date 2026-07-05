@@ -34,8 +34,16 @@ def build_repository_export_from_entries(
     git_branch: str | None = None,
     git_commit: str | None = None,
     git_dirty: bool | None = None,
+    dependencies: object | None = None,
+    database_schema: object | None = None,
+    secret_detection: object | None = None,
+    symbol_index: object | None = None,
+    import_graph: object | None = None,
+    call_graph: object | None = None,
+    test_map: object | None = None,
+    recent_commits: object | None = None,
 ) -> RepositoryExport:
-    """Build a RepositoryExport from already-collected FileEntry objects."""
+    """Build a RepositoryExport from already-collected model fragments."""
 
     file_entries = tuple(files)
     omitted_entries = tuple(omitted_files)
@@ -65,6 +73,17 @@ def build_repository_export_from_entries(
         language_statistics=LanguageStatistics(_language_statistics(included_entries)),
     )
 
+    report_kwargs = _report_kwargs(
+        dependencies=dependencies,
+        database_schema=database_schema,
+        secret_detection=secret_detection,
+        symbol_index=symbol_index,
+        import_graph=import_graph,
+        call_graph=call_graph,
+        test_map=test_map,
+        recent_commits=recent_commits,
+    )
+
     return RepositoryExport(
         mode=mode,
         repository=RepositoryMetadata(
@@ -80,8 +99,8 @@ def build_repository_export_from_entries(
         truncated_files=truncated_entries,
         warnings=warning_entries,
         tree=build_file_tree_from_entries(all_entries),
+        **report_kwargs,
     )
-
 
 
 def build_file_tree_from_entries(entries: Iterable[FileEntry]) -> tuple[FileTreeEntry, ...]:
@@ -105,31 +124,6 @@ def build_file_tree_from_entries(entries: Iterable[FileEntry]) -> tuple[FileTree
         node.setdefault(parts[-1], None)
 
     return _tree_nodes_from_mapping(root, prefix="")
-
-
-def _tree_nodes_from_mapping(
-    mapping: Mapping[str, object],
-    *,
-    prefix: str,
-) -> tuple[FileTreeEntry, ...]:
-    nodes: list[FileTreeEntry] = []
-
-    for name in sorted(mapping):
-        value = mapping[name]
-        path = f"{prefix}/{name}" if prefix else name
-
-        if isinstance(value, Mapping):
-            nodes.append(
-                FileTreeEntry(
-                    path=path,
-                    entry_type="directory",
-                    children=_tree_nodes_from_mapping(value, prefix=path),
-                )
-            )
-        else:
-            nodes.append(FileTreeEntry(path=path, entry_type="file"))
-
-    return tuple(nodes)
 
 
 def file_entry_from_mapping(data: Mapping[str, Any]) -> FileEntry:
@@ -208,6 +202,41 @@ def export_warnings_from_objects(values: Iterable[object]) -> tuple[ExportWarnin
     """Convert warning-like objects or mappings into ExportWarning objects."""
 
     return tuple(export_warning_from_object(value) for value in values)
+
+
+def _report_kwargs(**reports: object | None) -> dict[str, object]:
+    """Return only explicitly supplied RepositoryExport report fragments."""
+
+    return {
+        name: report
+        for name, report in reports.items()
+        if report is not None
+    }
+
+
+def _tree_nodes_from_mapping(
+    mapping: Mapping[str, object],
+    *,
+    prefix: str,
+) -> tuple[FileTreeEntry, ...]:
+    nodes: list[FileTreeEntry] = []
+
+    for name in sorted(mapping):
+        value = mapping[name]
+        path = f"{prefix}/{name}" if prefix else name
+
+        if isinstance(value, Mapping):
+            nodes.append(
+                FileTreeEntry(
+                    path=path,
+                    entry_type="directory",
+                    children=_tree_nodes_from_mapping(value, prefix=path),
+                )
+            )
+        else:
+            nodes.append(FileTreeEntry(path=path, entry_type="file"))
+
+    return tuple(nodes)
 
 
 def _get_value(value: object, name: str, default: object = None) -> object:
