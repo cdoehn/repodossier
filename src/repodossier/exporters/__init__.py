@@ -82,6 +82,7 @@ from repodossier.exporters.model_markdown import (
 
 from repodossier.exporters.model_adapter import (
     build_repository_export_from_entries,
+    build_file_tree_from_entries,
     export_warning_from_mapping,
     export_warning_from_object,
     export_warnings_from_objects,

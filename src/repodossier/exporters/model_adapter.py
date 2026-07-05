@@ -15,6 +15,7 @@ from repodossier.export_model import (
     ExportSummary,
     ExportWarning,
     FileEntry,
+    FileTreeEntry,
     LanguageStatistics,
     RepositoryExport,
     RepositoryMetadata,
@@ -78,7 +79,57 @@ def build_repository_export_from_entries(
         omitted_files=omitted_entries,
         truncated_files=truncated_entries,
         warnings=warning_entries,
+        tree=build_file_tree_from_entries(all_entries),
     )
+
+
+
+def build_file_tree_from_entries(entries: Iterable[FileEntry]) -> tuple[FileTreeEntry, ...]:
+    """Build a deterministic FileTreeEntry tree from FileEntry paths."""
+
+    root: dict[str, dict[str, object]] = {}
+
+    for entry in entries:
+        parts = tuple(part for part in Path(entry.path).parts if part not in {"", "."})
+        if not parts:
+            continue
+
+        node = root
+        for part in parts[:-1]:
+            child = node.setdefault(part, {})
+            if not isinstance(child, dict):
+                child = {}
+                node[part] = child
+            node = child
+
+        node.setdefault(parts[-1], None)
+
+    return _tree_nodes_from_mapping(root, prefix="")
+
+
+def _tree_nodes_from_mapping(
+    mapping: Mapping[str, object],
+    *,
+    prefix: str,
+) -> tuple[FileTreeEntry, ...]:
+    nodes: list[FileTreeEntry] = []
+
+    for name in sorted(mapping):
+        value = mapping[name]
+        path = f"{prefix}/{name}" if prefix else name
+
+        if isinstance(value, Mapping):
+            nodes.append(
+                FileTreeEntry(
+                    path=path,
+                    entry_type="directory",
+                    children=_tree_nodes_from_mapping(value, prefix=path),
+                )
+            )
+        else:
+            nodes.append(FileTreeEntry(path=path, entry_type="file"))
+
+    return tuple(nodes)
 
 
 def file_entry_from_mapping(data: Mapping[str, Any]) -> FileEntry:
