@@ -36,7 +36,7 @@ def test_markdown_renderer_exposes_mode_specific_methods() -> None:
     (
         ("full", "render_full", "# AI Quick Start"),
         ("ai", "render_ai", "# AI CONTEXT"),
-        ("docs", "render_docs", "# RepoDossier Export (docs)"),
+        ("docs", "render_docs", "# Documentation Context"),
         ("changed", "render_changed", "# RepoDossier Export (changed)"),
     ),
 )
@@ -73,7 +73,7 @@ def test_module_level_mode_helpers_delegate_to_renderer() -> None:
     assert render_full_markdown(_export("full")).startswith("# AI Quick Start")
     assert render_ai_markdown(_export("ai")).startswith("# AI CONTEXT")
     assert render_docs_markdown(_export("docs")).startswith(
-        "# RepoDossier Export (docs)"
+        "# Documentation Context"
     )
     assert render_changed_markdown(_export("changed")).startswith(
         "# RepoDossier Export (changed)"

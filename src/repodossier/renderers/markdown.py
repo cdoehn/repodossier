@@ -123,6 +123,34 @@ def iter_ai_markdown_renderer_headings() -> tuple[str, ...]:
     )
 
 
+DOCS_MARKDOWN_RENDERER_SECTION_ORDER: tuple[str, ...] = (
+    "document_header",
+    "documentation_quick_start",
+    "documentation_summary",
+    "documentation_files",
+    "extracted_documents",
+    "warnings",
+)
+
+DOCS_MARKDOWN_RENDERER_SECTION_HEADINGS: dict[str, str] = {
+    "document_header": "# Documentation Context",
+    "documentation_quick_start": "## Documentation Quick Start",
+    "documentation_summary": "## Documentation Summary",
+    "documentation_files": "## Documentation Files",
+    "extracted_documents": "## Extracted Documents",
+    "warnings": "## Warnings",
+}
+
+
+def iter_docs_markdown_renderer_headings() -> tuple[str, ...]:
+    """Return docs Markdown renderer headings in stable render order."""
+
+    return tuple(
+        DOCS_MARKDOWN_RENDERER_SECTION_HEADINGS[section_name]
+        for section_name in DOCS_MARKDOWN_RENDERER_SECTION_ORDER
+    )
+
+
 def describe_markdown_renderer_status() -> dict[str, tuple[str, ...] | str]:
     """Describe current renderer reuse points and migration gaps."""
 
@@ -392,9 +420,199 @@ class MarkdownRenderer:
         return str(item)
 
     def render_docs(self, export: RepositoryExport) -> str:
-        """Render a docs-mode RepositoryExport as Markdown."""
+        """Render a docs-mode RepositoryExport as documentation Markdown."""
 
-        return self._render_mode(export, "docs")
+        _assert_export_mode(export, "docs")
+        return self._render_docs_export(export)
+
+    def _render_docs_export(self, export: RepositoryExport) -> str:
+        """Render docs.txt-compatible sections from RepositoryExport."""
+
+        section_renderers = {
+            "document_header": self._render_docs_document_header,
+            "documentation_quick_start": self._render_docs_quick_start,
+            "documentation_summary": self._render_docs_summary,
+            "documentation_files": self._render_docs_files,
+            "extracted_documents": self._render_docs_extracted_documents,
+            "warnings": self._render_docs_warnings,
+        }
+
+        parts = [
+            section_renderers[section_name](export)
+            for section_name in DOCS_MARKDOWN_RENDERER_SECTION_ORDER
+        ]
+
+        return "\n\n".join(part for part in parts if part).rstrip() + "\n"
+
+    def _render_docs_document_header(self, export: RepositoryExport) -> str:
+        return DOCS_MARKDOWN_RENDERER_SECTION_HEADINGS["document_header"]
+
+    def _render_docs_quick_start(self, export: RepositoryExport) -> str:
+        repository = export.repository
+        docs_files = self._documentation_files(export)
+        lines = [
+            DOCS_MARKDOWN_RENDERER_SECTION_HEADINGS["documentation_quick_start"],
+            "",
+            f"Repository: {repository.root_name}",
+            f"Documentation files: {len(docs_files)}",
+            f"Estimated tokens: {export.summary.estimated_tokens}",
+        ]
+
+        if docs_files:
+            lines.append(f"Start with: {docs_files[0].path}")
+
+        return "\n".join(lines)
+
+    def _render_docs_summary(self, export: RepositoryExport) -> str:
+        docs_files = self._documentation_files(export)
+        omitted_docs = self._documentation_files_from_entries(export.omitted_files)
+        truncated_docs = self._documentation_files_from_entries(export.truncated_files)
+
+        lines = [
+            DOCS_MARKDOWN_RENDERER_SECTION_HEADINGS["documentation_summary"],
+            "",
+            f"Tracked files: {export.summary.total_tracked_files}",
+            f"Scanned files: {export.summary.scanned_files}",
+            f"Documentation files included: {len(docs_files)}",
+            f"Documentation files omitted: {len(omitted_docs)}",
+            f"Documentation files truncated: {len(truncated_docs)}",
+        ]
+
+        if docs_files:
+            total_lines = sum(entry.line_count for entry in docs_files)
+            total_tokens = sum(entry.estimated_tokens for entry in docs_files)
+            lines.append(f"Documentation lines: {total_lines}")
+            lines.append(f"Documentation estimated tokens: {total_tokens}")
+
+        return "\n".join(lines)
+
+    def _render_docs_files(self, export: RepositoryExport) -> str:
+        docs_files = self._documentation_files(export)
+        omitted_docs = self._documentation_files_from_entries(export.omitted_files)
+        truncated_docs = self._documentation_files_from_entries(export.truncated_files)
+
+        lines = [DOCS_MARKDOWN_RENDERER_SECTION_HEADINGS["documentation_files"]]
+
+        if not docs_files and not omitted_docs and not truncated_docs:
+            lines.extend(["", "No documentation files detected."])
+            return "\n".join(lines)
+
+        if docs_files:
+            lines.append("")
+            lines.append("Included:")
+            for entry in docs_files:
+                lines.append(
+                    f"- {entry.path} ({entry.language}, {entry.line_count} lines, "
+                    f"{entry.size_bytes} bytes, {entry.status})"
+                )
+
+        if omitted_docs:
+            lines.append("")
+            lines.append("Omitted:")
+            for entry in omitted_docs:
+                reason = f" - {entry.reason}" if entry.reason else ""
+                lines.append(f"- {entry.path} ({entry.status}){reason}")
+
+        if truncated_docs:
+            lines.append("")
+            lines.append("Truncated:")
+            for entry in truncated_docs:
+                reason = f" - {entry.reason}" if entry.reason else ""
+                lines.append(f"- {entry.path} ({entry.status}){reason}")
+
+        return "\n".join(lines)
+
+    def _render_docs_extracted_documents(self, export: RepositoryExport) -> str:
+        docs_files = self._documentation_files(export)
+        lines = [DOCS_MARKDOWN_RENDERER_SECTION_HEADINGS["extracted_documents"]]
+
+        if not docs_files:
+            lines.extend(["", "No documentation content exported."])
+            return "\n".join(lines)
+
+        for entry in docs_files:
+            content = entry.rendered_content
+            fence = self._choose_code_fence(content)
+            language = self._code_fence_language(entry.language)
+            opening_fence = f"{fence}{language}" if language else fence
+            lines.extend(["", f"### {entry.path}", "", opening_fence])
+            lines.append(content)
+            lines.append(fence)
+
+        return "\n".join(lines)
+
+    def _render_docs_warnings(self, export: RepositoryExport) -> str:
+        heading = DOCS_MARKDOWN_RENDERER_SECTION_HEADINGS["warnings"]
+        relevant_warnings = tuple(
+            warning
+            for warning in export.warnings
+            if not warning.path or self._is_documentation_path(warning.path)
+        )
+
+        if not relevant_warnings:
+            return f"{heading}\n\nNo documentation warnings."
+
+        lines = [heading]
+        for warning in sorted(relevant_warnings, key=self._warning_sort_key):
+            prefix = f"{warning.path}: " if warning.path else ""
+            suffix = f" [{warning.code}]" if warning.code else ""
+            lines.append(f"- {prefix}{warning.message}{suffix}")
+
+        return "\n".join(lines)
+
+    def _documentation_files(self, export: RepositoryExport) -> tuple[FileEntry, ...]:
+        return self._documentation_files_from_entries(export.files)
+
+    def _documentation_files_from_entries(
+        self,
+        entries: Iterable[FileEntry],
+    ) -> tuple[FileEntry, ...]:
+        return tuple(
+            sorted(
+                (
+                    entry
+                    for entry in entries
+                    if self._is_documentation_entry(entry)
+                ),
+                key=lambda item: item.path,
+            )
+        )
+
+    def _is_documentation_entry(self, entry: FileEntry) -> bool:
+        return self._is_documentation_path(entry.path) or (
+            entry.language in {"markdown", "rst", "text"} and "/" not in entry.path
+        )
+
+    def _is_documentation_path(self, path: str) -> bool:
+        normalized = path.lower()
+        documentation_names = {
+            "readme",
+            "license",
+            "changelog",
+            "contributing",
+            "code_of_conduct",
+            "security",
+            "authors",
+            "notice",
+        }
+        documentation_suffixes = (
+            ".md",
+            ".markdown",
+            ".rst",
+            ".txt",
+            ".adoc",
+        )
+        basename = normalized.rsplit("/", 1)[-1]
+        stem = basename.rsplit(".", 1)[0]
+
+        return (
+            normalized.startswith("docs/")
+            or normalized.startswith("doc/")
+            or "/docs/" in normalized
+            or "/doc/" in normalized
+            or stem in documentation_names
+            or basename.endswith(documentation_suffixes)
+        )
 
     def render_changed(self, export: RepositoryExport) -> str:
         """Render a changed-mode RepositoryExport as Markdown."""

@@ -94,3 +94,10 @@ def test_current_markdown_renderer_ai_entrypoint_is_mode_aware() -> None:
 
     assert rendered.startswith("# AI CONTEXT")
     assert "## Project" in rendered
+
+
+def test_current_markdown_renderer_docs_entrypoint_is_mode_aware() -> None:
+    rendered = MarkdownRenderer().render_docs(_minimal_export("docs"))
+
+    assert rendered.startswith("# Documentation Context")
+    assert "## Documentation Quick Start" in rendered
