@@ -37,7 +37,7 @@ def test_markdown_renderer_exposes_mode_specific_methods() -> None:
         ("full", "render_full", "# AI Quick Start"),
         ("ai", "render_ai", "# AI CONTEXT"),
         ("docs", "render_docs", "# Documentation Context"),
-        ("changed", "render_changed", "# RepoDossier Export (changed)"),
+        ("changed", "render_changed", "# Changed Export"),
     ),
 )
 def test_mode_specific_methods_validate_and_render_expected_mode(
@@ -76,7 +76,7 @@ def test_module_level_mode_helpers_delegate_to_renderer() -> None:
         "# Documentation Context"
     )
     assert render_changed_markdown(_export("changed")).startswith(
-        "# RepoDossier Export (changed)"
+        "# Changed Export"
     )
 
 

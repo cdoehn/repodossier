@@ -151,6 +151,36 @@ def iter_docs_markdown_renderer_headings() -> tuple[str, ...]:
     )
 
 
+CHANGED_MARKDOWN_RENDERER_SECTION_ORDER: tuple[str, ...] = (
+    "document_header",
+    "changed_files_summary",
+    "changed_files",
+    "git_diff",
+    "changed_file_contents",
+    "deleted_files",
+    "binary_or_skipped_files",
+)
+
+CHANGED_MARKDOWN_RENDERER_SECTION_HEADINGS: dict[str, str] = {
+    "document_header": "# Changed Export",
+    "changed_files_summary": "# Changed Files Summary",
+    "changed_files": "# Changed Files",
+    "git_diff": "# Git Diff",
+    "changed_file_contents": "# Changed File Contents",
+    "deleted_files": "# Deleted Files",
+    "binary_or_skipped_files": "# Binary / Skipped Files",
+}
+
+
+def iter_changed_markdown_renderer_headings() -> tuple[str, ...]:
+    """Return changed Markdown renderer headings in stable render order."""
+
+    return tuple(
+        CHANGED_MARKDOWN_RENDERER_SECTION_HEADINGS[section_name]
+        for section_name in CHANGED_MARKDOWN_RENDERER_SECTION_ORDER
+    )
+
+
 def describe_markdown_renderer_status() -> dict[str, tuple[str, ...] | str]:
     """Describe current renderer reuse points and migration gaps."""
 
@@ -615,9 +645,184 @@ class MarkdownRenderer:
         )
 
     def render_changed(self, export: RepositoryExport) -> str:
-        """Render a changed-mode RepositoryExport as Markdown."""
+        """Render a changed-mode RepositoryExport as changed Markdown."""
 
-        return self._render_mode(export, "changed")
+        _assert_export_mode(export, "changed")
+        return self._render_changed_export(export)
+
+    def _render_changed_export(self, export: RepositoryExport) -> str:
+        """Render changed.txt-compatible sections from RepositoryExport."""
+
+        section_renderers = {
+            "document_header": self._render_changed_document_header,
+            "changed_files_summary": self._render_changed_files_summary,
+            "changed_files": self._render_changed_files,
+            "git_diff": self._render_changed_git_diff,
+            "changed_file_contents": self._render_changed_file_contents,
+            "deleted_files": self._render_changed_deleted_files,
+            "binary_or_skipped_files": self._render_changed_binary_or_skipped_files,
+        }
+
+        parts = [
+            section_renderers[section_name](export)
+            for section_name in CHANGED_MARKDOWN_RENDERER_SECTION_ORDER
+        ]
+
+        return "\n\n".join(part for part in parts if part).rstrip() + "\n"
+
+    def _render_changed_document_header(self, export: RepositoryExport) -> str:
+        repository = export.repository
+        lines = [
+            CHANGED_MARKDOWN_RENDERER_SECTION_HEADINGS["document_header"],
+            "",
+            f"Repository path: {repository.root_path}",
+            "Compare mode: model",
+        ]
+
+        if repository.git_branch:
+            lines.append(f"Git branch: {repository.git_branch}")
+        if repository.git_commit:
+            lines.append(f"Git commit: {repository.git_commit}")
+        if repository.git_dirty is not None:
+            lines.append(f"Git dirty: {repository.git_dirty}")
+
+        return "\n".join(lines)
+
+    def _render_changed_files_summary(self, export: RepositoryExport) -> str:
+        included = tuple(sorted(export.files, key=lambda item: item.path))
+        deleted = self._changed_deleted_files(export)
+        skipped = self._changed_binary_or_skipped_files(export)
+
+        lines = [
+            CHANGED_MARKDOWN_RENDERER_SECTION_HEADINGS["changed_files_summary"],
+            "",
+            f"Changed text files: {len(included)}",
+            f"Deleted files: {len(deleted)}",
+            f"Binary / skipped files: {len(skipped)}",
+            f"Warnings: {len(export.warnings)}",
+            f"Estimated tokens: {export.summary.estimated_tokens}",
+        ]
+
+        return "\n".join(lines)
+
+    def _render_changed_files(self, export: RepositoryExport) -> str:
+        lines = [CHANGED_MARKDOWN_RENDERER_SECTION_HEADINGS["changed_files"]]
+        entries = tuple(sorted(export.files, key=lambda item: item.path))
+
+        if not entries:
+            lines.extend(["", "No changed text files."])
+            return "\n".join(lines)
+
+        for entry in entries:
+            lines.append(
+                f"- {entry.path} ({entry.language}, {entry.line_count} lines, "
+                f"{entry.size_bytes} bytes, {entry.status})"
+            )
+
+        return "\n".join(lines)
+
+    def _render_changed_git_diff(self, export: RepositoryExport) -> str:
+        lines = [CHANGED_MARKDOWN_RENDERER_SECTION_HEADINGS["git_diff"]]
+        diff_text = self._metadata_value(export, "git_diff")
+
+        if not diff_text:
+            lines.extend(["", "No git diff available in export model."])
+            return "\n".join(lines)
+
+        fence = self._choose_code_fence(str(diff_text))
+        lines.extend(["", f"{fence}diff", str(diff_text), fence])
+        return "\n".join(lines)
+
+    def _render_changed_file_contents(self, export: RepositoryExport) -> str:
+        lines = [CHANGED_MARKDOWN_RENDERER_SECTION_HEADINGS["changed_file_contents"]]
+        entries = tuple(sorted(export.included_files(), key=lambda item: item.path))
+
+        if not entries:
+            lines.extend(["", "No changed file contents exported."])
+            return "\n".join(lines)
+
+        for entry in entries:
+            content = entry.rendered_content
+            fence = self._choose_code_fence(content)
+            language = self._code_fence_language(entry.language)
+            opening_fence = f"{fence}{language}" if language else fence
+            lines.extend(["", f"## File: {entry.path}", "", opening_fence])
+            lines.append(content)
+            lines.append(fence)
+
+        return "\n".join(lines)
+
+    def _render_changed_deleted_files(self, export: RepositoryExport) -> str:
+        lines = [CHANGED_MARKDOWN_RENDERER_SECTION_HEADINGS["deleted_files"]]
+        entries = self._changed_deleted_files(export)
+
+        if not entries:
+            lines.extend(["", "No deleted files."])
+            return "\n".join(lines)
+
+        for entry in entries:
+            reason = f" - {entry.reason}" if entry.reason else ""
+            lines.append(f"- {entry.path} ({entry.status}){reason}")
+
+        return "\n".join(lines)
+
+    def _render_changed_binary_or_skipped_files(self, export: RepositoryExport) -> str:
+        lines = [CHANGED_MARKDOWN_RENDERER_SECTION_HEADINGS["binary_or_skipped_files"]]
+        entries = self._changed_binary_or_skipped_files(export)
+
+        if not entries:
+            lines.extend(["", "No binary or skipped files."])
+            return "\n".join(lines)
+
+        for entry in entries:
+            reason = f" - {entry.reason}" if entry.reason else ""
+            text_status = f", {entry.text_status}" if entry.text_status else ""
+            lines.append(f"- {entry.path} ({entry.status}{text_status}){reason}")
+
+        return "\n".join(lines)
+
+    def _changed_deleted_files(self, export: RepositoryExport) -> tuple[FileEntry, ...]:
+        return tuple(
+            sorted(
+                (
+                    entry
+                    for entry in export.omitted_files + export.truncated_files
+                    if entry.status == "deleted"
+                    or (entry.reason is not None and "deleted" in entry.reason.lower())
+                ),
+                key=lambda item: item.path,
+            )
+        )
+
+    def _changed_binary_or_skipped_files(self, export: RepositoryExport) -> tuple[FileEntry, ...]:
+        return tuple(
+            sorted(
+                (
+                    entry
+                    for entry in export.omitted_files + export.truncated_files
+                    if entry.status != "deleted"
+                    and not (entry.reason is not None and "deleted" in entry.reason.lower())
+                ),
+                key=lambda item: item.path,
+            )
+        )
+
+    def _metadata_value(self, export: RepositoryExport, key: str) -> object | None:
+        for report in (
+            export.dependencies,
+            export.database_schema,
+            export.secret_detection,
+            export.symbol_index,
+            export.import_graph,
+            export.call_graph,
+            export.test_map,
+            export.recent_commits,
+        ):
+            metadata = getattr(report, "metadata", None)
+            if isinstance(metadata, dict) and key in metadata:
+                return metadata[key]
+
+        return None
 
     def render(self, export: RepositoryExport) -> str:
         parts: list[str] = [

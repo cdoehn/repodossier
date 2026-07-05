@@ -101,3 +101,10 @@ def test_current_markdown_renderer_docs_entrypoint_is_mode_aware() -> None:
 
     assert rendered.startswith("# Documentation Context")
     assert "## Documentation Quick Start" in rendered
+
+
+def test_current_markdown_renderer_changed_entrypoint_is_mode_aware() -> None:
+    rendered = MarkdownRenderer().render_changed(_minimal_export("changed"))
+
+    assert rendered.startswith("# Changed Export")
+    assert "# Changed Files Summary" in rendered
