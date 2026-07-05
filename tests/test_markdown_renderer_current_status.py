@@ -79,7 +79,7 @@ def test_current_markdown_renderer_is_still_generic_not_legacy_full() -> None:
     assert "# Complete Source Export" not in rendered
 
 
-def test_current_markdown_renderer_is_still_generic_for_non_full_modes() -> None:
+def test_current_markdown_renderer_default_render_stays_generic_for_non_full_modes() -> None:
     for mode in ("ai", "docs", "changed"):
         rendered = MarkdownRenderer().render(_minimal_export(mode))
 
@@ -87,3 +87,10 @@ def test_current_markdown_renderer_is_still_generic_for_non_full_modes() -> None
         assert "# AI CONTEXT" not in rendered
         assert "# Documentation Quick Start" not in rendered
         assert "# Changed Export" not in rendered
+
+
+def test_current_markdown_renderer_ai_entrypoint_is_mode_aware() -> None:
+    rendered = MarkdownRenderer().render_ai(_minimal_export("ai"))
+
+    assert rendered.startswith("# AI CONTEXT")
+    assert "## Project" in rendered

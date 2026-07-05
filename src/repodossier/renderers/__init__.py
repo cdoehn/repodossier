@@ -3,6 +3,7 @@
 from repodossier.renderers.markdown import (
     MarkdownRenderer,
     describe_markdown_renderer_status,
+    iter_ai_markdown_renderer_headings,
     render_ai_markdown,
     render_changed_markdown,
     render_docs_markdown,
@@ -13,6 +14,7 @@ from repodossier.renderers.markdown import (
 __all__ = [
     "MarkdownRenderer",
     "describe_markdown_renderer_status",
+    "iter_ai_markdown_renderer_headings",
     "render_ai_markdown",
     "render_changed_markdown",
     "render_docs_markdown",

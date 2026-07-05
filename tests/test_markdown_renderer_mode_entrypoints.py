@@ -35,7 +35,7 @@ def test_markdown_renderer_exposes_mode_specific_methods() -> None:
     ("mode", "method_name", "expected_prefix"),
     (
         ("full", "render_full", "# AI Quick Start"),
-        ("ai", "render_ai", "# RepoDossier Export (ai)"),
+        ("ai", "render_ai", "# AI CONTEXT"),
         ("docs", "render_docs", "# RepoDossier Export (docs)"),
         ("changed", "render_changed", "# RepoDossier Export (changed)"),
     ),
@@ -71,7 +71,7 @@ def test_mode_specific_methods_reject_wrong_mode(
 
 def test_module_level_mode_helpers_delegate_to_renderer() -> None:
     assert render_full_markdown(_export("full")).startswith("# AI Quick Start")
-    assert render_ai_markdown(_export("ai")).startswith("# RepoDossier Export (ai)")
+    assert render_ai_markdown(_export("ai")).startswith("# AI CONTEXT")
     assert render_docs_markdown(_export("docs")).startswith(
         "# RepoDossier Export (docs)"
     )

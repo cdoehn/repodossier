@@ -87,6 +87,42 @@ FULL_MARKDOWN_RENDERER_SECTION_HEADINGS: dict[str, str] = {
 }
 
 
+AI_MARKDOWN_RENDERER_SECTION_ORDER: tuple[str, ...] = (
+    "document_header",
+    "project",
+    "architecture_summary",
+    "important_files",
+    "dependencies",
+    "database_schema",
+    "symbol_index",
+    "import_graph",
+    "call_graph",
+    "notes",
+)
+
+AI_MARKDOWN_RENDERER_SECTION_HEADINGS: dict[str, str] = {
+    "document_header": "# AI CONTEXT",
+    "project": "## Project",
+    "architecture_summary": "## Architecture Summary",
+    "important_files": "## Important Files",
+    "dependencies": "## Dependencies",
+    "database_schema": "## Database Schema",
+    "symbol_index": "## Symbol Index",
+    "import_graph": "## Import Graph",
+    "call_graph": "## Call Graph",
+    "notes": "## Notes",
+}
+
+
+def iter_ai_markdown_renderer_headings() -> tuple[str, ...]:
+    """Return AI Markdown renderer headings in stable render order."""
+
+    return tuple(
+        AI_MARKDOWN_RENDERER_SECTION_HEADINGS[section_name]
+        for section_name in AI_MARKDOWN_RENDERER_SECTION_ORDER
+    )
+
+
 def describe_markdown_renderer_status() -> dict[str, tuple[str, ...] | str]:
     """Describe current renderer reuse points and migration gaps."""
 
@@ -135,9 +171,225 @@ class MarkdownRenderer:
         return self._render_full_export(export)
 
     def render_ai(self, export: RepositoryExport) -> str:
-        """Render an AI-mode RepositoryExport as Markdown."""
+        """Render an AI-mode RepositoryExport as compact Markdown."""
 
-        return self._render_mode(export, "ai")
+        _assert_export_mode(export, "ai")
+        return self._render_ai_export(export)
+
+    def _render_ai_export(self, export: RepositoryExport) -> str:
+        """Render ai.txt-compatible compact sections from RepositoryExport."""
+
+        section_renderers = {
+            "document_header": self._render_ai_document_header,
+            "project": self._render_ai_project,
+            "architecture_summary": self._render_ai_architecture_summary,
+            "important_files": self._render_ai_important_files,
+            "dependencies": self._render_ai_dependencies,
+            "database_schema": self._render_ai_database_schema,
+            "symbol_index": self._render_ai_symbol_index,
+            "import_graph": self._render_ai_import_graph,
+            "call_graph": self._render_ai_call_graph,
+            "notes": self._render_ai_notes,
+        }
+
+        parts = [
+            section_renderers[section_name](export)
+            for section_name in AI_MARKDOWN_RENDERER_SECTION_ORDER
+        ]
+
+        return "\n\n".join(part for part in parts if part).rstrip() + "\n"
+
+    def _render_ai_document_header(self, export: RepositoryExport) -> str:
+        return AI_MARKDOWN_RENDERER_SECTION_HEADINGS["document_header"]
+
+    def _render_ai_project(self, export: RepositoryExport) -> str:
+        summary = export.summary
+        repository = export.repository
+        lines = [
+            AI_MARKDOWN_RENDERER_SECTION_HEADINGS["project"],
+            "",
+            f"Repository: {repository.root_name}",
+            f"Mode: {export.mode}",
+            f"Tracked files: {summary.total_tracked_files}",
+            f"Exported text files: {summary.exported_text_files}",
+            f"Estimated tokens: {summary.estimated_tokens}",
+            f"Primary language: {self._primary_language(export)}",
+        ]
+
+        if repository.git_branch:
+            lines.append(f"Git branch: {repository.git_branch}")
+        if repository.git_commit:
+            lines.append(f"Git commit: {repository.git_commit}")
+
+        return "\n".join(lines)
+
+    def _render_ai_architecture_summary(self, export: RepositoryExport) -> str:
+        lines = [AI_MARKDOWN_RENDERER_SECTION_HEADINGS["architecture_summary"]]
+
+        top_level_dirs = sorted(
+            {
+                entry.path.split("/", 1)[0]
+                for entry in export.files + export.omitted_files + export.truncated_files
+                if "/" in entry.path
+            }
+        )
+        root_files = sorted(
+            {
+                entry.path
+                for entry in export.files + export.omitted_files + export.truncated_files
+                if "/" not in entry.path
+            }
+        )
+        languages = export.summary.language_statistics.counts
+
+        lines.append("")
+        lines.append(f"Top-level directories: {', '.join(top_level_dirs) if top_level_dirs else 'none detected'}")
+        lines.append(f"Root files: {', '.join(root_files[:8]) if root_files else 'none detected'}")
+
+        if languages:
+            language_summary = ", ".join(
+                f"{language}: {count}" for language, count in sorted(languages.items())
+            )
+            lines.append(f"Languages: {language_summary}")
+        else:
+            lines.append("Languages: none detected")
+
+        return "\n".join(lines)
+
+    def _render_ai_important_files(self, export: RepositoryExport) -> str:
+        lines = [AI_MARKDOWN_RENDERER_SECTION_HEADINGS["important_files"]]
+
+        candidates = sorted(
+            export.files,
+            key=lambda entry: (
+                0 if entry.path in {"README.md", "pyproject.toml"} else 1,
+                0 if entry.path.endswith("cli.py") or entry.path.endswith("__main__.py") else 1,
+                entry.path.count("/"),
+                entry.path,
+            ),
+        )
+
+        if not candidates:
+            lines.extend(["", "No important files available in the model."])
+            return "\n".join(lines)
+
+        for entry in candidates[:12]:
+            reason = "model file entry"
+            if entry.path == "README.md":
+                reason = "primary documentation"
+            elif entry.path == "pyproject.toml":
+                reason = "project configuration"
+            elif entry.path.endswith("cli.py") or entry.path.endswith("__main__.py"):
+                reason = "likely entry point"
+            lines.append(f"- {entry.path}")
+            lines.append(f"  Reason: {reason}")
+
+        return "\n".join(lines)
+
+    def _render_ai_dependencies(self, export: RepositoryExport) -> str:
+        return self._render_ai_report_section(
+            AI_MARKDOWN_RENDERER_SECTION_HEADINGS["dependencies"],
+            export.dependencies,
+            empty_message="No dependencies detected.",
+        )
+
+    def _render_ai_database_schema(self, export: RepositoryExport) -> str:
+        return self._render_ai_report_section(
+            AI_MARKDOWN_RENDERER_SECTION_HEADINGS["database_schema"],
+            export.database_schema,
+            empty_message="No database schema files detected.",
+        )
+
+    def _render_ai_symbol_index(self, export: RepositoryExport) -> str:
+        return self._render_ai_report_section(
+            AI_MARKDOWN_RENDERER_SECTION_HEADINGS["symbol_index"],
+            export.symbol_index,
+            empty_message="No symbol index data available.",
+        )
+
+    def _render_ai_import_graph(self, export: RepositoryExport) -> str:
+        return self._render_ai_report_section(
+            AI_MARKDOWN_RENDERER_SECTION_HEADINGS["import_graph"],
+            export.import_graph,
+            empty_message="No import graph data available.",
+        )
+
+    def _render_ai_call_graph(self, export: RepositoryExport) -> str:
+        return self._render_ai_report_section(
+            AI_MARKDOWN_RENDERER_SECTION_HEADINGS["call_graph"],
+            export.call_graph,
+            empty_message="No call graph data available.",
+        )
+
+    def _render_ai_notes(self, export: RepositoryExport) -> str:
+        lines = [AI_MARKDOWN_RENDERER_SECTION_HEADINGS["notes"]]
+
+        if not export.warnings and not export.omitted_files and not export.truncated_files:
+            lines.extend(["", "No notes."])
+            return "\n".join(lines)
+
+        if export.warnings:
+            lines.append("")
+            lines.append("Warnings:")
+            for warning in sorted(export.warnings, key=self._warning_sort_key):
+                prefix = f"{warning.path}: " if warning.path else ""
+                suffix = f" [{warning.code}]" if warning.code else ""
+                lines.append(f"- {prefix}{warning.message}{suffix}")
+
+        if export.omitted_files:
+            lines.append("")
+            lines.append("Omitted files:")
+            for entry in sorted(export.omitted_files, key=lambda item: item.path)[:20]:
+                reason = f" - {entry.reason}" if entry.reason else ""
+                lines.append(f"- {entry.path} ({entry.status}){reason}")
+
+        if export.truncated_files:
+            lines.append("")
+            lines.append("Truncated files:")
+            for entry in sorted(export.truncated_files, key=lambda item: item.path)[:20]:
+                reason = f" - {entry.reason}" if entry.reason else ""
+                lines.append(f"- {entry.path} ({entry.status}){reason}")
+
+        return "\n".join(lines)
+
+    def _render_ai_report_section(
+        self,
+        heading: str,
+        report: object,
+        *,
+        empty_message: str,
+    ) -> str:
+        items = self._report_items(report)
+
+        if not items:
+            return f"{heading}\n\n{empty_message}"
+
+        lines = [heading]
+        for item in items[:40]:
+            lines.append(f"- {self._format_report_item(item)}")
+
+        return "\n".join(lines)
+
+    def _report_items(self, report: object) -> tuple[object, ...]:
+        for attribute in ("items", "symbols", "edges", "findings", "mappings", "commits"):
+            value = getattr(report, attribute, ())
+            if value:
+                return tuple(value)
+
+        masked_files = getattr(report, "masked_files", ())
+        if masked_files:
+            return tuple({"masked_file": path} for path in masked_files)
+
+        return ()
+
+    def _format_report_item(self, item: object) -> str:
+        if isinstance(item, dict):
+            return ", ".join(
+                f"{key}: {value}" for key, value in sorted(item.items())
+            )
+        if isinstance(item, tuple) and len(item) == 2:
+            return f"{item[0]}: {item[1]}"
+        return str(item)
 
     def render_docs(self, export: RepositoryExport) -> str:
         """Render a docs-mode RepositoryExport as Markdown."""
