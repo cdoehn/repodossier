@@ -895,3 +895,16 @@ def render_docs_export(context: DocumentationExportContext) -> str:
     rendered = _insert_docs_config_summary_after_heading(rendered)
     return _apply_docs_max_export_bytes_limit(rendered)
 
+
+def render_docs_export_from_model(export: "RepositoryExport") -> str:
+    """Render docs Markdown from a RepositoryExport model.
+
+    This bridge is intentionally model-only. It does not scan files, inspect Git,
+    or run analyzers. Legacy docs-export functions stay unchanged while callers
+    can opt into the model-rendered Markdown path explicitly.
+    """
+
+    from repodossier.renderers import render_docs_markdown
+
+    return render_docs_markdown(export)
+

@@ -763,3 +763,17 @@ def _is_bash_call_graph_source(path: str, content: str | bytes | None = None) ->
                 return True
 
     return False
+
+
+def render_changed_export_from_model(export: "RepositoryExport") -> str:
+    """Render changed Markdown from a RepositoryExport model.
+
+    This bridge is intentionally model-only. It does not scan files, inspect Git,
+    or run analyzers. Legacy changed-export functions stay unchanged while
+    callers can opt into the model-rendered Markdown path explicitly.
+    """
+
+    from repodossier.renderers import render_changed_markdown
+
+    return render_changed_markdown(export)
+

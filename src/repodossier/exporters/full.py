@@ -1722,3 +1722,17 @@ def render_full_export(*args, **kwargs):
 
     separator = "\n\n" if output and not output.endswith("\n\n") else ""
     return f"{output}{separator}{chr(10).join(chr(10) + section if index else section for index, section in enumerate(sections))}\n"
+
+
+def render_full_export_from_model(export: "RepositoryExport") -> str:
+    """Render full Markdown from a RepositoryExport model.
+
+    This bridge is intentionally model-only. It does not scan files, inspect Git,
+    or run analyzers. Legacy full-export functions stay unchanged while callers
+    can opt into the model-rendered Markdown path explicitly.
+    """
+
+    from repodossier.renderers import render_full_markdown
+
+    return render_full_markdown(export)
+

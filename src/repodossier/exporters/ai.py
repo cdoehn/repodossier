@@ -2217,3 +2217,16 @@ def render_ai_export(context: AIExportContext) -> str:
     rendered = _REPODOSSIER_ORIGINAL_RENDER_AI_EXPORT_FOR_MAX_EXPORT_BYTES(context)
     return _apply_ai_max_export_bytes_limit(rendered)
 
+
+def render_ai_export_from_model(export: "RepositoryExport") -> str:
+    """Render AI Markdown from a RepositoryExport model.
+
+    This bridge is intentionally model-only. It does not scan files, inspect Git,
+    or run analyzers. Legacy AI-export functions stay unchanged while callers
+    can opt into the model-rendered Markdown path explicitly.
+    """
+
+    from repodossier.renderers import render_ai_markdown
+
+    return render_ai_markdown(export)
+
