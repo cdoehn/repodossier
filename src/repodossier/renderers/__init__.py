@@ -11,6 +11,7 @@ from repodossier.renderers.markdown import (
     render_docs_markdown,
     render_full_markdown,
     render_markdown,
+    render_mode_markdown,
 )
 
 __all__ = [
@@ -24,4 +25,5 @@ __all__ = [
     "render_docs_markdown",
     "render_full_markdown",
     "render_markdown",
+    "render_mode_markdown",
 ]

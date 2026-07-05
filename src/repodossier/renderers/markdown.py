@@ -51,6 +51,13 @@ MARKDOWN_RENDERER_MODE_METHODS: tuple[str, ...] = (
     "render_changed",
 )
 
+MARKDOWN_RENDERER_MODE_DISPATCH: dict[str, str] = {
+    "full": "render_full",
+    "ai": "render_ai",
+    "docs": "render_docs",
+    "changed": "render_changed",
+}
+
 MARKDOWN_RENDERER_MIGRATION_DECISION = (
     "The current MarkdownRenderer can render a generic RepositoryExport, "
     "but Milestone 4 still needs mode-aware render_full, render_ai, "
@@ -188,6 +195,7 @@ def describe_markdown_renderer_status() -> dict[str, tuple[str, ...] | str]:
         "reusable_sections": MARKDOWN_RENDERER_REUSABLE_SECTIONS,
         "legacy_gaps": MARKDOWN_RENDERER_LEGACY_GAPS,
         "mode_methods": MARKDOWN_RENDERER_MODE_METHODS,
+        "mode_dispatch": MARKDOWN_RENDERER_MODE_DISPATCH,
         "decision": MARKDOWN_RENDERER_MIGRATION_DECISION,
     }
 
@@ -221,6 +229,20 @@ def _assert_export_mode(export: RepositoryExport, expected_mode: str) -> None:
 
 class MarkdownRenderer:
     """Render a RepositoryExport as deterministic Markdown text."""
+
+    def render_mode(self, export: RepositoryExport) -> str:
+        """Render a RepositoryExport through its mode-specific entrypoint."""
+
+        mode = _export_mode_value(export)
+        method_name = MARKDOWN_RENDERER_MODE_DISPATCH.get(mode)
+        if method_name is None:
+            supported_modes = ", ".join(sorted(MARKDOWN_RENDERER_MODE_DISPATCH))
+            raise ValueError(
+                f"Unsupported RepositoryExport mode {mode!r}. "
+                f"Supported modes: {supported_modes}."
+            )
+
+        return getattr(self, method_name)(export)
 
     def render_full(self, export: RepositoryExport) -> str:
         """Render a full-mode RepositoryExport as legacy-shaped Markdown."""
@@ -1299,6 +1321,12 @@ class MarkdownRenderer:
             fence += backtick
 
         return fence
+
+
+def render_mode_markdown(export: RepositoryExport) -> str:
+    """Render a RepositoryExport using its mode-specific Markdown renderer."""
+
+    return MarkdownRenderer().render_mode(export)
 
 
 def render_full_markdown(export: RepositoryExport) -> str:
