@@ -16,6 +16,39 @@ from repodossier.config import apply_config_to_file_infos, filter_changed_export
 
 
 
+CHANGED_EXPORT_DOCUMENT_HEADING = "# Changed Export"
+
+CHANGED_EXPORT_SECTION_ORDER: tuple[str, ...] = (
+    "changed_files_summary",
+    "changed_files",
+    "git_diff",
+    "changed_file_contents",
+    "deleted_files",
+    "binary_or_skipped_files",
+)
+
+CHANGED_EXPORT_SECTION_HEADINGS: dict[str, str] = {
+    "changed_files_summary": "# Changed Files Summary",
+    "changed_files": "# Changed Files",
+    "git_diff": "# Git Diff",
+    "changed_file_contents": "# Changed File Contents",
+    "deleted_files": "# Deleted Files",
+    "binary_or_skipped_files": "# Binary / Skipped Files",
+}
+
+
+def iter_changed_export_headings() -> tuple[str, ...]:
+    """Return changed export headings in stable render order."""
+
+    return (
+        CHANGED_EXPORT_DOCUMENT_HEADING,
+        *(
+            CHANGED_EXPORT_SECTION_HEADINGS[section_name]
+            for section_name in CHANGED_EXPORT_SECTION_ORDER
+        ),
+    )
+
+
 def _repodossier_export_safety_root() -> object:
     """Return the nearest Git repository root or current directory."""
 
@@ -111,7 +144,7 @@ def _append_summary(lines: list[str], scans: Sequence[ChangedFileScan]) -> None:
 
     lines.extend(
         [
-            "# Changed Files Summary",
+            CHANGED_EXPORT_SECTION_HEADINGS["changed_files_summary"],
             "",
             f"- Total: {len(scans)}",
             f"- Modified: {status_counts.get('modified', 0)}",
@@ -127,7 +160,7 @@ def _append_summary(lines: list[str], scans: Sequence[ChangedFileScan]) -> None:
 
 
 def _append_file_overview(lines: list[str], scans: Sequence[ChangedFileScan]) -> None:
-    lines.extend(["# Changed Files", ""])
+    lines.extend([CHANGED_EXPORT_SECTION_HEADINGS["changed_files"], ""])
 
     if not scans:
         lines.extend(["No changed files detected.", ""])
@@ -153,7 +186,7 @@ def _append_git_diff(
     *,
     branch: str | None = None,
 ) -> None:
-    lines.extend(["# Git Diff", ""])
+    lines.extend([CHANGED_EXPORT_SECTION_HEADINGS["git_diff"], ""])
 
     diffable_scans = [
         scan
@@ -197,7 +230,7 @@ def _append_changed_file_contents(
     repo_path: Path,
     scans: Sequence[ChangedFileScan],
 ) -> None:
-    lines.extend(["# Changed File Contents", ""])
+    lines.extend([CHANGED_EXPORT_SECTION_HEADINGS["changed_file_contents"], ""])
 
     text_scans = [
         scan
@@ -230,7 +263,7 @@ def _append_changed_file_contents(
 def _append_deleted_files(lines: list[str], scans: Sequence[ChangedFileScan]) -> None:
     deleted_scans = [scan for scan in scans if scan.is_deleted]
 
-    lines.extend(["# Deleted Files", ""])
+    lines.extend([CHANGED_EXPORT_SECTION_HEADINGS["deleted_files"], ""])
 
     if not deleted_scans:
         lines.extend(["No deleted files.", ""])
@@ -249,7 +282,7 @@ def _append_binary_or_skipped_files(lines: list[str], scans: Sequence[ChangedFil
         if scan.is_binary or (not scan.is_deleted and scan.file_info is None)
     ]
 
-    lines.extend(["# Binary / Skipped Files", ""])
+    lines.extend([CHANGED_EXPORT_SECTION_HEADINGS["binary_or_skipped_files"], ""])
 
     if not skipped_scans:
         lines.extend(["No binary or skipped files.", ""])
@@ -285,7 +318,7 @@ def _render_changed_export_unmasked(
     )
 
     lines: list[str] = [
-        "# Changed Export",
+        CHANGED_EXPORT_DOCUMENT_HEADING,
         "",
         f"Repository: {repo.resolve()}",
         f"Compare Mode: {compare_mode}",
