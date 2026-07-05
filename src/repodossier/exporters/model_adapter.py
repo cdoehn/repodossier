@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from repodossier.export_model import (
+    ExportConfigurationSummary,
     ExportSummary,
     ExportWarning,
     FileEntry,
@@ -34,6 +35,15 @@ def build_repository_export_from_entries(
     git_branch: str | None = None,
     git_commit: str | None = None,
     git_dirty: bool | None = None,
+    configuration: object | None = None,
+    config_active: bool | None = None,
+    config_path: str | Path | None = None,
+    include_paths: Iterable[str] = (),
+    include_globs: Iterable[str] = (),
+    exclude_paths: Iterable[str] = (),
+    exclude_globs: Iterable[str] = (),
+    limits: Mapping[str, object] | None = None,
+    split_settings: Mapping[str, object] | None = None,
     dependencies: object | None = None,
     database_schema: object | None = None,
     secret_detection: object | None = None,
@@ -73,6 +83,18 @@ def build_repository_export_from_entries(
         language_statistics=LanguageStatistics(_language_statistics(included_entries)),
     )
 
+    configuration_summary = _configuration_summary(
+        configuration,
+        config_active=config_active,
+        config_path=config_path,
+        include_paths=include_paths,
+        include_globs=include_globs,
+        exclude_paths=exclude_paths,
+        exclude_globs=exclude_globs,
+        limits=limits,
+        split_settings=split_settings,
+    )
+
     report_kwargs = _report_kwargs(
         dependencies=dependencies,
         database_schema=database_schema,
@@ -94,6 +116,7 @@ def build_repository_export_from_entries(
             git_dirty=git_dirty,
         ),
         summary=summary,
+        configuration=configuration_summary,
         files=file_entries,
         omitted_files=omitted_entries,
         truncated_files=truncated_entries,
@@ -124,6 +147,74 @@ def build_file_tree_from_entries(entries: Iterable[FileEntry]) -> tuple[FileTree
         node.setdefault(parts[-1], None)
 
     return _tree_nodes_from_mapping(root, prefix="")
+
+
+
+def export_configuration_from_mapping(data: Mapping[str, Any]) -> ExportConfigurationSummary:
+    """Create an ExportConfigurationSummary from a mapping."""
+
+    return ExportConfigurationSummary(
+        config_active=bool(data.get("config_active", data.get("active", False))),
+        config_path=_optional_text(data.get("config_path", data.get("path"))),
+        include_paths=_tuple_of_text(data.get("include_paths", ())),
+        include_globs=_tuple_of_text(data.get("include_globs", ())),
+        exclude_paths=_tuple_of_text(data.get("exclude_paths", ())),
+        exclude_globs=_tuple_of_text(data.get("exclude_globs", ())),
+        limits=_dict_copy(data.get("limits")),
+        split_settings=_dict_copy(data.get("split_settings")),
+    )
+
+
+def export_configuration_from_object(value: object) -> ExportConfigurationSummary:
+    """Create an ExportConfigurationSummary from an object with config-like attributes."""
+
+    if isinstance(value, ExportConfigurationSummary):
+        return value
+
+    if isinstance(value, Mapping):
+        return export_configuration_from_mapping(value)
+
+    return ExportConfigurationSummary(
+        config_active=bool(
+            _get_value(value, "config_active", _get_value(value, "active", False))
+        ),
+        config_path=_optional_text(
+            _get_value(value, "config_path", _get_value(value, "path", None))
+        ),
+        include_paths=_tuple_of_text(_get_value(value, "include_paths", ())),
+        include_globs=_tuple_of_text(_get_value(value, "include_globs", ())),
+        exclude_paths=_tuple_of_text(_get_value(value, "exclude_paths", ())),
+        exclude_globs=_tuple_of_text(_get_value(value, "exclude_globs", ())),
+        limits=_dict_copy(_get_value(value, "limits", None)),
+        split_settings=_dict_copy(_get_value(value, "split_settings", None)),
+    )
+
+
+def _configuration_summary(
+    configuration: object | None,
+    *,
+    config_active: bool | None,
+    config_path: str | Path | None,
+    include_paths: Iterable[str],
+    include_globs: Iterable[str],
+    exclude_paths: Iterable[str],
+    exclude_globs: Iterable[str],
+    limits: Mapping[str, object] | None,
+    split_settings: Mapping[str, object] | None,
+) -> ExportConfigurationSummary:
+    if configuration is not None:
+        return export_configuration_from_object(configuration)
+
+    return ExportConfigurationSummary(
+        config_active=bool(config_active),
+        config_path=_optional_text(config_path),
+        include_paths=_tuple_of_text(include_paths),
+        include_globs=_tuple_of_text(include_globs),
+        exclude_paths=_tuple_of_text(exclude_paths),
+        exclude_globs=_tuple_of_text(exclude_globs),
+        limits=_dict_copy(limits),
+        split_settings=_dict_copy(split_settings),
+    )
 
 
 def file_entry_from_mapping(data: Mapping[str, Any]) -> FileEntry:
@@ -237,6 +328,35 @@ def _tree_nodes_from_mapping(
             nodes.append(FileTreeEntry(path=path, entry_type="file"))
 
     return tuple(nodes)
+
+
+
+def _optional_text(value: object | None) -> str | None:
+    if value is None:
+        return None
+
+    text = str(value)
+    return text or None
+
+
+def _tuple_of_text(values: object) -> tuple[str, ...]:
+    if values is None:
+        return ()
+
+    if isinstance(values, str):
+        return (values,)
+
+    return tuple(str(value) for value in values)
+
+
+def _dict_copy(values: object | None) -> dict[str, object]:
+    if not values:
+        return {}
+
+    if isinstance(values, Mapping):
+        return {str(key): value for key, value in values.items()}
+
+    raise TypeError(f"Expected mapping-like configuration data, got {type(values).__name__}.")
 
 
 def _get_value(value: object, name: str, default: object = None) -> object:
