@@ -908,3 +908,14 @@ def render_docs_export_from_model(export: "RepositoryExport") -> str:
 
     return render_docs_markdown(export)
 
+
+def write_docs_export_from_model(export, output_path) -> None:
+    """Write docs Markdown rendered from a RepositoryExport model."""
+
+    from pathlib import Path
+
+    Path(output_path).write_text(
+        render_docs_export_from_model(export),
+        encoding="utf-8",
+    )
+

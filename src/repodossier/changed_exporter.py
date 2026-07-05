@@ -777,3 +777,14 @@ def render_changed_export_from_model(export: "RepositoryExport") -> str:
 
     return render_changed_markdown(export)
 
+
+def write_changed_export_from_model(export, output_path) -> None:
+    """Write changed Markdown rendered from a RepositoryExport model."""
+
+    from pathlib import Path
+
+    Path(output_path).write_text(
+        render_changed_export_from_model(export),
+        encoding="utf-8",
+    )
+

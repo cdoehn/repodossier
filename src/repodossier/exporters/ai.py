@@ -2230,3 +2230,14 @@ def render_ai_export_from_model(export: "RepositoryExport") -> str:
 
     return render_ai_markdown(export)
 
+
+def write_ai_export_from_model(export, output_path) -> None:
+    """Write AI Markdown rendered from a RepositoryExport model."""
+
+    from pathlib import Path
+
+    Path(output_path).write_text(
+        render_ai_export_from_model(export),
+        encoding="utf-8",
+    )
+
