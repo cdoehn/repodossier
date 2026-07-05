@@ -17,6 +17,56 @@ from repodossier.export_model import (
 )
 
 
+MARKDOWN_RENDERER_REUSABLE_SECTIONS: tuple[str, ...] = (
+    "repository",
+    "summary",
+    "configuration",
+    "language_statistics",
+    "repository_tree",
+    "file_summary",
+    "source_export",
+    "warnings",
+)
+
+MARKDOWN_RENDERER_LEGACY_GAPS: tuple[str, ...] = (
+    "full_legacy_heading_order",
+    "ai_legacy_heading_order",
+    "docs_legacy_heading_order",
+    "changed_legacy_heading_order",
+    "dependencies_report_rendering",
+    "database_schema_report_rendering",
+    "secret_detection_report_rendering",
+    "symbol_index_report_rendering",
+    "import_graph_report_rendering",
+    "call_graph_report_rendering",
+    "important_files_rendering",
+    "documentation_only_rendering",
+    "changed_diff_rendering",
+)
+
+MARKDOWN_RENDERER_MIGRATION_DECISION = (
+    "The current MarkdownRenderer can render a generic RepositoryExport, "
+    "but Milestone 4 still needs mode-aware render_full, render_ai, "
+    "render_docs, and render_changed output before legacy exporters can "
+    "delegate to it as their primary renderer."
+)
+
+
+def describe_markdown_renderer_status() -> dict[str, tuple[str, ...] | str]:
+    """Describe current renderer reuse points and migration gaps.
+
+    This is an explicit Milestone 4 inventory helper. It documents the current
+    boundary without performing IO, scanning, Git access, or analyzer work.
+    """
+
+    return {
+        "reusable_sections": MARKDOWN_RENDERER_REUSABLE_SECTIONS,
+        "legacy_gaps": MARKDOWN_RENDERER_LEGACY_GAPS,
+        "decision": MARKDOWN_RENDERER_MIGRATION_DECISION,
+    }
+
+
+
 class MarkdownRenderer:
     """Render a RepositoryExport as deterministic Markdown text."""
 

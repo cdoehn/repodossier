@@ -1,5 +1,13 @@
-"""Renderer interfaces for structured RepoDossier exports."""
+"""Renderer helpers for RepoDossier structured exports."""
 
-from repodossier.renderers.markdown import MarkdownRenderer, render_markdown
+from repodossier.renderers.markdown import (
+    MarkdownRenderer,
+    describe_markdown_renderer_status,
+    render_markdown,
+)
 
-__all__ = ["MarkdownRenderer", "render_markdown"]
+__all__ = [
+    "MarkdownRenderer",
+    "describe_markdown_renderer_status",
+    "render_markdown",
+]
