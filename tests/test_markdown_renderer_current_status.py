@@ -55,6 +55,12 @@ def test_markdown_renderer_status_documents_legacy_gaps() -> None:
 def test_markdown_renderer_status_records_mode_aware_migration_decision() -> None:
     status = describe_markdown_renderer_status()
 
+    assert status["mode_methods"] == (
+        "render_full",
+        "render_ai",
+        "render_docs",
+        "render_changed",
+    )
     assert status["decision"] == MARKDOWN_RENDERER_MIGRATION_DECISION
     assert "generic RepositoryExport" in status["decision"]
     assert "mode-aware" in status["decision"]

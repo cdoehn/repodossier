@@ -62,13 +62,68 @@ def describe_markdown_renderer_status() -> dict[str, tuple[str, ...] | str]:
     return {
         "reusable_sections": MARKDOWN_RENDERER_REUSABLE_SECTIONS,
         "legacy_gaps": MARKDOWN_RENDERER_LEGACY_GAPS,
+        "mode_methods": MARKDOWN_RENDERER_MODE_METHODS,
         "decision": MARKDOWN_RENDERER_MIGRATION_DECISION,
     }
 
 
 
+MARKDOWN_RENDERER_MODE_METHODS: tuple[str, ...] = (
+    "render_full",
+    "render_ai",
+    "render_docs",
+    "render_changed",
+)
+
+
+def _export_mode_value(export: RepositoryExport) -> str:
+    """Return a normalized export mode value from a RepositoryExport."""
+
+    mode = getattr(export, "mode", "")
+    value = getattr(mode, "value", mode)
+    return str(value).strip().lower()
+
+
+def _assert_export_mode(export: RepositoryExport, expected_mode: str) -> None:
+    """Raise when a mode-specific renderer receives the wrong model mode."""
+
+    actual_mode = _export_mode_value(export)
+    if actual_mode != expected_mode:
+        raise ValueError(
+            f"Expected RepositoryExport mode {expected_mode!r}, got {actual_mode!r}."
+        )
+
+
+
 class MarkdownRenderer:
     """Render a RepositoryExport as deterministic Markdown text."""
+
+    def render_full(self, export: RepositoryExport) -> str:
+        """Render a full-mode RepositoryExport as Markdown."""
+
+        return self._render_mode(export, "full")
+
+    def render_ai(self, export: RepositoryExport) -> str:
+        """Render an AI-mode RepositoryExport as Markdown."""
+
+        return self._render_mode(export, "ai")
+
+    def render_docs(self, export: RepositoryExport) -> str:
+        """Render a docs-mode RepositoryExport as Markdown."""
+
+        return self._render_mode(export, "docs")
+
+    def render_changed(self, export: RepositoryExport) -> str:
+        """Render a changed-mode RepositoryExport as Markdown."""
+
+        return self._render_mode(export, "changed")
+
+    def _render_mode(self, export: RepositoryExport, expected_mode: str) -> str:
+        """Validate the export mode before delegating to the generic renderer."""
+
+        _assert_export_mode(export, expected_mode)
+        return self.render(export)
+
 
     def render(self, export: RepositoryExport) -> str:
         parts: list[str] = [
@@ -243,6 +298,32 @@ class MarkdownRenderer:
         lines.append(f"- {label}:")
         for value in values:
             lines.append(f"  - {value}")
+
+
+
+def render_full_markdown(export: RepositoryExport) -> str:
+    """Render a full-mode RepositoryExport with the Markdown renderer."""
+
+    return MarkdownRenderer().render_full(export)
+
+
+def render_ai_markdown(export: RepositoryExport) -> str:
+    """Render an AI-mode RepositoryExport with the Markdown renderer."""
+
+    return MarkdownRenderer().render_ai(export)
+
+
+def render_docs_markdown(export: RepositoryExport) -> str:
+    """Render a docs-mode RepositoryExport with the Markdown renderer."""
+
+    return MarkdownRenderer().render_docs(export)
+
+
+def render_changed_markdown(export: RepositoryExport) -> str:
+    """Render a changed-mode RepositoryExport with the Markdown renderer."""
+
+    return MarkdownRenderer().render_changed(export)
+
 
 
 def render_markdown(export: RepositoryExport) -> str:
