@@ -1047,11 +1047,7 @@ class MarkdownRenderer:
         if items:
             lines.append("")
             for item in items:
-                if isinstance(item, tuple) and len(item) == 2:
-                    key, value = item
-                    lines.append(f"- {key}: {value}")
-                else:
-                    lines.append(f"- {item}")
+                lines.append(f"- {self._format_report_item(item)}")
 
         return "\n".join(lines)
 
