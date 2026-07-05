@@ -92,4 +92,6 @@ from repodossier.exporters.model_adapter import (
     file_entry_from_mapping,
     file_entry_from_object,
 )
-
+from repodossier.exporters.full import (
+    render_full_export_with_optional_model,
+)
