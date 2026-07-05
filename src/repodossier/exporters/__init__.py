@@ -80,3 +80,13 @@ from repodossier.exporters.model_markdown import (
     write_markdown_export_model_to_stream,
 )
 
+from repodossier.exporters.model_adapter import (
+    build_repository_export_from_entries,
+    export_warning_from_mapping,
+    export_warning_from_object,
+    export_warnings_from_objects,
+    file_entries_from_objects,
+    file_entry_from_mapping,
+    file_entry_from_object,
+)
+
