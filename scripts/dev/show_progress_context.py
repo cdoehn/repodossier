@@ -188,7 +188,53 @@ def _strip_ansi(text: str) -> str:
     return "".join(result)
 
 
+def _active_indices(rows: list[str]) -> list[int]:
+    return [
+        index
+        for index, row in enumerate(rows)
+        if "🟪" in _strip_ansi(row)
+    ]
+
+
+def _active_center(rows: list[str]) -> float | None:
+    indices = _active_indices(rows)
+    if not indices:
+        return None
+    return (indices[0] + indices[-1]) / 2
+
+
+def _pad_before_active(rows: list[str], count: int) -> list[str]:
+    if count <= 0:
+        return rows
+
+    indices = _active_indices(rows)
+    if not indices:
+        return rows
+
+    insert_at = indices[0]
+    return rows[:insert_at] + [""] * count + rows[insert_at:]
+
+
+def _align_active_midpoints(left: list[str], right: list[str]) -> tuple[list[str], list[str]]:
+    left_center = _active_center(left)
+    right_center = _active_center(right)
+
+    if left_center is None or right_center is None:
+        return left, right
+
+    delta = int(round(abs(left_center - right_center)))
+    if delta <= 0:
+        return left, right
+
+    if left_center < right_center:
+        return _pad_before_active(left, delta), right
+
+    return left, _pad_before_active(right, delta)
+
+
 def render_side_by_side(left: list[str], right: list[str], *, width: int) -> str:
+    left, right = _align_active_midpoints(left, right)
+
     gap = "    "
     rows: list[str] = []
     max_rows = max(len(left), len(right))

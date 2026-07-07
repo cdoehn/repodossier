@@ -101,6 +101,22 @@ def test_c_runner_rejects_invalid_metadata_before_execution(tmp_path: Path) -> N
     assert "Metadatenprüfung fehlgeschlagen" in result.stdout
 
 
+
+def test_c_runner_prints_success_marker_as_last_line(tmp_path: Path) -> None:
+    download_dir = tmp_path / "Downloads"
+    download_dir.mkdir()
+
+    marker = tmp_path / "marker"
+    _write_script(download_dir, "success_marker_patch.sh", _script_body(f": > {marker}"))
+
+    result = _run_runner(download_dir)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert marker.exists()
+    assert result.stdout.rstrip().endswith("ERFOLG\x1b[0m") or result.stdout.rstrip().endswith("ERFOLG")
+    assert "\x1b[0;32m" in result.stdout
+    assert "\x1b[1m" in result.stdout
+
 def test_c_runner_moves_failed_script_to_failed_and_keeps_log(tmp_path: Path) -> None:
     download_dir = tmp_path / "Downloads"
     download_dir.mkdir()

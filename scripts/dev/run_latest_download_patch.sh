@@ -71,6 +71,8 @@ Optional progress records render Roadmap/Milestone context before execution:
 
 Status colors:
   done=green, active=purple, partial=yellow, todo=red.
+
+On success, c prints a final bold green ERFOLG line as the last output line.
 USAGE
 }
 
@@ -433,5 +435,9 @@ fi
 
 info "Logfile bleibt in Downloads: $(show_path "$run_log")"
 info "Endzeit: $(date --iso-8601=seconds)"
+
+if [ "$status" -eq 0 ]; then
+  printf '%b\n' "${C_OK}${C_BOLD}ERFOLG${C_RESET}"
+fi
 
 exit "$status"

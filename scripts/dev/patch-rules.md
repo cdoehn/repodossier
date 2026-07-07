@@ -544,3 +544,26 @@ Farben:
 `c` validiert diese Metadaten vor der Ausführung mit `scripts/dev/validate_patch_metadata.py`.
 
 Progress-Metadaten sind für normale `c`-Patchscripts Pflicht. `c` rendert mit `scripts/dev/show_progress_context.py` Roadmap links und Milestone rechts, ohne Rahmen und mit Kontextzeilen oberhalb und unterhalb. Wenn ein Patch keine Roadmap- und Milestone-Progress-Zeilen enthält, wird er vor der Ausführung blockiert.
+
+
+### c: Erfolgsmarker als letzte Zeile
+
+`c` gibt bei erfolgreichem Patchlauf als allerletzte Zeile fett grün aus:
+
+```text
+ERFOLG
+```
+
+Regeln:
+
+1. Diese Zeile erscheint nur bei Exit-Code 0 des Patchscripts.
+2. Sie steht nach Logfile- und Endzeit-Ausgabe.
+3. Nach `ERFOLG` gibt `c` nichts Weiteres mehr aus.
+4. Fehlerläufe zeigen kein `ERFOLG`.
+
+
+### Progress-Renderer: Active-Zentrierung
+
+In der zweispaltigen Roadmap/Milestone-Ansicht richtet der Progress-Renderer die Mittelpunkte der lila `active`-Bereiche vertikal zueinander aus.
+
+Wenn der lila Bereich einer Spalte weiter oben liegt als der lila Bereich der anderen Spalte, fügt der Renderer vor dem früheren lila Bereich Leerzeilen ein. Dadurch werden die aktuellen Arbeitsbereiche optisch auf gleicher Höhe sichtbar, statt dass eine Spalte oben schon aktiv ist und die andere erst weit unten.
