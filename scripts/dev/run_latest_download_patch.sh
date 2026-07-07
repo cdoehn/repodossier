@@ -1,10 +1,6 @@
 #!/usr/bin/env bash
 set -u
 
-# Protect the running c process from self-overwrite. Some patches update this
-# file while c is still executing. Bash may otherwise continue reading the
-# modified file and fail with syntax errors. Therefore c immediately re-execs a
-# temporary copy of itself before it runs any downloaded patch.
 if [ "${C_RUNNER_SELF_COPY:-0}" != "1" ]; then
   self_copy="$(mktemp "${TMPDIR:-/tmp}/repodossier-c-runner.XXXXXX.sh")"
   cp "$0" "$self_copy"
@@ -21,6 +17,15 @@ done_dir="$download_dir/done"
 failed_dir="$download_dir/failed"
 applied_ledger="$done_dir/.applied_patch_hashes.tsv"
 max_age_seconds="${C_RUNNER_MAX_AGE_SECONDS:-3600}"
+
+runner_source="${BASH_SOURCE[0]}"
+if [ -n "${C_RUNNER_TEMP_COPY:-}" ] && [ -x "$HOME/market_research/repo_dossier/scripts/dev/run_latest_download_patch.sh" ]; then
+  runner_source="$HOME/market_research/repo_dossier/scripts/dev/run_latest_download_patch.sh"
+fi
+runner_dir="$(cd "$(dirname "$runner_source")" && pwd)"
+runner_repo="$(cd "$runner_dir/../.." && pwd)"
+metadata_validator="$runner_dir/validate_patch_metadata.py"
+progress_renderer="$runner_dir/show_progress_context.py"
 
 C_USE_COLOR=1
 if [ -n "${NO_COLOR:-}" ] || [ "${C_RUNNER_COLOR:-auto}" = "never" ]; then
@@ -56,16 +61,16 @@ Usage:
   c /path/to/patch.sh
   c --help
 
-Without arguments, runs the newest *.sh file directly in ~/Downloads.
+Patch scripts must include one patch metadata record, for example:
+  # repodossier-meta: {"type":"patch","id":"DEV.6","title":"Add progress renderer","commit":"Add patch metadata progress renderer"}
 
-The runner:
-  1. finds the newest patch script in Downloads,
-  2. warns in red and asks for confirmation if this exact script was already applied,
-  3. warns and asks for confirmation if the script is older than 60 minutes,
-  4. checks bash syntax with bash -n,
-  5. logs stdout and stderr to ~/Downloads/<script>_<timestamp>.log,
-  6. moves the script to ~/Downloads/done on success,
-  7. moves the script to ~/Downloads/failed on failure.
+Optional progress records render Roadmap/Milestone context before execution:
+  # repodossier-meta: {"type":"progress","panel":"roadmap","status":"active","file":"planning/ROADMAP.md","start":10,"end":20}
+  # repodossier-meta: {"type":"progress","panel":"milestone","status":"partial","file":"planning/MILESTONE4.md","start":30,"end":40}
+  # repodossier-meta: {"type":"display","context":4,"layout":"side-by-side","frame":false}
+
+Status colors:
+  done=green, active=purple, partial=yellow, todo=red.
 USAGE
 }
 
@@ -339,6 +344,34 @@ info "Failed-Ordner: $(show_path "$failed_dir")"
 info "Patchscript: $(show_path "$patch_script")"
 info "Logfile: $(show_path "$run_log")"
 info "Startzeit: $(date --iso-8601=seconds)"
+
+section "Metadatenprüfung"
+if [ ! -x "$metadata_validator" ]; then
+  error "Metadata-Validator fehlt oder ist nicht ausführbar: $metadata_validator"
+  info "Logfile bleibt erhalten: $(show_path "$run_log")"
+  exit 10
+fi
+
+action "Validiere repodossier-meta JSON-Kommentarzeilen."
+python3 "$metadata_validator" --script "$patch_script" --repo "$runner_repo"
+metadata_status=$?
+if [ "$metadata_status" -ne 0 ]; then
+  error "Metadatenprüfung fehlgeschlagen. Patch wird nicht ausgeführt."
+  info "Logfile bleibt erhalten: $(show_path "$run_log")"
+  exit "$metadata_status"
+fi
+success "Metadaten OK."
+
+if [ -x "$progress_renderer" ]; then
+  section "Roadmap / Milestone"
+  python3 "$progress_renderer" --script "$patch_script" --repo "$runner_repo"
+  progress_status=$?
+  if [ "$progress_status" -ne 0 ]; then
+    error "Progress-Kontext konnte nicht gerendert werden."
+    info "Logfile bleibt erhalten: $(show_path "$run_log")"
+    exit "$progress_status"
+  fi
+fi
 
 script_hash="$(hash_script "$patch_script")"
 applied_match=""

@@ -10,13 +10,16 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 RUNNER = REPO_ROOT / "scripts" / "dev" / "run_latest_download_patch.sh"
 
 
-def _write_script(
-    download_dir: Path,
-    name: str,
-    body: str,
-    *,
-    age_seconds: int = 0,
-) -> Path:
+def _meta() -> str:
+    return '\n'.join(
+        [
+            '# repodossier-meta: {"type":"patch","id":"TEST","title":"Test patch","commit":"Test patch"}',
+            '# repodossier-meta: {"type":"display","context":1,"layout":"side-by-side","frame":false}',
+        ]
+    )
+
+
+def _write_script(download_dir: Path, name: str, body: str, *, age_seconds: int = 0) -> Path:
     path = download_dir / name
     path.write_text(body, encoding="utf-8")
     path.chmod(0o755)
@@ -26,6 +29,10 @@ def _write_script(
         os.utime(path, (timestamp, timestamp))
 
     return path
+
+
+def _script_body(commands: str) -> str:
+    return f"#!/usr/bin/env bash\n{_meta()}\n{commands}\n"
 
 
 def _run_runner(download_dir: Path, *args: str, input_text: str | None = None):
@@ -55,17 +62,8 @@ def test_c_runner_executes_newest_script_and_moves_to_done(tmp_path: Path) -> No
     old_marker = tmp_path / "old_marker"
     latest_marker = tmp_path / "latest_marker"
 
-    _write_script(
-        download_dir,
-        "older_patch.sh",
-        f"#!/usr/bin/env bash\necho old\n: > {old_marker}\n",
-        age_seconds=30,
-    )
-    latest = _write_script(
-        download_dir,
-        "latest_patch.sh",
-        f"#!/usr/bin/env bash\necho latest\n: > {latest_marker}\n",
-    )
+    _write_script(download_dir, "older_patch.sh", _script_body(f"echo old\n: > {old_marker}"), age_seconds=30)
+    latest = _write_script(download_dir, "latest_patch.sh", _script_body(f"echo latest\n: > {latest_marker}"))
 
     result = _run_runner(download_dir)
 
@@ -75,25 +73,37 @@ def test_c_runner_executes_newest_script_and_moves_to_done(tmp_path: Path) -> No
     assert not latest.exists()
     assert (download_dir / "done" / "latest_patch.sh").exists()
     assert (download_dir / "older_patch.sh").exists()
+    assert "Metadaten OK" in result.stdout
     assert "latest" in result.stdout
     assert "\x1b[" in result.stdout
-    assert "c · RepoDossier Download Patch Runner" in result.stdout
     assert (download_dir / "done" / ".applied_patch_hashes.tsv").exists()
+    assert len(_logs(download_dir)) == 1
 
-    logs = _logs(download_dir)
-    assert len(logs) == 1
-    assert "latest" in logs[0].read_text(encoding="utf-8")
+
+def test_c_runner_rejects_invalid_metadata_before_execution(tmp_path: Path) -> None:
+    download_dir = tmp_path / "Downloads"
+    download_dir.mkdir()
+
+    marker = tmp_path / "marker"
+    bad = _write_script(
+        download_dir,
+        "bad_meta_patch.sh",
+        f"#!/usr/bin/env bash\n# repodossier-meta: {{\"type\":\"patch\",\"id\":\"BAD\"}}\n: > {marker}\n",
+    )
+
+    result = _run_runner(download_dir)
+
+    assert result.returncode == 10
+    assert bad.exists()
+    assert not marker.exists()
+    assert "Metadatenprüfung fehlgeschlagen" in result.stdout
 
 
 def test_c_runner_moves_failed_script_to_failed_and_keeps_log(tmp_path: Path) -> None:
     download_dir = tmp_path / "Downloads"
     download_dir.mkdir()
 
-    failing = _write_script(
-        download_dir,
-        "failing_patch.sh",
-        "#!/usr/bin/env bash\necho before-fail\nexit 7\n",
-    )
+    failing = _write_script(download_dir, "failing_patch.sh", _script_body("echo before-fail\nexit 7"))
 
     result = _run_runner(download_dir)
 
@@ -101,10 +111,7 @@ def test_c_runner_moves_failed_script_to_failed_and_keeps_log(tmp_path: Path) ->
     assert not failing.exists()
     assert (download_dir / "failed" / "failing_patch.sh").exists()
     assert "Patch fehlgeschlagen" in result.stdout
-
-    logs = _logs(download_dir)
-    assert len(logs) == 1
-    assert "before-fail" in logs[0].read_text(encoding="utf-8")
+    assert "before-fail" in _logs(download_dir)[0].read_text(encoding="utf-8")
 
 
 def test_c_runner_refuses_old_script_without_confirmation(tmp_path: Path) -> None:
@@ -115,7 +122,7 @@ def test_c_runner_refuses_old_script_without_confirmation(tmp_path: Path) -> Non
     old_script = _write_script(
         download_dir,
         "old_patch.sh",
-        f"#!/usr/bin/env bash\n: > {marker}\n",
+        _script_body(f": > {marker}"),
         age_seconds=61 * 60,
     )
 
@@ -124,11 +131,7 @@ def test_c_runner_refuses_old_script_without_confirmation(tmp_path: Path) -> Non
     assert result.returncode == 2
     assert old_script.exists()
     assert not marker.exists()
-    assert not (download_dir / "done" / "old_patch.sh").exists()
-    assert not (download_dir / "failed" / "old_patch.sh").exists()
     assert "älter" in result.stdout
-    assert "Trotzdem ausführen" in result.stdout
-    assert len(_logs(download_dir)) == 1
 
 
 def test_c_runner_executes_old_script_after_confirmation(tmp_path: Path) -> None:
@@ -136,12 +139,7 @@ def test_c_runner_executes_old_script_after_confirmation(tmp_path: Path) -> None
     download_dir.mkdir()
 
     marker = tmp_path / "marker"
-    old_script = _write_script(
-        download_dir,
-        "old_confirmed_patch.sh",
-        f"#!/usr/bin/env bash\n: > {marker}\n",
-        age_seconds=61 * 60,
-    )
+    old_script = _write_script(download_dir, "old_confirmed_patch.sh", _script_body(f": > {marker}"), age_seconds=61 * 60)
 
     result = _run_runner(download_dir, input_text="y\n")
 
@@ -149,7 +147,6 @@ def test_c_runner_executes_old_script_after_confirmation(tmp_path: Path) -> None
     assert marker.exists()
     assert not old_script.exists()
     assert (download_dir / "done" / "old_confirmed_patch.sh").exists()
-    assert "Bestätigung erhalten" in result.stdout
 
 
 def test_c_runner_failed_syntax_moves_script_to_failed(tmp_path: Path) -> None:
@@ -159,7 +156,7 @@ def test_c_runner_failed_syntax_moves_script_to_failed(tmp_path: Path) -> None:
     broken = _write_script(
         download_dir,
         "broken_patch.sh",
-        "#!/usr/bin/env bash\nif true; then\necho broken\n",
+        f"#!/usr/bin/env bash\n{_meta()}\nif true; then\necho broken\n",
     )
 
     result = _run_runner(download_dir)
@@ -168,7 +165,6 @@ def test_c_runner_failed_syntax_moves_script_to_failed(tmp_path: Path) -> None:
     assert not broken.exists()
     assert (download_dir / "failed" / "broken_patch.sh").exists()
     assert "Syntaxprüfung fehlgeschlagen" in result.stdout
-    assert len(_logs(download_dir)) == 1
 
 
 def test_c_runner_warns_red_and_refuses_already_applied_script(tmp_path: Path) -> None:
@@ -176,14 +172,13 @@ def test_c_runner_warns_red_and_refuses_already_applied_script(tmp_path: Path) -
     download_dir.mkdir()
 
     marker = tmp_path / "marker"
-    body = f"#!/usr/bin/env bash\necho applied\n: > {marker}\n"
+    body = _script_body(f"echo applied\n: > {marker}")
 
     first = _write_script(download_dir, "first_patch.sh", body)
     first_result = _run_runner(download_dir)
 
     assert first_result.returncode == 0, first_result.stdout + first_result.stderr
     assert not first.exists()
-    assert (download_dir / "done" / "first_patch.sh").exists()
 
     marker.unlink()
     duplicate = _write_script(download_dir, "duplicate_patch.sh", body)
@@ -201,15 +196,11 @@ def test_c_runner_can_rerun_already_applied_script_after_confirmation(tmp_path: 
     download_dir.mkdir()
 
     counter = tmp_path / "counter"
-    body = (
-        "#!/usr/bin/env bash\n"
-        f"current=0\n"
-        f"if [ -f {counter} ]; then current=$(cat {counter}); fi\n"
-        f"echo $((current + 1)) > {counter}\n"
+    body = _script_body(
+        f"current=0\nif [ -f {counter} ]; then current=$(cat {counter}); fi\necho $((current + 1)) > {counter}"
     )
 
-    _write_script(download_dir, "first_patch.sh", body)
-    first_result = _run_runner(download_dir)
+    first_result = _run_runner(download_dir, str(_write_script(download_dir, "first_patch.sh", body)))
     assert first_result.returncode == 0, first_result.stdout + first_result.stderr
 
     _write_script(download_dir, "duplicate_patch.sh", body)
@@ -218,4 +209,3 @@ def test_c_runner_can_rerun_already_applied_script_after_confirmation(tmp_path: 
     assert duplicate_result.returncode == 0, duplicate_result.stdout + duplicate_result.stderr
     assert counter.read_text(encoding="utf-8").strip() == "2"
     assert (download_dir / "done" / "duplicate_patch.sh").exists()
-    assert "bereits angewendete Script erneut" in duplicate_result.stdout

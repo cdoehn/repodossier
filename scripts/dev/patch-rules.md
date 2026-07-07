@@ -499,3 +499,45 @@ scripts/dev/run_repodossier_exports.sh
 7. Vorhandene Dateien in `~/Downloads` werden überschrieben.
 
 `r` ist bewusst für das aktuelle Git-Repo gedacht, nicht nur für das RepoDossier-Entwicklungsrepo.
+
+---
+
+## Patch-Metadaten und Progress-Kontext
+
+Jedes neue Download-Patchscript soll oben maschinenlesbare JSON-Kommentarzeilen enthalten.
+
+Format:
+
+```bash
+# repodossier-meta: {"type":"patch","id":"DEV.6","title":"Add progress renderer","commit":"Add patch metadata progress renderer"}
+# repodossier-meta: {"type":"progress","panel":"roadmap","status":"done","file":"planning/ROADMAP.md","start":1,"end":20}
+# repodossier-meta: {"type":"progress","panel":"roadmap","status":"active","file":"planning/ROADMAP.md","start":21,"end":30}
+# repodossier-meta: {"type":"progress","panel":"milestone","status":"partial","file":"planning/MILESTONE4.md","start":40,"end":50}
+# repodossier-meta: {"type":"progress","panel":"milestone","status":"todo","file":"planning/MILESTONE4.md","start":51,"end":70}
+# repodossier-meta: {"type":"display","context":4,"layout":"side-by-side","frame":false}
+```
+
+Pflicht für `type=patch`:
+
+1. `id`
+2. `title`
+3. `commit`
+
+Optional für `type=progress`:
+
+1. `panel`: `roadmap` oder `milestone`
+2. `status`: `done`, `active`, `partial`, `todo`
+3. `file`: repo-relativer Pfad
+4. `start`: Startzeile
+5. `end`: Endzeile
+
+Farben:
+
+1. `done` = grün
+2. `active` = lila
+3. `partial` = gelb
+4. `todo` = rot
+
+`c` validiert diese Metadaten vor der Ausführung mit `scripts/dev/validate_patch_metadata.py`.
+
+Wenn Progress-Metadaten vorhanden sind, rendert `c` mit `scripts/dev/show_progress_context.py` Roadmap links und Milestone rechts, ohne Rahmen und mit Kontextzeilen oberhalb und unterhalb.
