@@ -43,10 +43,26 @@ def _script_body(commands: str) -> str:
     return f"#!/usr/bin/env bash\n{_meta()}\n{commands}\n"
 
 
+def _preflight_script_body(commands: str) -> str:
+    return (
+        f"#!/usr/bin/env bash\n{_meta()}\n"
+        "print_footer() {\n"
+        "  echo footer\n"
+        "}\n"
+        f"{commands}\n"
+        "python3 -m py_compile scripts/dev/validate_patch_metadata.py\n"
+    )
+
+
 def _run_runner(download_dir: Path, *args: str, input_text: str | None = None):
     env = os.environ.copy()
     env["PATCH_DOWNLOAD_DIR"] = str(download_dir)
     env.pop("NO_COLOR", None)
+    env.pop("C_RUNNER_WAIT_CHILD", None)
+    env.pop("C_RUNNER_WATCH_CHILD", None)
+    env.pop("C_RUNNER_SELF_COPY", None)
+    env.pop("C_RUNNER_ORIGINAL", None)
+    env.pop("C_RUNNER_TEMP_COPY", None)
 
     return subprocess.run(
         [str(RUNNER), *args],
@@ -62,6 +78,11 @@ def _run_runner(download_dir: Path, *args: str, input_text: str | None = None):
 def _run_runner_env(download_dir: Path, *args: str, env_extra: dict[str, str] | None = None):
     env = os.environ.copy()
     env["PATCH_DOWNLOAD_DIR"] = str(download_dir)
+    env.pop("C_RUNNER_WAIT_CHILD", None)
+    env.pop("C_RUNNER_WATCH_CHILD", None)
+    env.pop("C_RUNNER_SELF_COPY", None)
+    env.pop("C_RUNNER_ORIGINAL", None)
+    env.pop("C_RUNNER_TEMP_COPY", None)
     if env_extra:
         env.update(env_extra)
 
@@ -364,3 +385,123 @@ def test_c_wait_marks_existing_scripts_seen_before_waiting(tmp_path: Path) -> No
 
     assert "Warte-Modus" in stdout
     assert stderr == ""
+
+def test_c_runner_dry_run_checks_without_executing_or_moving(tmp_path: Path) -> None:
+    download_dir = tmp_path / "Downloads"
+    download_dir.mkdir()
+
+    marker = tmp_path / "dry_run_marker"
+    script = _write_script(
+        download_dir,
+        "dry_run_patch.sh",
+        _preflight_script_body(f": > {marker}"),
+    )
+
+    result = _run_runner(download_dir, "--dry-run")
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert script.exists()
+    assert not marker.exists()
+    assert not (download_dir / "done" / "dry_run_patch.sh").exists()
+    assert not (download_dir / "failed" / "dry_run_patch.sh").exists()
+    assert "Preflight OK" in result.stdout
+    assert "Dry-run erfolgreich" in result.stdout
+    assert "c · Progress Context" in result.stdout
+    assert result.stdout.rstrip().endswith("DRY-RUN OK\x1b[0m") or result.stdout.rstrip().endswith("DRY-RUN OK")
+
+
+def test_c_runner_dry_run_rejects_preflight_failure_without_moving(tmp_path: Path) -> None:
+    download_dir = tmp_path / "Downloads"
+    download_dir.mkdir()
+
+    marker = tmp_path / "bad_dry_run_marker"
+    script = _write_script(
+        download_dir,
+        "bad_dry_run_patch.sh",
+        f"#!/usr/bin/env bash\n{_meta()}\n: > {marker}\n",
+    )
+
+    result = _run_runner(download_dir, "--dry-run")
+
+    assert result.returncode == 20
+    assert script.exists()
+    assert not marker.exists()
+    assert not (download_dir / "done" / "bad_dry_run_patch.sh").exists()
+    assert not (download_dir / "failed" / "bad_dry_run_patch.sh").exists()
+    assert "Preflight-Linter hat das Patchscript beanstandet" in result.stdout
+    assert "missing-footer" in result.stdout
+
+
+def test_c_runner_dry_run_accepts_explicit_script_path(tmp_path: Path) -> None:
+    download_dir = tmp_path / "Downloads"
+    download_dir.mkdir()
+
+    first_marker = tmp_path / "first_marker"
+    second_marker = tmp_path / "second_marker"
+    first = _write_script(
+        download_dir,
+        "first_dry_run_patch.sh",
+        _preflight_script_body(f": > {first_marker}"),
+        age_seconds=10,
+    )
+    _write_script(
+        download_dir,
+        "second_dry_run_patch.sh",
+        _preflight_script_body(f": > {second_marker}"),
+    )
+
+    result = _run_runner(download_dir, "--dry-run", str(first))
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert first.exists()
+    assert not first_marker.exists()
+    assert not second_marker.exists()
+    assert "first_dry_run_patch.sh" in result.stdout
+
+
+
+def test_c_runner_dry_run_syntax_failure_does_not_move_script(tmp_path: Path) -> None:
+    download_dir = tmp_path / "Downloads"
+    download_dir.mkdir()
+
+    broken = _write_script(
+        download_dir,
+        "dry_run_broken_patch.sh",
+        f"#!/usr/bin/env bash\n{_meta()}\nprint_footer() {{ echo footer; }}\npython3 -m py_compile scripts/dev/validate_patch_metadata.py\nif true; then\necho broken\n",
+    )
+
+    result = _run_runner(download_dir, "--dry-run")
+
+    assert result.returncode != 0
+    assert broken.exists()
+    assert not (download_dir / "done" / "dry_run_broken_patch.sh").exists()
+    assert not (download_dir / "failed" / "dry_run_broken_patch.sh").exists()
+    assert "Syntaxprüfung fehlgeschlagen" in result.stdout
+    assert "Dry-run: Script bleibt unverändert" in result.stdout
+
+
+def test_c_runner_does_not_leak_internal_env_to_patch_scripts(tmp_path: Path) -> None:
+    download_dir = tmp_path / "Downloads"
+    download_dir.mkdir()
+
+    env_marker = tmp_path / "runner_env"
+    script = _write_script(
+        download_dir,
+        "env_leak_patch.sh",
+        _script_body(f"env | grep '^C_RUNNER_' > {env_marker} || true"),
+    )
+
+    result = _run_runner(download_dir, str(script))
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert (download_dir / "done" / "env_leak_patch.sh").exists()
+    assert env_marker.read_text(encoding="utf-8") == ""
+
+
+def test_c_runner_has_self_copy_guard_for_self_updates() -> None:
+    text = RUNNER.read_text(encoding="utf-8")
+
+    assert 'C_RUNNER_SELF_COPY=1' in text
+    assert 'exec bash "$temp_runner" "$@"' in text
+    assert 'runner_source="${C_RUNNER_ORIGINAL:-${BASH_SOURCE[0]}}"' in text
+    assert '-u C_RUNNER_SELF_COPY -u C_RUNNER_ORIGINAL -u C_RUNNER_TEMP_COPY bash "$patch_script"' in text

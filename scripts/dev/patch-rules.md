@@ -762,3 +762,55 @@ Grund:
    - `~` = partial
    - `!` = todo
 4. Die Farbcodierung bleibt erhalten.
+
+
+### c: Dry-run-Modus
+
+`c` kann ein Download-Patchscript prüfen, ohne es auszuführen:
+
+    c --dry-run
+    c --dry-run ~/Downloads/patch.sh
+
+Der Dry-run macht:
+
+1. neuestes oder explizit angegebenes Patchscript auswählen,
+2. `repodossier-meta` validieren,
+3. Progress-Kontext vorbereiten,
+4. Patch-Preflight-Linter ausführen,
+5. Wiederholungsprüfung ausführen,
+6. Frischeprüfung ausführen,
+7. `bash -n` ausführen,
+8. Kontext unten anzeigen,
+9. mit grüner Zeile `DRY-RUN OK` enden.
+
+Der Dry-run macht ausdrücklich nicht:
+
+1. Patchscript ausführen,
+2. Commit erstellen,
+3. Script nach `done/` verschieben,
+4. Script nach `failed/` verschieben,
+5. Applied-Ledger aktualisieren.
+
+### c: Dry-run-Syntaxfehler
+
+Wenn `c --dry-run` bei `bash -n` einen Syntaxfehler findet, bleibt das Script unverändert in `~/Downloads`.
+
+Es wird nicht nach `failed/` verschoben, weil Dry-run ausdrücklich keine Datei-Bewegungen durchführen soll.
+
+### c: Wait-Umgebungsisolation
+
+Wenn `c --wait` ein Patchscript startet, darf die interne Variable `C_RUNNER_WAIT_CHILD` nicht in das Patchscript selbst weitergereicht werden. Sonst verhalten sich Tests, die `c` in Subprozessen starten, fälschlich wie Wait-Kindprozesse.
+
+
+### c: Selbstkopie bei Runner-Updates
+
+`c` startet sich aus einer temporären Selbstkopie, bevor es ein Patchscript ausführt.
+
+Grund:
+
+1. Manche Patchscripts ändern `scripts/dev/run_latest_download_patch.sh`.
+2. Bash kann ein laufendes Script teilweise weiter aus der Datei lesen.
+3. Wenn die Datei während des Laufs überschrieben wird, kann das laufende `c` am Ende syntaktisch stolpern.
+4. Die temporäre Selbstkopie entkoppelt den laufenden Prozess von Änderungen an der Quell-Datei.
+
+Interne Variablen wie `C_RUNNER_SELF_COPY`, `C_RUNNER_ORIGINAL`, `C_RUNNER_TEMP_COPY`, `C_RUNNER_WAIT_CHILD` und `C_RUNNER_WATCH_CHILD` dürfen nicht in Patchscripts weitergereicht werden.

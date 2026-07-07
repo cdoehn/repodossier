@@ -2,6 +2,18 @@
 set -u
 
 if [ "${C_RUNNER_SELF_COPY:-0}" != "1" ]; then
+  original_runner="${BASH_SOURCE[0]}"
+  temp_runner="$(mktemp "${TMPDIR:-/tmp}/repodossier-c-runner.XXXXXX.sh")"
+  cp "$original_runner" "$temp_runner"
+  chmod +x "$temp_runner"
+  C_RUNNER_SELF_COPY=1 C_RUNNER_ORIGINAL="$original_runner" C_RUNNER_TEMP_COPY="$temp_runner" exec bash "$temp_runner" "$@"
+fi
+
+if [ -n "${C_RUNNER_TEMP_COPY:-}" ]; then
+  trap 'rm -f "$C_RUNNER_TEMP_COPY" 2>/dev/null || true' EXIT
+fi
+
+if [ "${C_RUNNER_SELF_COPY:-0}" != "1" ]; then
   self_copy="$(mktemp "${TMPDIR:-/tmp}/repodossier-c-runner.XXXXXX.sh")"
   cp "$0" "$self_copy"
   chmod +x "$self_copy"
@@ -21,7 +33,7 @@ max_age_seconds="${C_RUNNER_MAX_AGE_SECONDS:-3600}"
 wait_sleep_seconds="${C_RUNNER_WAIT_SLEEP_SECONDS:-2}"
 wait_fresh_seconds="${C_RUNNER_WAIT_FRESH_SECONDS:-30}"
 
-runner_source="${BASH_SOURCE[0]}"
+runner_source="${C_RUNNER_ORIGINAL:-${BASH_SOURCE[0]}}"
 if [ -n "${C_RUNNER_TEMP_COPY:-}" ] && [ -x "$HOME/market_research/repo_dossier/scripts/dev/run_latest_download_patch.sh" ]; then
   runner_source="$HOME/market_research/repo_dossier/scripts/dev/run_latest_download_patch.sh"
 fi
@@ -29,6 +41,7 @@ runner_dir="$(cd "$(dirname "$runner_source")" && pwd)"
 runner_repo="$(cd "$runner_dir/../.." && pwd)"
 metadata_validator="$runner_dir/validate_patch_metadata.py"
 progress_renderer="$runner_dir/show_progress_context.py"
+preflight_linter="$runner_dir/lint_patch_script.py"
 
 C_USE_COLOR=1
 if [ -n "${NO_COLOR:-}" ] || [ "${C_RUNNER_COLOR:-auto}" = "never" ]; then
@@ -62,8 +75,14 @@ usage() {
 Usage:
   c
   c /path/to/patch.sh
+  c --dry-run [path/to/patch.sh]
   c --wait
   c --help
+
+Dry-run mode:
+  c --dry-run validates the selected patch through metadata, progress,
+  preflight, freshness, repetition and bash syntax checks, but does not
+  execute it and does not move it to done/failed.
 
 Normal mode:
   c validates metadata, checks freshness and repetition, runs one patch script,
@@ -145,6 +164,7 @@ success_band() {
   printf '%b\n' "${C_OK}${C_BOLD}${line}${C_RESET}"
 }
 
+dry_run=0
 mkdir -p "$download_dir" "$done_dir" "$failed_dir"
 
 select_latest_script() {
@@ -463,6 +483,11 @@ if [ "${1:-}" = "--help" ] || [ "${1:-}" = "-h" ]; then
   exit 0
 fi
 
+if [ "${1:-}" = "--dry-run" ]; then
+  dry_run=1
+  shift
+fi
+
 case "${1:-}" in
   --wait|--loop)
     wait_loop
@@ -527,6 +552,25 @@ if [ "$metadata_status" -ne 0 ]; then
 fi
 success "Metadaten OK."
 
+if [ "$dry_run" -eq 1 ]; then
+  section "Preflight"
+  if [ ! -x "$preflight_linter" ]; then
+    error "Patch-Preflight-Linter fehlt oder ist nicht ausführbar: $preflight_linter"
+    info "Patchscript wurde nicht ausgeführt und bleibt unverändert: $(show_path "$patch_script")"
+    exit 20
+  fi
+
+  action "Prüfe Patchscript mit lint_patch_script.py."
+  python3 "$preflight_linter" --script "$patch_script" --repo "$runner_repo"
+  preflight_status=$?
+  if [ "$preflight_status" -ne 0 ]; then
+    error "Preflight-Linter hat das Patchscript beanstandet."
+    info "Patchscript wurde nicht ausgeführt und bleibt unverändert: $(show_path "$patch_script")"
+    exit "$preflight_status"
+  fi
+  success "Preflight OK."
+fi
+
 progress_context_output=""
 if [ -x "$progress_renderer" ]; then
   progress_context_output="$(mktemp "${TMPDIR:-/tmp}/repodossier-progress-context.XXXXXX.txt")"
@@ -589,6 +633,13 @@ syntax_status=$?
 
 if [ "$syntax_status" -ne 0 ]; then
   error "Syntaxprüfung fehlgeschlagen. Exit-Code: $syntax_status"
+  if [ "$dry_run" -eq 1 ]; then
+    info "Dry-run: Script bleibt unverändert in Downloads: $(show_path "$patch_script")"
+    info "Logfile bleibt in Downloads: $(show_path "$run_log")"
+    rm -f "${progress_context_output:-}" 2>/dev/null || true
+    exit "$syntax_status"
+  fi
+
   moved_to="$(move_script_to "$failed_dir" "$patch_script")"
   info "Script verschoben nach: $(show_path "$moved_to")"
   info "Logfile bleibt in Downloads: $(show_path "$run_log")"
@@ -598,9 +649,26 @@ fi
 
 success "Syntax OK."
 
+if [ "$dry_run" -eq 1 ]; then
+  section "Dry-run Abschluss"
+  success "Dry-run erfolgreich. Patchscript wurde nicht ausgeführt."
+  info "Script bleibt unverändert in Downloads: $(show_path "$patch_script")"
+  info "Logfile bleibt in Downloads: $(show_path "$run_log")"
+  info "Endzeit: $(date --iso-8601=seconds)"
+
+  if [ -n "${progress_context_output:-}" ] && [ -s "$progress_context_output" ]; then
+    section "Roadmap / Milestone"
+    cat "$progress_context_output"
+  fi
+  rm -f "${progress_context_output:-}" 2>/dev/null || true
+
+  printf '%b\n' "${C_OK}${C_BOLD}DRY-RUN OK${C_RESET}"
+  exit 0
+fi
+
 section "Ausführung"
 action "Starte Patchscript mit bash."
-bash "$patch_script"
+env -u C_RUNNER_WAIT_CHILD -u C_RUNNER_WATCH_CHILD -u C_RUNNER_SELF_COPY -u C_RUNNER_ORIGINAL -u C_RUNNER_TEMP_COPY bash "$patch_script"
 status=$?
 
 section "Abschluss"
