@@ -24,15 +24,14 @@ Daraus folgt:
 2. Den letzten Patch als grün / committed behandeln.
 3. Direkt den nächsten sinnvollen Commit liefern.
 4. Keine Wiederholung des vorherigen Patches.
-5. Keine lange Erklärung außerhalb des Scriptblocks.
-6. Wenn aus dem Chat klar ist, dass der letzte Schritt ein Fix war, dann den Fix als abgeschlossen behandeln.
-7. Wenn Christian statt `n` eine Fehlermeldung postet, hat der Fix Vorrang.
+5. Wenn aus dem Chat klar ist, dass der letzte Schritt ein Fix war, den Fix als abgeschlossen behandeln.
+6. Wenn Christian statt `n` eine Fehlermeldung, ein Logfile oder Terminalausgabe mit Fehlern postet, hat der Fix Vorrang.
 
 ---
 
 ## 2. Bedeutung von geposteten Fehlern
 
-Wenn Christian Terminalausgaben, Tracebacks, Syntaxfehler oder Testfehler postet, gilt:
+Wenn Christian Terminalausgaben, Tracebacks, Syntaxfehler, Testfehler oder Logfiles mit Fehlern postet, gilt:
 
 > Der aktuelle Patch ist noch nicht abgeschlossen. Repariere genau diesen Patch.
 
@@ -45,47 +44,74 @@ Daraus folgt:
 5. Bei grünem Testlauf soll der ursprünglich geplante Commit erstellt werden.
 6. Falls der ursprüngliche Commit noch nicht erstellt wurde, nutzt der Fix dieselbe Commit-Message.
 7. Falls bereits committed wurde und ein neuer Fix nötig ist, bekommt der Fix einen eigenen Commit.
-8. Im Footer wird der Fix als aktuelle gelbe Aufgabe markiert.
+8. Im Footer wird der Fix als aktuelle Aufgabe markiert.
 
 ---
 
-## 3. Ein-Codeblock-Regel
+## 3. Ausgabeformat für Patches und Fixes
 
 Für zukünftige Commit- und Fix-Antworten gilt:
 
-1. Genau ein Bash-Codeblock.
-2. Keine separate Browser-Übersicht nach dem Codeblock.
-3. Die Aufgabenübersicht steht unten im Script als Footer.
-4. Der Footer ist dadurch im Browser sichtbar und erscheint beim Ausführen auch im Terminal.
-5. Erklärtext außerhalb des Codeblocks nur minimal, wenn unbedingt nötig.
-6. Keine literal Markdown-Code-Fences im Heredoc ausgeben, weil das das Chat-Codefenster beschädigen kann.
+1. Patches, Fixes und Next-Commit-Scripts werden als Download-Link zu einer `.sh`-Bashscript-Datei bereitgestellt.
+2. Keine riesigen Bash-Scripts direkt ins Chatfenster posten, wenn ein Download-Link möglich ist.
+3. Kurz und knapp erklären, was der Patch oder Fix macht.
+4. Bei Bedarf darf Christian um zusätzliche Eingaben, Logausgaben oder Testergebnisse gebeten werden.
+5. Die `.sh`-Datei muss direkt ausführbar oder mit `bash <datei>.sh` ausführbar sein.
+6. Der Script-Footer bleibt Teil des `.sh`-Scripts und wird beim Ausführen im Terminal angezeigt.
 
 ---
 
-## 4. Projektpfad
+## 4. Repo-Root-Erkennung
 
-Standardpfad:
+Das Script soll das Repository-Root selbst finden.
+
+Regeln:
+
+1. Standardannahme bleibt `~/market_research/repo_dossier`.
+2. Zusätzlich soll das Script mit `git rev-parse --show-toplevel` das tatsächliche Repo-Root ermitteln.
+3. Wenn das gefundene Repo-Root nicht zu RepoDossier gehört, abbrechen.
+4. Wenn das aktuelle Verzeichnis kein Git-Repo ist, nach `~/market_research/repo_dossier` wechseln und dort erneut prüfen.
+5. Wenn RepoDossier nicht gefunden wird, klar abbrechen und keinen Commit erstellen.
+
+Beispiel-Logik:
 
 ```bash
-~/market_research/repo_dossier
-```
+REPO_CANDIDATE="$HOME/market_research/repo_dossier"
 
-Patch-Scripts starten grundsätzlich mit:
+if git rev-parse --show-toplevel >/dev/null 2>&1; then
+  REPO_ROOT="$(git rev-parse --show-toplevel)"
+else
+  cd "$REPO_CANDIDATE" || {
+    echo "Fehler: RepoDossier-Verzeichnis nicht gefunden: $REPO_CANDIDATE"
+    return 1
+  }
+  REPO_ROOT="$(git rev-parse --show-toplevel)"
+fi
 
-```bash
-REPO_DIR="$HOME/market_research/repo_dossier"
+case "$REPO_ROOT" in
+  */repo_dossier) ;;
+  *)
+    echo "Fehler: falsches Repository: $REPO_ROOT"
+    return 1
+    ;;
+esac
 
-cd "$REPO_DIR" || {
-  echo "Fehler: Projektverzeichnis nicht gefunden: $REPO_DIR"
-  return 1
-}
+cd "$REPO_ROOT" || return 1
 ```
 
 ---
 
 ## 5. Virtuelle Umgebung
 
-Wenn `.venv` existiert, wird sie aktiviert:
+Wenn `.venv` existiert, wird sie aktiviert.
+
+Regeln:
+
+1. Dafür bevorzugt Helper-Funktionen aus `scripts/dev/repo_patch_helper.py` verwenden, sofern vorhanden und nutzbar.
+2. Fallback ist direkte Bash-Aktivierung.
+3. Es wird immer `python3` verwendet.
+
+Fallback:
 
 ```bash
 if [ -d .venv ]; then
@@ -93,33 +119,23 @@ if [ -d .venv ]; then
 fi
 ```
 
-Es wird immer `python3` verwendet.
-
 ---
 
 ## 6. Repository-lokaler Helper
 
-Die bevorzugte Helper-Datei liegt jetzt im Projekt:
+Die bevorzugte Helper-Datei liegt im Projekt:
 
 ```text
 scripts/dev/repo_patch_helper.py
 ```
 
-Sie ersetzt die frühere externe Helper-Datei unter:
+Die frühere externe Datei unter folgendem Pfad ist nur noch Fallback:
 
 ```text
 ~/dev-scripts/repo_patch_helper.py
 ```
 
-Die externe Datei kann als Fallback existieren, soll aber nicht mehr bevorzugt werden.
-
-Zukünftige Patches sollen zuerst die repo-lokale Datei verwenden:
-
-```bash
-REPO_HELPER="scripts/dev/repo_patch_helper.py"
-```
-
-Vor Nutzung kann geprüft werden:
+Vor Nutzung des repo-lokalen Helpers kann geprüft werden:
 
 ```bash
 [ -f "$REPO_HELPER" ] && python3 -m py_compile "$REPO_HELPER"
@@ -130,26 +146,30 @@ Wenn der Helper fehlt oder syntaktisch defekt ist:
 1. Nicht blind abbrechen, wenn ein einfacher manueller Fallback möglich ist.
 2. Bei Helper-bezogenen Patches manuelle Shell-Fallbacks nutzen.
 3. Bei normalen Projektpatches klar melden, dass der Helper fehlt oder defekt ist.
+4. Wenn der Helper selbst repariert wird, nicht den defekten Helper für die Reparatur voraussetzen.
 
 ---
 
-## 7. Python-Heredoc-Imports
+## 7. Logging
 
-Wenn Python-Patches Helper brauchen:
+Alle Ausgaben sollen geloggt werden.
 
-```python
-import sys
-from pathlib import Path
+Regeln:
 
-sys.path.insert(0, str(Path("scripts/dev").resolve()))
-from repo_patch_helper import (
-    replace_once,
-    write_text,
-    write_test,
-)
+1. `stdout` und `stderr` zusammen in eine Logdatei schreiben.
+2. Das Logging soll auch bei erfolgreichem Lauf passieren.
+3. Dafür bevorzugt Helper-Funktionen aus `scripts/dev/repo_patch_helper.py` verwenden.
+4. Bei Fehlern soll das Log per `xclip` in die Zwischenablage kopiert werden, wenn verfügbar.
+5. Wenn `xclip` nicht installiert ist, nur Hinweis ausgeben.
+6. Der Pfad zur Logdatei soll im Terminal sichtbar sein.
+
+Typisches Pattern:
+
+```bash
+RUN_LOG="$(mktemp)"
+exec > >(tee -a "$RUN_LOG") 2>&1
+echo "Logfile: $RUN_LOG"
 ```
-
-Für reine Dateierzeugung kann auch ohne Helper gearbeitet werden, wenn das robuster ist.
 
 ---
 
@@ -168,7 +188,7 @@ Bei Commit-Patches gilt:
 
 `bundle_project.sh` wird nicht mehr verwendet.
 
-Für Snapshots, Prüfungen und Exporte werden RepoDossier/RepoContext-Befehle oder vorhandene Exportdateien genutzt.
+Für Snapshots, Prüfungen und Exporte werden RepoDossier-/RepoContext-Befehle oder vorhandene Exportdateien genutzt.
 
 ---
 
@@ -176,7 +196,16 @@ Für Snapshots, Prüfungen und Exporte werden RepoDossier/RepoContext-Befehle od
 
 Jeder Commit-Patch führt relevante Tests aus.
 
-Bevorzugt:
+Regeln:
+
+1. `--color=yes` verwenden.
+2. Bei Testfehlern keinen Commit erstellen.
+3. Optionale Testdateien nur ausführen, wenn sie existieren.
+4. Nach Fixes dieselben relevanten Tests erneut ausführen.
+5. Testausgaben werden gemeinsam mit allen anderen Ausgaben geloggt.
+6. Wenn Tests fehlen, aber der Patch sinnvoll prüfbar ist, mindestens Syntax-/Smoke-Checks ausführen.
+
+Bevorzugt mit Helper:
 
 ```bash
 python3 "$REPO_HELPER" pytest-existing --repo . --log "$TEST_LOG" tests/test_x.py tests/test_y.py
@@ -185,30 +214,16 @@ python3 "$REPO_HELPER" pytest-existing --repo . --log "$TEST_LOG" tests/test_x.p
 Fallback:
 
 ```bash
-python3 -m pytest --color=yes tests/test_x.py tests/test_y.py 2>&1 | tee "$TEST_LOG"
-TEST_STATUS=${PIPESTATUS[0]}
+python3 -m pytest --color=yes tests/test_x.py tests/test_y.py
 ```
-
-Regeln:
-
-1. `--color=yes` verwenden.
-2. Testausgabe in Log speichern.
-3. Bei Testfehlern keinen Commit erstellen.
-4. Bei Testfehlern Log in die Zwischenablage kopieren, wenn möglich.
-5. Optionale Testdateien nur ausführen, wenn sie existieren.
-6. Nach Fixes dieselben relevanten Tests erneut ausführen.
 
 ---
 
 ## 11. Syntaxchecks
 
-Bei Python-Änderungen:
+Bei Python-Änderungen werden Syntaxchecks ausgeführt.
 
-```bash
-python3 -m compileall ...
-```
-
-oder mit Helper:
+Bevorzugt mit Helper:
 
 ```bash
 python3 "$REPO_HELPER" compile --repo . --log "$TEST_LOG" path1 path2
@@ -224,38 +239,25 @@ python3 -m py_compile scripts/dev/repo_patch_helper.py
 
 ## 12. Clipboard bei Fehlern
 
-Bei Fehlern wird der Log kopiert, wenn möglich.
+Bei Fehlern wird der relevante Log kopiert, wenn möglich.
 
 Mit Helper:
 
 ```bash
-python3 "$REPO_HELPER" copy-log "$TEST_LOG" || true
+python3 "$REPO_HELPER" copy-log "$RUN_LOG" || true
 ```
 
 Fallback:
 
 ```bash
 if command -v xclip >/dev/null 2>&1; then
-  cat "$TEST_LOG" | xclip -selection clipboard
+  cat "$RUN_LOG" | xclip -selection clipboard
 fi
 ```
 
 ---
 
 ## 13. Commit-Regeln
-
-Bei grünem Testlauf:
-
-```bash
-git add ...
-git commit -m "..."
-```
-
-oder mit Helper:
-
-```bash
-python3 "$REPO_HELPER" commit-if-changed --repo . --message "Commit message" path1 path2
-```
 
 Regeln:
 
@@ -265,6 +267,27 @@ Regeln:
 4. Keine unrelated Dateien committen.
 5. Keine ungewollten Planning-Dateien committen.
 6. Danach immer `git status --short`.
+7. Git-Ausgaben ohne Pager anzeigen.
+
+Bevorzugt mit Helper:
+
+```bash
+python3 "$REPO_HELPER" commit-if-changed --repo . --message "Commit message" path1 path2
+```
+
+Fallback:
+
+```bash
+git add path1 path2
+
+if git diff --cached --quiet; then
+  echo "Keine Änderungen zum Committen."
+else
+  git commit -m "Commit message"
+fi
+
+git status --short
+```
 
 ---
 
@@ -275,6 +298,7 @@ Immer:
 ```bash
 git --no-pager diff
 git --no-pager log
+git --no-pager status
 ```
 
 oder Helper:
@@ -290,7 +314,7 @@ Nie plain `git diff` oder `git log`, wenn dadurch ein Pager hängen bleiben kann
 
 ## 15. Footer-Pflicht
 
-Jeder Patch- oder Fixblock enthält unten im Script eine Footer-Funktion.
+Jeder Patch- oder Fixscript enthält unten eine Footer-Funktion.
 
 Der Footer wird aufgerufen:
 
@@ -315,15 +339,28 @@ Farbschema:
 
 ```text
 Grün  = erledigt / committed / Tests grün
-Gelb  = aktuell / laufender Fix / gerade bearbeitet
-Cyan  = nächste geplante Schritte / noch nicht begonnen
+Lila  = aktuell / laufender Fix / gerade bearbeitet
+Gelb  = nächste geplante Schritte / noch nicht begonnen
 Rot   = echte Probleme, Testfehler, Blocker, nicht committed
 ```
 
-Wichtig:
+Regeln:
 
-- Zukünftige Aufgaben nie rot markieren.
-- Rot nur bei echten Problemen.
+1. Zukünftige Aufgaben nicht rot markieren.
+2. Rot ist nur für echte Probleme.
+3. Erledigte Schritte grün markieren.
+4. Aktuelle Aufgabe lila markieren.
+5. Nächste Schritte gelb markieren.
+
+Empfohlene ANSI-Farben:
+
+```bash
+GREEN='\033[0;32m'
+PURPLE='\033[0;35m'
+YELLOW='\033[1;33m'
+RED='\033[0;31m'
+NC='\033[0m'
+```
 
 ---
 
@@ -365,7 +402,7 @@ SyntaxError: unexpected character after line continuation character
 bei Zeilen wie:
 
 ```python
-raise SystemExit(main()) + "literal backslash+n außerhalb eines Strings"
+raise SystemExit(main())\n
 ```
 
 Regeln:
@@ -431,12 +468,13 @@ Wenn Christian `n` schreibt:
 
 1. Letzten Patch als grün behandeln.
 2. Nächsten sinnvollen Commit liefern.
-3. Genau einen Bash-Codeblock.
+3. Patch als Download-Link zu einer `.sh`-Datei bereitstellen.
 4. Repo-lokalen Helper verwenden, wenn möglich.
-5. Tests laufen lassen.
-6. Bei grünem Ergebnis committen.
-7. Footer unten im Script.
-8. Keine separate Übersicht außerhalb des Scripts.
+5. Alle Ausgaben in ein Logfile schreiben.
+6. Tests laufen lassen.
+7. Bei grünem Ergebnis committen.
+8. Footer unten im Script.
+9. Keine separate lange Übersicht außerhalb des Scripts.
 
 ---
 
@@ -451,3 +489,18 @@ Wenn Christian einen Fehler postet:
 5. Bei Erfolg committen.
 6. Footer zeigt Fix als aktuelle Aufgabe.
 7. Rot nur für echte Probleme.
+8. Ausgabe wieder als Download-Link zu einer `.sh`-Datei bereitstellen.
+
+---
+
+## 25. Wichtigste Prioritäten
+
+Priorität bei Konflikten:
+
+1. Sicherheit des Repos: keine falschen Repos patchen.
+2. Fehlerfix vor neuem Feature.
+3. Tests und Syntaxchecks vor Commit.
+4. Keine unrelated Dateien committen.
+5. Logs immer speichern.
+6. Download-`.sh` statt riesigem Chat-Codeblock.
+7. Footer immer im Script.
