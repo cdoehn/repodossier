@@ -21,6 +21,7 @@ def test_validate_patch_metadata_accepts_patch_display_and_progress(tmp_path: Pa
             "#!/usr/bin/env bash",
             '# repodossier-meta: {"type":"patch","id":"DEV.X","title":"Demo","commit":"Demo commit"}',
             '# repodossier-meta: {"type":"progress","panel":"roadmap","status":"active","file":"scripts/dev/patch-rules.md","start":1,"end":1}',
+            '# repodossier-meta: {"type":"progress","panel":"milestone","status":"partial","file":"scripts/dev/patch-rules.md","start":2,"end":2}',
             '# repodossier-meta: {"type":"display","context":2,"layout":"side-by-side","frame":false}',
             "echo ok",
         ],
@@ -65,6 +66,7 @@ def test_validate_patch_metadata_rejects_unknown_status(tmp_path: Path) -> None:
             "#!/usr/bin/env bash",
             '# repodossier-meta: {"type":"patch","id":"DEV.X","title":"Demo","commit":"Demo commit"}',
             '# repodossier-meta: {"type":"progress","panel":"roadmap","status":"unknown","file":"scripts/dev/patch-rules.md","start":1,"end":1}',
+            '# repodossier-meta: {"type":"progress","panel":"milestone","status":"partial","file":"scripts/dev/patch-rules.md","start":2,"end":2}',
             "echo ok",
         ],
     )
@@ -87,6 +89,7 @@ def test_validate_patch_metadata_rejects_missing_file(tmp_path: Path) -> None:
             "#!/usr/bin/env bash",
             '# repodossier-meta: {"type":"patch","id":"DEV.X","title":"Demo","commit":"Demo commit"}',
             '# repodossier-meta: {"type":"progress","panel":"roadmap","status":"done","file":"missing.md","start":1,"end":1}',
+            '# repodossier-meta: {"type":"progress","panel":"milestone","status":"partial","file":"scripts/dev/patch-rules.md","start":2,"end":2}',
             "echo ok",
         ],
     )
@@ -100,3 +103,25 @@ def test_validate_patch_metadata_rejects_missing_file(tmp_path: Path) -> None:
 
     assert result.returncode == 10
     assert "file does not exist" in result.stdout
+
+def test_validate_patch_metadata_rejects_missing_progress_records(tmp_path: Path) -> None:
+    target = _write_script(
+        tmp_path / "patch.sh",
+        [
+            "#!/usr/bin/env bash",
+            '# repodossier-meta: {"type":"patch","id":"DEV.X","title":"Demo","commit":"Demo commit"}',
+            '# repodossier-meta: {"type":"display","context":2}',
+            "echo ok",
+        ],
+    )
+
+    result = subprocess.run(
+        [sys.executable, str(VALIDATOR), "--script", str(target), "--repo", str(REPO_ROOT)],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode == 10
+    assert "missing required roadmap progress metadata record" in result.stdout
+    assert "missing required milestone progress metadata record" in result.stdout

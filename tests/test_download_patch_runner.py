@@ -14,6 +14,8 @@ def _meta() -> str:
     return '\n'.join(
         [
             '# repodossier-meta: {"type":"patch","id":"TEST","title":"Test patch","commit":"Test patch"}',
+            '# repodossier-meta: {"type":"progress","panel":"roadmap","status":"active","file":"scripts/dev/patch-rules.md","start":1,"end":1}',
+            '# repodossier-meta: {"type":"progress","panel":"milestone","status":"partial","file":"scripts/dev/patch-rules.md","start":2,"end":2}',
             '# repodossier-meta: {"type":"display","context":1,"layout":"side-by-side","frame":false}',
         ]
     )

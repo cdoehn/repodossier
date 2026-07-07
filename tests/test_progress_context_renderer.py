@@ -57,6 +57,8 @@ def test_progress_renderer_outputs_side_by_side_status_context(tmp_path: Path) -
 def test_progress_renderer_uses_priority_for_overlapping_ranges(tmp_path: Path) -> None:
     roadmap = tmp_path / "ROADMAP.md"
     roadmap.write_text("one\ntwo\nthree\n", encoding="utf-8")
+    milestone = tmp_path / "MILESTONE.md"
+    milestone.write_text("milestone one\n", encoding="utf-8")
 
     script = tmp_path / "patch.sh"
     script.write_text(
@@ -66,6 +68,7 @@ def test_progress_renderer_uses_priority_for_overlapping_ranges(tmp_path: Path) 
                 '# repodossier-meta: {"type":"patch","id":"DEV.X","title":"Demo","commit":"Demo commit"}',
                 '# repodossier-meta: {"type":"progress","panel":"roadmap","status":"todo","file":"ROADMAP.md","start":1,"end":3}',
                 '# repodossier-meta: {"type":"progress","panel":"roadmap","status":"active","file":"ROADMAP.md","start":2,"end":2}',
+                '# repodossier-meta: {"type":"progress","panel":"milestone","status":"partial","file":"MILESTONE.md","start":1,"end":1}',
                 '# repodossier-meta: {"type":"display","context":0,"layout":"stacked","frame":false}',
                 "echo ok",
             ]

@@ -118,6 +118,7 @@ def validate_records(
         return errors
 
     patch_records = [record for record in records if record.data.get("type") == "patch"]
+    progress_records = [record for record in records if record.data.get("type") == "progress"]
     display_records = [record for record in records if record.data.get("type") == "display"]
 
     if len(patch_records) != 1:
@@ -125,6 +126,20 @@ def validate_records(
 
     if len(display_records) > 1:
         errors.append(f"expected at most one display metadata record, found {len(display_records)}")
+
+    requires_direct_bash = any(
+        record.data.get("requires_direct_bash") is True for record in patch_records
+    )
+    if patch_records and not requires_direct_bash:
+        progress_panels = {
+            record.data.get("panel")
+            for record in progress_records
+            if isinstance(record.data.get("panel"), str)
+        }
+        if "roadmap" not in progress_panels:
+            errors.append("missing required roadmap progress metadata record")
+        if "milestone" not in progress_panels:
+            errors.append("missing required milestone progress metadata record")
 
     for record in records:
         meta_type = record.data.get("type")

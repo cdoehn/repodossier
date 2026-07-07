@@ -526,7 +526,7 @@ Pflicht für `type=patch`:
 2. `title`
 3. `commit`
 
-Optional für `type=progress`:
+Pflicht für normale `c`-Patchscripts: mindestens ein `type=progress`-Eintrag für `roadmap` und mindestens ein `type=progress`-Eintrag für `milestone`.
 
 1. `panel`: `roadmap` oder `milestone`
 2. `status`: `done`, `active`, `partial`, `todo`
@@ -543,4 +543,4 @@ Farben:
 
 `c` validiert diese Metadaten vor der Ausführung mit `scripts/dev/validate_patch_metadata.py`.
 
-Wenn Progress-Metadaten vorhanden sind, rendert `c` mit `scripts/dev/show_progress_context.py` Roadmap links und Milestone rechts, ohne Rahmen und mit Kontextzeilen oberhalb und unterhalb.
+Progress-Metadaten sind für normale `c`-Patchscripts Pflicht. `c` rendert mit `scripts/dev/show_progress_context.py` Roadmap links und Milestone rechts, ohne Rahmen und mit Kontextzeilen oberhalb und unterhalb. Wenn ein Patch keine Roadmap- und Milestone-Progress-Zeilen enthält, wird er vor der Ausführung blockiert.
