@@ -425,7 +425,7 @@ Priorität bei Konflikten:
 2. Fehlerfix vor neuem Feature.
 3. Tests und Syntaxchecks vor Commit.
 4. Keine unrelated Dateien committen.
-5. `c` verwaltet Download-Scripts und Logs zentral.
+5. `c` verwaltet Download-Scripts, Wiederholungsprüfung und Logs zentral.
 6. Download-`.sh` statt riesigem Chat-Codeblock.
 7. Footer immer im Script.
 
@@ -451,3 +451,51 @@ Regeln:
 12. `c` wird getestet: Auswahl des neuesten Scripts, erfolgreiche Ausführung, Fehler-Ausführung, Syntaxfehler, Logdatei, done/failed-Verschiebung und Altersbestätigung.
 
 Einzelne Patchscripts sollen weiterhin keine eigene globale Logumleitung und keine eigene Clipboard-Logik enthalten. `c` übernimmt diese Verantwortung zentral.
+
+---
+
+## c-Runner Wiederholungsprüfung und r-Runner
+
+### c: bereits angewendete Scripts
+
+`c` erkennt bereits erfolgreich angewendete Patchscripts über SHA-256-Hash.
+
+Regeln:
+
+1. Erfolgreich ausgeführte Scripts werden in `~/Downloads/done/.applied_patch_hashes.tsv` protokolliert.
+2. Zusätzlich vergleicht `c` neue Scripts gegen bereits vorhandene `*.sh`-Dateien in `~/Downloads/done`.
+3. Wenn ein Script bereits angewendet wurde, warnt `c` rot.
+4. Ein bereits angewendetes Script wird nicht automatisch erneut ausgeführt.
+5. Eine erneute Ausführung ist nur nach ausdrücklicher Bestätigung erlaubt.
+6. Ohne Bestätigung bleibt das Script in `~/Downloads` liegen und wird weder nach `done` noch nach `failed` verschoben.
+
+### c: Selbst-Update-Sicherheit
+
+`c` startet sich vor der eigentlichen Patch-Ausführung als temporäre Kopie neu.
+
+Grund:
+
+1. Manche Patches aktualisieren `scripts/dev/run_latest_download_patch.sh`.
+2. Wenn Bash ein Script ausführt, das währenddessen überschrieben wird, kann die laufende Shell später aus der neuen Datei weiterlesen und mit Syntaxfehlern abbrechen.
+3. Die temporäre Kopie verhindert diese Selbstüberschreibung während der laufenden Ausführung.
+4. Dadurch darf ein Patch den `c`-Runner selbst sicher aktualisieren.
+
+### r: RepoDossier-Export für aktuelles Repo
+
+Das Kürzel `r` ruft den repo-lokalen Runner auf:
+
+```text
+scripts/dev/run_repodossier_exports.sh
+```
+
+`r` macht Folgendes:
+
+1. Aktuelles Git-Repo erkennen.
+2. In dieses Repo-Root wechseln.
+3. `repodossier full` ausführen.
+4. `repodossier export-ai` ausführen.
+5. `full.txt` nach `~/Downloads/full.txt` kopieren.
+6. `ai.txt` nach `~/Downloads/ai.txt` kopieren.
+7. Vorhandene Dateien in `~/Downloads` werden überschrieben.
+
+`r` ist bewusst für das aktuelle Git-Repo gedacht, nicht nur für das RepoDossier-Entwicklungsrepo.

@@ -1,12 +1,25 @@
 #!/usr/bin/env bash
 set -u
 
-# c-runner: executes the newest downloaded patch script with syntax checks,
-# structured colored output, central logging and archive handling.
+# Protect the running c process from self-overwrite. Some patches update this
+# file while c is still executing. Bash may otherwise continue reading the
+# modified file and fail with syntax errors. Therefore c immediately re-execs a
+# temporary copy of itself before it runs any downloaded patch.
+if [ "${C_RUNNER_SELF_COPY:-0}" != "1" ]; then
+  self_copy="$(mktemp "${TMPDIR:-/tmp}/repodossier-c-runner.XXXXXX.sh")"
+  cp "$0" "$self_copy"
+  chmod +x "$self_copy"
+  C_RUNNER_SELF_COPY=1 C_RUNNER_TEMP_COPY="$self_copy" exec "$self_copy" "$@"
+fi
+
+if [ -n "${C_RUNNER_TEMP_COPY:-}" ]; then
+  trap 'rm -f "$C_RUNNER_TEMP_COPY"' EXIT
+fi
 
 download_dir="${PATCH_DOWNLOAD_DIR:-$HOME/Downloads}"
 done_dir="$download_dir/done"
 failed_dir="$download_dir/failed"
+applied_ledger="$done_dir/.applied_patch_hashes.tsv"
 max_age_seconds="${C_RUNNER_MAX_AGE_SECONDS:-3600}"
 
 C_USE_COLOR=1
@@ -17,7 +30,6 @@ fi
 if [ "$C_USE_COLOR" -eq 1 ]; then
   C_RESET=$'\033[0m'
   C_BOLD=$'\033[1m'
-  C_DIM=$'\033[2m'
   C_ACCENT=$'\033[38;5;45m'
   C_INFO=$'\033[38;5;39m'
   C_OK=$'\033[0;32m'
@@ -28,7 +40,6 @@ if [ "$C_USE_COLOR" -eq 1 ]; then
 else
   C_RESET=''
   C_BOLD=''
-  C_DIM=''
   C_ACCENT=''
   C_INFO=''
   C_OK=''
@@ -49,11 +60,12 @@ Without arguments, runs the newest *.sh file directly in ~/Downloads.
 
 The runner:
   1. finds the newest patch script in Downloads,
-  2. warns and asks for confirmation if the script is older than 60 minutes,
-  3. checks bash syntax with bash -n,
-  4. logs stdout and stderr to ~/Downloads/<script>_<timestamp>.log,
-  5. moves the script to ~/Downloads/done on success,
-  6. moves the script to ~/Downloads/failed on failure.
+  2. warns in red and asks for confirmation if this exact script was already applied,
+  3. warns and asks for confirmation if the script is older than 60 minutes,
+  4. checks bash syntax with bash -n,
+  5. logs stdout and stderr to ~/Downloads/<script>_<timestamp>.log,
+  6. moves the script to ~/Downloads/done on success,
+  7. moves the script to ~/Downloads/failed on failure.
 USAGE
 }
 
@@ -181,6 +193,48 @@ format_age() {
   fi
 }
 
+hash_script() {
+  sha256sum "$1" | awk '{print $1}'
+}
+
+find_applied_match() {
+  local script_hash="$1"
+  local candidate
+  local candidate_hash
+
+  if [ -f "$applied_ledger" ]; then
+    if grep -Fq "$script_hash" "$applied_ledger"; then
+      grep -F "$script_hash" "$applied_ledger" | tail -n 1
+      return 0
+    fi
+  fi
+
+  for candidate in "$done_dir"/*.sh; do
+    [ -e "$candidate" ] || continue
+    candidate_hash="$(hash_script "$candidate")"
+    if [ "$candidate_hash" = "$script_hash" ]; then
+      printf 'done-file\t%s\n' "$candidate"
+      return 0
+    fi
+  done
+
+  return 1
+}
+
+record_successful_application() {
+  local script_hash="$1"
+  local original_script="$2"
+  local moved_to="$3"
+
+  mkdir -p "$done_dir"
+  touch "$applied_ledger"
+  printf '%s\t%s\t%s\t%s\n' \
+    "$script_hash" \
+    "$(date --iso-8601=seconds)" \
+    "$(basename "$original_script")" \
+    "$moved_to" >> "$applied_ledger"
+}
+
 confirm_old_script() {
   local script_path="$1"
   local age="$2"
@@ -206,6 +260,36 @@ confirm_old_script() {
       ;;
     *)
       error "Abgebrochen. Das ältere Script wurde nicht ausgeführt und bleibt in Downloads."
+      return 1
+      ;;
+  esac
+}
+
+confirm_already_applied_script() {
+  local script_path="$1"
+  local script_hash="$2"
+  local match="$3"
+  local answer
+
+  section "Wiederholungsprüfung"
+  error "Dieses Patchscript wurde bereits erfolgreich angewendet."
+  error "Hash: $script_hash"
+  error "Fundstelle: $match"
+  warn "Erneutes Ausführen kann doppelte Commits, kaputte Imports oder unnötige Fixes erzeugen."
+  info "Script bleibt ohne Bestätigung in Downloads: $(show_path "$script_path")"
+
+  printf '%b' "${C_ACCENT}c${C_RESET} ${C_ERR}confirm${C_RESET} Trotzdem erneut ausführen? [y/N] "
+  if ! read -r answer; then
+    answer=""
+  fi
+
+  case "${answer,,}" in
+    y|yes|j|ja)
+      warn "Bestätigung erhalten. c führt das bereits angewendete Script erneut aus."
+      return 0
+      ;;
+    *)
+      error "Abgebrochen. Bereits angewendetes Script wurde nicht erneut ausgeführt."
       return 1
       ;;
   esac
@@ -256,6 +340,18 @@ info "Patchscript: $(show_path "$patch_script")"
 info "Logfile: $(show_path "$run_log")"
 info "Startzeit: $(date --iso-8601=seconds)"
 
+script_hash="$(hash_script "$patch_script")"
+applied_match=""
+if applied_match="$(find_applied_match "$script_hash")"; then
+  if ! confirm_already_applied_script "$patch_script" "$script_hash" "$applied_match"; then
+    info "Logfile bleibt erhalten: $(show_path "$run_log")"
+    exit 3
+  fi
+else
+  section "Wiederholungsprüfung"
+  success "Dieses Patchscript wurde noch nicht als erfolgreich angewendet erkannt."
+fi
+
 age_seconds="$(script_age_seconds "$patch_script")"
 if [ "$age_seconds" -gt "$max_age_seconds" ]; then
   if ! confirm_old_script "$patch_script" "$age_seconds"; then
@@ -292,8 +388,10 @@ info "Patchscript Exit-Code: $status"
 
 if [ "$status" -eq 0 ]; then
   moved_to="$(move_script_to "$done_dir" "$patch_script")"
+  record_successful_application "$script_hash" "$patch_script" "$moved_to"
   success "Patch erfolgreich."
   info "Script verschoben nach: $(show_path "$moved_to")"
+  info "Applied-Ledger aktualisiert: $(show_path "$applied_ledger")"
 else
   moved_to="$(move_script_to "$failed_dir" "$patch_script")"
   error "Patch fehlgeschlagen."

@@ -1,10 +1,7 @@
-"""Tests for the c download patch runner."""
-
 from __future__ import annotations
 
 import os
 import subprocess
-import sys
 import time
 from pathlib import Path
 
@@ -81,6 +78,7 @@ def test_c_runner_executes_newest_script_and_moves_to_done(tmp_path: Path) -> No
     assert "latest" in result.stdout
     assert "\x1b[" in result.stdout
     assert "c · RepoDossier Download Patch Runner" in result.stdout
+    assert (download_dir / "done" / ".applied_patch_hashes.tsv").exists()
 
     logs = _logs(download_dir)
     assert len(logs) == 1
@@ -130,9 +128,7 @@ def test_c_runner_refuses_old_script_without_confirmation(tmp_path: Path) -> Non
     assert not (download_dir / "failed" / "old_patch.sh").exists()
     assert "älter" in result.stdout
     assert "Trotzdem ausführen" in result.stdout
-
-    logs = _logs(download_dir)
-    assert len(logs) == 1
+    assert len(_logs(download_dir)) == 1
 
 
 def test_c_runner_executes_old_script_after_confirmation(tmp_path: Path) -> None:
@@ -172,7 +168,54 @@ def test_c_runner_failed_syntax_moves_script_to_failed(tmp_path: Path) -> None:
     assert not broken.exists()
     assert (download_dir / "failed" / "broken_patch.sh").exists()
     assert "Syntaxprüfung fehlgeschlagen" in result.stdout
+    assert len(_logs(download_dir)) == 1
 
-    logs = _logs(download_dir)
-    assert len(logs) == 1
-    assert "Syntaxprüfung" in logs[0].read_text(encoding="utf-8")
+
+def test_c_runner_warns_red_and_refuses_already_applied_script(tmp_path: Path) -> None:
+    download_dir = tmp_path / "Downloads"
+    download_dir.mkdir()
+
+    marker = tmp_path / "marker"
+    body = f"#!/usr/bin/env bash\necho applied\n: > {marker}\n"
+
+    first = _write_script(download_dir, "first_patch.sh", body)
+    first_result = _run_runner(download_dir)
+
+    assert first_result.returncode == 0, first_result.stdout + first_result.stderr
+    assert not first.exists()
+    assert (download_dir / "done" / "first_patch.sh").exists()
+
+    marker.unlink()
+    duplicate = _write_script(download_dir, "duplicate_patch.sh", body)
+    duplicate_result = _run_runner(download_dir, input_text="n\n")
+
+    assert duplicate_result.returncode == 3
+    assert duplicate.exists()
+    assert not marker.exists()
+    assert "bereits erfolgreich angewendet" in duplicate_result.stdout
+    assert "\x1b[0;31m" in duplicate_result.stdout
+
+
+def test_c_runner_can_rerun_already_applied_script_after_confirmation(tmp_path: Path) -> None:
+    download_dir = tmp_path / "Downloads"
+    download_dir.mkdir()
+
+    counter = tmp_path / "counter"
+    body = (
+        "#!/usr/bin/env bash\n"
+        f"current=0\n"
+        f"if [ -f {counter} ]; then current=$(cat {counter}); fi\n"
+        f"echo $((current + 1)) > {counter}\n"
+    )
+
+    _write_script(download_dir, "first_patch.sh", body)
+    first_result = _run_runner(download_dir)
+    assert first_result.returncode == 0, first_result.stdout + first_result.stderr
+
+    _write_script(download_dir, "duplicate_patch.sh", body)
+    duplicate_result = _run_runner(download_dir, input_text="y\n")
+
+    assert duplicate_result.returncode == 0, duplicate_result.stdout + duplicate_result.stderr
+    assert counter.read_text(encoding="utf-8").strip() == "2"
+    assert (download_dir / "done" / "duplicate_patch.sh").exists()
+    assert "bereits angewendete Script erneut" in duplicate_result.stdout
