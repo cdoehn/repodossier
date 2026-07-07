@@ -567,3 +567,46 @@ Regeln:
 In der zweispaltigen Roadmap/Milestone-Ansicht richtet der Progress-Renderer die Mittelpunkte der lila `active`-Bereiche vertikal zueinander aus.
 
 Wenn der lila Bereich einer Spalte weiter oben liegt als der lila Bereich der anderen Spalte, fügt der Renderer vor dem früheren lila Bereich Leerzeilen ein. Dadurch werden die aktuellen Arbeitsbereiche optisch auf gleicher Höhe sichtbar, statt dass eine Spalte oben schon aktiv ist und die andere erst weit unten.
+
+
+### Download-Link-Markierung in Chat-Antworten
+
+Wenn ein Patchscript bereitgestellt wird, soll der Downloadlink im Chat sichtbar hervorgehoben werden.
+
+Format:
+
+```text
+🟩 **Download:** **[dateiname.sh herunterladen](sandbox:/mnt/data/dateiname.sh)**
+```
+
+Regeln:
+
+1. Der Linktext selbst ist fett.
+2. Vor dem Link steht eine farbliche/visuelle Markierung, bevorzugt `🟩 **Download:**`.
+3. Kein riesiges Patchscript direkt in die Antwort schreiben, wenn ein Downloadlink möglich ist.
+
+
+### c: Kontextansicht am Erfolgsende
+
+`c` validiert und bereitet die Roadmap/Milestone-Kontextansicht früh vor, zeigt sie aber bei erfolgreichem Patchlauf erst unten im Abschlussbereich.
+
+Reihenfolge bei Erfolg:
+
+1. Patchscript läuft.
+2. `c` verschiebt das Script nach `~/Downloads/done/`.
+3. `c` zeigt Logfile- und Endzeit-Hinweise.
+4. `c` zeigt die Roadmap/Milestone-Kontextansicht.
+5. `c` gibt als letzte Zeile fett grün `ERFOLG` aus.
+
+Dadurch geht die Kontextansicht nicht am Anfang der Ausgabe verloren.
+
+
+### c: Erfolgsmarker als letzte Zeile
+
+`c` gibt bei erfolgreichem Patchlauf als allerletzte Zeile fett grün aus:
+
+```text
+ERFOLG
+```
+
+Fehlerläufe zeigen kein `ERFOLG`.

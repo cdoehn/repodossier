@@ -364,12 +364,15 @@ if [ "$metadata_status" -ne 0 ]; then
 fi
 success "Metadaten OK."
 
+progress_context_output=""
 if [ -x "$progress_renderer" ]; then
-  section "Roadmap / Milestone"
-  python3 "$progress_renderer" --script "$patch_script" --repo "$runner_repo"
+  progress_context_output="$(mktemp "${TMPDIR:-/tmp}/repodossier-progress-context.XXXXXX.txt")"
+  python3 "$progress_renderer" --script "$patch_script" --repo "$runner_repo" > "$progress_context_output"
   progress_status=$?
   if [ "$progress_status" -ne 0 ]; then
-    error "Progress-Kontext konnte nicht gerendert werden."
+    cat "$progress_context_output" || true
+    rm -f "$progress_context_output"
+    error "Progress-Kontext konnte nicht vorbereitet werden."
     info "Logfile bleibt erhalten: $(show_path "$run_log")"
     exit "$progress_status"
   fi
@@ -436,8 +439,15 @@ fi
 info "Logfile bleibt in Downloads: $(show_path "$run_log")"
 info "Endzeit: $(date --iso-8601=seconds)"
 
+if [ "$status" -eq 0 ] && [ -n "${progress_context_output:-}" ] && [ -s "$progress_context_output" ]; then
+  section "Roadmap / Milestone"
+  cat "$progress_context_output"
+fi
+rm -f "${progress_context_output:-}" 2>/dev/null || true
+
 if [ "$status" -eq 0 ]; then
-  printf '%b\n' "${C_OK}${C_BOLD}ERFOLG${C_RESET}"
+  printf '%b
+' "${C_OK}${C_BOLD}ERFOLG${C_RESET}"
 fi
 
 exit "$status"
