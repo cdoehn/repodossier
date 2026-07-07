@@ -394,7 +394,7 @@ Wenn Christian `n` schreibt:
 2. Nächsten sinnvollen Commit liefern.
 3. Patch als Download-Link zu einer `.sh`-Datei bereitstellen.
 4. Patch-Script schreibt normal nach stdout/stderr.
-5. `c` übernimmt Syntaxprüfung, Logdatei und Verschieben nach done/failed.
+5. `c` übernimmt Syntaxprüfung, Logdatei, farbige Struktur, 60-Minuten-Warnung und Verschieben nach done/failed.
 6. Repo-lokalen Helper verwenden, wenn möglich.
 7. Tests laufen lassen.
 8. Bei grünem Ergebnis committen.
@@ -428,3 +428,26 @@ Priorität bei Konflikten:
 5. `c` verwaltet Download-Scripts und Logs zentral.
 6. Download-`.sh` statt riesigem Chat-Codeblock.
 7. Footer immer im Script.
+
+---
+
+## c-Runner UX, Farben und 60-Minuten-Sicherheitsbremse
+
+Der Download-Patch-Runner `c` ist die zentrale Ausführungsschicht für heruntergeladene Patchscripts.
+
+Regeln:
+
+1. `c` nutzt eine eigene Türkis/Cyan-Akzentfarbe, damit seine Ausgaben klar von Patch-Ausgaben unterscheidbar sind.
+2. `c` strukturiert die Ausgabe in sichtbare Abschnitte: Start, Sicherheitsprüfung, Syntaxprüfung, Ausführung und Abschluss.
+3. `c` sagt explizit, was es gerade tut: welches Script, welches Logfile, welcher Ordner, welcher Check und welches Ergebnis.
+4. Erfolg wird grün markiert.
+5. Warnungen werden gelb markiert.
+6. Fehler werden rot markiert.
+7. Pfade und Logfiles werden farblich hervorgehoben.
+8. `c` führt ohne Rückfrage nur Patchscripts aus, die höchstens 60 Minuten alt sind.
+9. Wenn das neueste gefundene Patchscript älter als 60 Minuten ist, zeigt `c` eine Warnung an.
+10. Ein älteres Patchscript wird nur nach ausdrücklicher Bestätigung ausgeführt.
+11. Ohne Bestätigung bleibt das Script in `~/Downloads` liegen und wird weder nach `done` noch nach `failed` verschoben.
+12. `c` wird getestet: Auswahl des neuesten Scripts, erfolgreiche Ausführung, Fehler-Ausführung, Syntaxfehler, Logdatei, done/failed-Verschiebung und Altersbestätigung.
+
+Einzelne Patchscripts sollen weiterhin keine eigene globale Logumleitung und keine eigene Clipboard-Logik enthalten. `c` übernimmt diese Verantwortung zentral.
