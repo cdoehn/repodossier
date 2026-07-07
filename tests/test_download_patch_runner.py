@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import re
 import subprocess
 import time
 from pathlib import Path
@@ -10,8 +11,12 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 RUNNER = REPO_ROOT / "scripts" / "dev" / "run_latest_download_patch.sh"
 
 
+def _strip_ansi(value: str) -> str:
+    return re.sub(r"\x1b\[[0-9;]*m", "", value)
+
+
 def _meta() -> str:
-    return '\n'.join(
+    return "\n".join(
         [
             '# repodossier-meta: {"type":"patch","id":"TEST","title":"Test patch","commit":"Test patch"}',
             '# repodossier-meta: {"type":"progress","panel":"roadmap","status":"active","file":"scripts/dev/patch-rules.md","start":1,"end":1}',
@@ -53,6 +58,22 @@ def _run_runner(download_dir: Path, *args: str, input_text: str | None = None):
     )
 
 
+def _run_runner_env(download_dir: Path, *args: str, env_extra: dict[str, str] | None = None):
+    env = os.environ.copy()
+    env["PATCH_DOWNLOAD_DIR"] = str(download_dir)
+    if env_extra:
+        env.update(env_extra)
+
+    return subprocess.run(
+        [str(RUNNER), *args],
+        cwd=REPO_ROOT,
+        env=env,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+
 def _logs(download_dir: Path) -> list[Path]:
     return sorted(download_dir.glob("*.log"))
 
@@ -82,40 +103,24 @@ def test_c_runner_executes_newest_script_and_moves_to_done(tmp_path: Path) -> No
     assert len(_logs(download_dir)) == 1
 
 
-def test_c_runner_rejects_invalid_metadata_before_execution(tmp_path: Path) -> None:
+def test_c_runner_prints_success_banner_as_last_line(tmp_path: Path) -> None:
     download_dir = tmp_path / "Downloads"
     download_dir.mkdir()
 
     marker = tmp_path / "marker"
-    bad = _write_script(
-        download_dir,
-        "bad_meta_patch.sh",
-        f"#!/usr/bin/env bash\n# repodossier-meta: {{\"type\":\"patch\",\"id\":\"BAD\"}}\n: > {marker}\n",
-    )
-
-    result = _run_runner(download_dir)
-
-    assert result.returncode == 10
-    assert bad.exists()
-    assert not marker.exists()
-    assert "Metadatenprüfung fehlgeschlagen" in result.stdout
-
-
-
-def test_c_runner_prints_success_marker_as_last_line(tmp_path: Path) -> None:
-    download_dir = tmp_path / "Downloads"
-    download_dir.mkdir()
-
-    marker = tmp_path / "marker"
-    _write_script(download_dir, "success_marker_patch.sh", _script_body(f": > {marker}"))
+    _write_script(download_dir, "success_banner_patch.sh", _script_body(f": > {marker}"))
 
     result = _run_runner(download_dir)
 
     assert result.returncode == 0, result.stdout + result.stderr
     assert marker.exists()
-    assert result.stdout.rstrip().endswith("ERFOLG\x1b[0m") or result.stdout.rstrip().endswith("ERFOLG")
-    assert "\x1b[0;32m" in result.stdout
-    assert "\x1b[1m" in result.stdout
+
+    last_line = result.stdout.rstrip().splitlines()[-1]
+    plain = _strip_ansi(last_line)
+    assert plain.startswith("ERFOLG  ERFOLG  ERFOLG")
+    assert "ERFOLG" in plain
+    assert "\x1b[0;32m" in last_line
+    assert "\x1b[1m" in last_line
 
 
 def test_c_runner_prints_progress_context_near_success_footer(tmp_path: Path) -> None:
@@ -137,7 +142,26 @@ def test_c_runner_prints_progress_context_near_success_footer(tmp_path: Path) ->
 
     assert context_index > execution_index
     assert context_index < success_index
-    assert output.rstrip().endswith("ERFOLG\x1b[0m") or output.rstrip().endswith("ERFOLG")
+
+
+def test_c_runner_rejects_invalid_metadata_before_execution(tmp_path: Path) -> None:
+    download_dir = tmp_path / "Downloads"
+    download_dir.mkdir()
+
+    marker = tmp_path / "marker"
+    bad = _write_script(
+        download_dir,
+        "bad_meta_patch.sh",
+        f"#!/usr/bin/env bash\n# repodossier-meta: {{\"type\":\"patch\",\"id\":\"BAD\"}}\n: > {marker}\n",
+    )
+
+    result = _run_runner(download_dir)
+
+    assert result.returncode == 10
+    assert bad.exists()
+    assert not marker.exists()
+    assert "Metadatenprüfung fehlgeschlagen" in result.stdout
+
 
 def test_c_runner_moves_failed_script_to_failed_and_keeps_log(tmp_path: Path) -> None:
     download_dir = tmp_path / "Downloads"
@@ -249,3 +273,63 @@ def test_c_runner_can_rerun_already_applied_script_after_confirmation(tmp_path: 
     assert duplicate_result.returncode == 0, duplicate_result.stdout + duplicate_result.stderr
     assert counter.read_text(encoding="utf-8").strip() == "2"
     assert (download_dir / "done" / "duplicate_patch.sh").exists()
+
+
+def test_c_watch_up_down_status(tmp_path: Path) -> None:
+    download_dir = tmp_path / "Downloads"
+    download_dir.mkdir()
+
+    env_extra = {
+        "C_RUNNER_WATCH_SLEEP_SECONDS": "0.1",
+        "C_RUNNER_WATCH_FRESH_SECONDS": "30",
+    }
+
+    up = _run_runner_env(download_dir, "--watch-up", env_extra=env_extra)
+    try:
+        assert up.returncode == 0, up.stdout + up.stderr
+        assert "gestartet" in up.stdout
+
+        status = _run_runner_env(download_dir, "--watch-status", env_extra=env_extra)
+        assert status.returncode == 0, status.stdout + status.stderr
+        assert "läuft" in status.stdout
+    finally:
+        down = _run_runner_env(download_dir, "--watch-down", env_extra=env_extra)
+        assert down.returncode == 0, down.stdout + down.stderr
+
+
+def test_c_watch_auto_runs_fresh_valid_script_once(tmp_path: Path) -> None:
+    download_dir = tmp_path / "Downloads"
+    download_dir.mkdir()
+
+    marker = tmp_path / "watch_marker"
+    patch = download_dir / "watch_patch.sh"
+
+    env_extra = {
+        "C_RUNNER_WATCH_SLEEP_SECONDS": "0.1",
+        "C_RUNNER_WATCH_FRESH_SECONDS": "30",
+    }
+
+    up = _run_runner_env(download_dir, "--watch-up", env_extra=env_extra)
+    try:
+        assert up.returncode == 0, up.stdout + up.stderr
+
+        _write_script(download_dir, patch.name, _script_body(f": > {marker}"))
+
+        deadline = time.time() + 8
+        while time.time() < deadline and not marker.exists():
+            time.sleep(0.1)
+
+        assert marker.exists()
+        assert (download_dir / "done" / patch.name).exists()
+        assert not patch.exists()
+
+        # Recreate the exact same content. The watcher's seen/applied protections
+        # must not run it again.
+        marker.unlink()
+        _write_script(download_dir, patch.name, _script_body(f": > {marker}"))
+
+        time.sleep(1.0)
+        assert not marker.exists()
+    finally:
+        down = _run_runner_env(download_dir, "--watch-down", env_extra=env_extra)
+        assert down.returncode == 0, down.stdout + down.stderr

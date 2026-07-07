@@ -610,3 +610,42 @@ ERFOLG
 ```
 
 Fehlerläufe zeigen kein `ERFOLG`.
+
+
+### c-Watch-Daemon
+
+`c` kann einen optionalen Download-Wächter starten:
+
+```bash
+c --watch-up
+c --watch-status
+c --watch-down
+```
+
+Der Watch-Daemon führt neue `*.sh`-Patchscripts aus `~/Downloads` automatisch ohne Nutzerinteraktion aus, aber nur unter harten Schutzregeln:
+
+1. `c` darf nicht als root laufen.
+2. Nur Dateien direkt in `~/Downloads` werden berücksichtigt.
+3. Die Datei muss innerhalb der letzten 30 Sekunden erschienen bzw. geändert worden sein.
+4. Die Datei muss gültige `repodossier-meta` haben.
+5. Roadmap- und Milestone-Progress-Metadaten sind Pflicht.
+6. `bash -n` muss grün sein.
+7. Der SHA-256-Hash darf nicht bereits erfolgreich angewendet worden sein.
+8. Jede gesehene Datei/Hash-Kombination wird nur einmal gestartet.
+9. Ein Lockfile verhindert mehrere Watcher parallel.
+10. Die Ausführung läuft trotzdem durch den normalen `c`-Runner mit Logging, done/failed-Verschiebung und Applied-Ledger.
+
+Der Daemon schreibt ein eigenes Log nach `~/Downloads/c-watch.log`.
+
+
+### c: Erfolgsleiste als letzte Zeile
+
+Bei erfolgreichem Patchlauf gibt `c` als allerletzte Zeile eine fette grüne Erfolgsleiste über die Terminalbreite aus.
+
+Die sichtbare Zeile beginnt mit:
+
+```text
+ERFOLG  ERFOLG  ERFOLG
+```
+
+Fehlerläufe zeigen keine Erfolgsleiste.
