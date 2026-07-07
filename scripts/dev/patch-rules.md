@@ -649,3 +649,90 @@ ERFOLG  ERFOLG  ERFOLG
 ```
 
 Fehlerläufe zeigen keine Erfolgsleiste.
+
+
+### Patch-Preflight-Linter
+
+Neue Download-Patchscripts sollen zusätzlich mit dem repo-lokalen Preflight-Linter prüfbar sein:
+
+    python3 scripts/dev/lint_patch_script.py --script ~/Downloads/patch.sh --repo .
+
+Der Linter prüft vor der eigentlichen Ausführung:
+
+1. gültige `repodossier-meta` über den bestehenden Metadata-Validator,
+2. Roadmap- und Milestone-Progress-Metadaten,
+3. kein `bundle_project.sh`,
+4. keine eigene globale `tee`-Logumleitung,
+5. keine Clipboard-Tools wie `xclip`, `xsel` oder `wl-copy`,
+6. kein Aider-Aufruf in direkten Patchscripts,
+7. `git diff`, `git log` und `git show` nur mit `--no-pager` oder `GIT_PAGER=cat`,
+8. vorhandene Footer-Funktion,
+9. vorhandene Tests oder Syntax-/Smoke-Checks,
+10. keine literal Triple-Backticks in Patch-Heredocs.
+
+Der Linter ist die technische Vorstufe für `c --dry-run` und soll verhindern, dass formal fehlerhafte Patches überhaupt in den normalen Patchlauf kommen.
+
+
+### Workflow-Verbesserungen Commit-Serie
+
+Die nächsten Workflow-Verbesserungen werden in fünf kleinen Commits umgesetzt:
+
+1. `Add patch script preflight linter`
+2. `Add patch runner dry-run mode`
+3. `Add progress anchor metadata resolution`
+4. `Extend r export runner modes`
+5. `Normalize patch workflow rules schema`
+
+Der Quarantäne-Ordner für Downloads wird bewusst nicht umgesetzt.
+
+
+### Patch-Preflight-Linter: Heredoc-Bewusstsein
+
+Der Patch-Preflight-Linter prüft Workflow-Verbote in echten Shell-Zeilen außerhalb von Heredoc-Bodies.
+
+Grund:
+
+1. Patchscripts erzeugen häufig Tests.
+2. Diese Tests müssen verbotene Begriffe wie `bundle_project.sh`, `xclip`, `aider` oder `git diff` als Test-Fixtures enthalten dürfen.
+3. Solche Fixture-Strings sind keine ausgeführten Patch-Kommandos.
+4. Deshalb ignoriert der Linter Workflow-Verbote innerhalb von Heredoc-Bodies.
+5. Nach Ende eines Heredocs werden Shell-Kommandos wieder normal geprüft.
+
+Literal Triple-Backticks bleiben weiterhin global verboten, auch innerhalb von Heredocs. Wenn ein Test Triple-Backticks erzeugen muss, soll er sie über `chr(96) * 3` zusammensetzen.
+
+
+### Patch-Preflight-Linter: Git-Diff-Ausnahmen
+
+Der Linter verbietet `git diff`, `git log` und `git show` ohne `--no-pager`, wenn dabei Terminalausgabe entstehen kann.
+
+Erlaubte Ausnahme:
+
+    git diff --cached --quiet
+
+und allgemein `git diff ... --quiet`.
+
+Grund:
+
+- `--quiet` erzeugt keine Diff-Ausgabe.
+- Der Befehl dient nur als Exit-Code-Check, zum Beispiel vor einem Commit.
+- Dadurch kann kein Pager hängen bleiben.
+
+
+### Patch-Preflight-Linter: Quoted diagnostic text
+
+Der Linter prüft echte Shell-Kommandos. Quoted Diagnose- oder Erklärungstexte werden für Kommando-Regeln ignoriert.
+
+Beispiele, die als Text erlaubt sind:
+
+    echo "git diff --cached --quiet is documented here"
+    echo 'bundle_project.sh xclip aider git diff are quoted diagnostics'
+
+Echte unquoted Befehle bleiben verboten, zum Beispiel:
+
+    git diff -- src
+    ./bundle_project.sh
+
+
+### Patch-Preflight-Linter: Heredoc-Bewusstsein
+
+Der Linter ist heredoc-bewusst: Workflow-Verbote werden nur in echten Shell-Zeilen außerhalb von Heredoc-Bodies geprüft. Test-Fixtures dürfen verbotene Begriffe als Strings enthalten. Literal Triple-Backticks bleiben global verboten.
