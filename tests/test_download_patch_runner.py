@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import re
+import signal
 import subprocess
 import time
 from pathlib import Path
@@ -76,6 +77,20 @@ def _run_runner_env(download_dir: Path, *args: str, env_extra: dict[str, str] | 
 
 def _logs(download_dir: Path) -> list[Path]:
     return sorted(download_dir.glob("*.log"))
+
+
+def test_c_runner_help_mentions_wait_not_daemon(tmp_path: Path) -> None:
+    download_dir = tmp_path / "Downloads"
+    download_dir.mkdir()
+
+    result = _run_runner(download_dir, "--help")
+
+    assert result.returncode == 0
+    assert "c --wait" in result.stdout
+    assert "--watch-up" not in result.stdout
+    assert "--watch-down" not in result.stdout
+    assert "--watch-status" not in result.stdout
+    assert "daemon" not in result.stdout.lower()
 
 
 def test_c_runner_executes_newest_script_and_moves_to_done(tmp_path: Path) -> None:
@@ -275,61 +290,77 @@ def test_c_runner_can_rerun_already_applied_script_after_confirmation(tmp_path: 
     assert (download_dir / "done" / "duplicate_patch.sh").exists()
 
 
-def test_c_watch_up_down_status(tmp_path: Path) -> None:
+def test_c_wait_runs_fresh_new_script_in_foreground_and_keeps_waiting(tmp_path: Path) -> None:
     download_dir = tmp_path / "Downloads"
     download_dir.mkdir()
 
-    env_extra = {
-        "C_RUNNER_WATCH_SLEEP_SECONDS": "0.1",
-        "C_RUNNER_WATCH_FRESH_SECONDS": "30",
-    }
+    marker = tmp_path / "wait_marker"
+    env = os.environ.copy()
+    env["PATCH_DOWNLOAD_DIR"] = str(download_dir)
+    env["C_RUNNER_WAIT_SLEEP_SECONDS"] = "0.1"
+    env["C_RUNNER_WAIT_FRESH_SECONDS"] = "30"
 
-    up = _run_runner_env(download_dir, "--watch-up", env_extra=env_extra)
+    process = subprocess.Popen(
+        [str(RUNNER), "--wait"],
+        cwd=REPO_ROOT,
+        env=env,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+
     try:
-        assert up.returncode == 0, up.stdout + up.stderr
-        assert "gestartet" in up.stdout
-
-        status = _run_runner_env(download_dir, "--watch-status", env_extra=env_extra)
-        assert status.returncode == 0, status.stdout + status.stderr
-        assert "läuft" in status.stdout
-    finally:
-        down = _run_runner_env(download_dir, "--watch-down", env_extra=env_extra)
-        assert down.returncode == 0, down.stdout + down.stderr
-
-
-def test_c_watch_auto_runs_fresh_valid_script_once(tmp_path: Path) -> None:
-    download_dir = tmp_path / "Downloads"
-    download_dir.mkdir()
-
-    marker = tmp_path / "watch_marker"
-    patch = download_dir / "watch_patch.sh"
-
-    env_extra = {
-        "C_RUNNER_WATCH_SLEEP_SECONDS": "0.1",
-        "C_RUNNER_WATCH_FRESH_SECONDS": "30",
-    }
-
-    up = _run_runner_env(download_dir, "--watch-up", env_extra=env_extra)
-    try:
-        assert up.returncode == 0, up.stdout + up.stderr
-
-        _write_script(download_dir, patch.name, _script_body(f": > {marker}"))
+        time.sleep(0.4)
+        _write_script(download_dir, "wait_patch.sh", _script_body(f"echo visible-wait-output\n: > {marker}"))
 
         deadline = time.time() + 8
         while time.time() < deadline and not marker.exists():
             time.sleep(0.1)
 
         assert marker.exists()
-        assert (download_dir / "done" / patch.name).exists()
-        assert not patch.exists()
+        assert (download_dir / "done" / "wait_patch.sh").exists()
 
-        # Recreate the exact same content. The watcher's seen/applied protections
-        # must not run it again.
-        marker.unlink()
-        _write_script(download_dir, patch.name, _script_body(f": > {marker}"))
+        time.sleep(0.4)
+        assert process.poll() is None
+    finally:
+        process.send_signal(signal.SIGTERM)
+        stdout, stderr = process.communicate(timeout=5)
 
-        time.sleep(1.0)
+    assert "Warte-Modus" in stdout
+    assert "visible-wait-output" in stdout
+    assert "Warte auf das nächste Script" in stdout
+    assert "watch" not in stdout.lower()
+    assert stderr == ""
+
+
+def test_c_wait_marks_existing_scripts_seen_before_waiting(tmp_path: Path) -> None:
+    download_dir = tmp_path / "Downloads"
+    download_dir.mkdir()
+
+    marker = tmp_path / "old_marker"
+    existing = _write_script(download_dir, "already_there.sh", _script_body(f": > {marker}"))
+
+    env = os.environ.copy()
+    env["PATCH_DOWNLOAD_DIR"] = str(download_dir)
+    env["C_RUNNER_WAIT_SLEEP_SECONDS"] = "0.1"
+    env["C_RUNNER_WAIT_FRESH_SECONDS"] = "30"
+
+    process = subprocess.Popen(
+        [str(RUNNER), "--wait"],
+        cwd=REPO_ROOT,
+        env=env,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+
+    try:
+        time.sleep(0.8)
+        assert existing.exists()
         assert not marker.exists()
     finally:
-        down = _run_runner_env(download_dir, "--watch-down", env_extra=env_extra)
-        assert down.returncode == 0, down.stdout + down.stderr
+        process.terminate()
+        stdout, stderr = process.communicate(timeout=5)
+
+    assert "Warte-Modus" in stdout
+    assert stderr == ""

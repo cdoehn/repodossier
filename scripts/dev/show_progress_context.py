@@ -17,7 +17,7 @@ from validate_patch_metadata import MetaRecord, parse_metadata_lines, validate_r
 
 
 STATUS_PRIORITY = {"todo": 1, "done": 2, "partial": 3, "active": 4}
-STATUS_ICON = {"done": "🟩", "active": "🟪", "partial": "🟨", "todo": "🟥", None: "  "}
+STATUS_ICON = {"done": "✓", "active": "■", "partial": "~", "todo": "!", None: " "}
 STATUS_COLOR = {
     "done": "\033[0;32m",
     "active": "\033[0;35m",
@@ -192,7 +192,7 @@ def _active_indices(rows: list[str]) -> list[int]:
     return [
         index
         for index, row in enumerate(rows)
-        if "🟪" in _strip_ansi(row)
+        if STATUS_ICON["active"] in _strip_ansi(row)
     ]
 
 

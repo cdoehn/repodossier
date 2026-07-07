@@ -612,30 +612,40 @@ ERFOLG
 Fehlerläufe zeigen kein `ERFOLG`.
 
 
-### c-Watch-Daemon
+### c-Wait-Modus im Vordergrund
 
-`c` kann einen optionalen Download-Wächter starten:
+Der frühere Hintergrund-Wächter wurde wieder entfernt.
+
+Stattdessen kann `c` im sichtbaren Vordergrund blockieren und auf neue Download-Patchscripts warten:
 
 ```bash
-c --watch-up
-c --watch-status
-c --watch-down
+c --wait
 ```
 
-Der Watch-Daemon führt neue `*.sh`-Patchscripts aus `~/Downloads` automatisch ohne Nutzerinteraktion aus, aber nur unter harten Schutzregeln:
+Verhalten:
 
-1. `c` darf nicht als root laufen.
-2. Nur Dateien direkt in `~/Downloads` werden berücksichtigt.
-3. Die Datei muss innerhalb der letzten 30 Sekunden erschienen bzw. geändert worden sein.
-4. Die Datei muss gültige `repodossier-meta` haben.
-5. Roadmap- und Milestone-Progress-Metadaten sind Pflicht.
-6. `bash -n` muss grün sein.
-7. Der SHA-256-Hash darf nicht bereits erfolgreich angewendet worden sein.
-8. Jede gesehene Datei/Hash-Kombination wird nur einmal gestartet.
-9. Ein Lockfile verhindert mehrere Watcher parallel.
-10. Die Ausführung läuft trotzdem durch den normalen `c`-Runner mit Logging, done/failed-Verschiebung und Applied-Ledger.
+1. `c --wait` läuft im aktuellen Terminal und zeigt alle Ausgaben sichtbar an.
+2. Beim Start werden bereits vorhandene `*.sh`-Dateien in `~/Downloads` als gesehen markiert.
+3. Danach wartet `c --wait` auf das nächste neue `*.sh`-Patchscript direkt in `~/Downloads`.
+4. Ein erkanntes Script wird über den normalen `c`-Runner ausgeführt.
+5. Nach dem Patchlauf wartet `c --wait` wieder auf das nächste Script.
+6. Stoppen mit `Ctrl+C`.
 
-Der Daemon schreibt ein eigenes Log nach `~/Downloads/c-watch.log`.
+Sicherheitsregeln:
+
+1. Kein Hintergrundprozess.
+2. Keine automatische Ausführung bereits vorhandener alter Scripts.
+3. Nicht als root.
+4. Nur `*.sh` direkt in `~/Downloads`.
+5. Nur Scripts, die maximal 30 Sekunden alt sind.
+6. Gültige `repodossier-meta` bleiben Pflicht.
+7. Roadmap- und Milestone-Progress-Metadaten bleiben Pflicht.
+8. `bash -n` muss grün sein.
+9. Bereits angewendete SHA-256-Hashes werden übersprungen.
+10. Jede gesehene Datei/Hash-Kombination wird nur einmal gestartet.
+
+Der frühere Modus `c --watch-up`, `c --watch-status`, `c --watch-down` wird nicht mehr verwendet.
+
 
 
 ### c: Erfolgsleiste als letzte Zeile
@@ -736,3 +746,19 @@ Echte unquoted Befehle bleiben verboten, zum Beispiel:
 ### Patch-Preflight-Linter: Heredoc-Bewusstsein
 
 Der Linter ist heredoc-bewusst: Workflow-Verbote werden nur in echten Shell-Zeilen außerhalb von Heredoc-Bodies geprüft. Test-Fixtures dürfen verbotene Begriffe als Strings enthalten. Literal Triple-Backticks bleiben global verboten.
+
+
+### Progress-Renderer: feste Statusmarker
+
+Der Progress-Renderer verwendet feste einspaltige Statusmarker statt farbiger Emoji-Quadrate.
+
+Grund:
+
+1. Emoji-Quadrate können je nach Terminal/Font als doppelte oder uneinheitliche Breite gerendert werden.
+2. Dadurch verschieben sich Line-Number-Spalten und Text optisch.
+3. Feste Marker bleiben stabil:
+   - `✓` = done
+   - `■` = active
+   - `~` = partial
+   - `!` = todo
+4. Die Farbcodierung bleibt erhalten.

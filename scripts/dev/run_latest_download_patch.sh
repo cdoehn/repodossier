@@ -16,7 +16,10 @@ download_dir="${PATCH_DOWNLOAD_DIR:-$HOME/Downloads}"
 done_dir="$download_dir/done"
 failed_dir="$download_dir/failed"
 applied_ledger="$done_dir/.applied_patch_hashes.tsv"
+wait_seen="$download_dir/.repodossier-c-wait.seen"
 max_age_seconds="${C_RUNNER_MAX_AGE_SECONDS:-3600}"
+wait_sleep_seconds="${C_RUNNER_WAIT_SLEEP_SECONDS:-2}"
+wait_fresh_seconds="${C_RUNNER_WAIT_FRESH_SECONDS:-30}"
 
 runner_source="${BASH_SOURCE[0]}"
 if [ -n "${C_RUNNER_TEMP_COPY:-}" ] && [ -x "$HOME/market_research/repo_dossier/scripts/dev/run_latest_download_patch.sh" ]; then
@@ -26,13 +29,6 @@ runner_dir="$(cd "$(dirname "$runner_source")" && pwd)"
 runner_repo="$(cd "$runner_dir/../.." && pwd)"
 metadata_validator="$runner_dir/validate_patch_metadata.py"
 progress_renderer="$runner_dir/show_progress_context.py"
-
-watch_pidfile="$download_dir/.repodossier-c-watch.pid"
-watch_lockdir="$download_dir/.repodossier-c-watch.lock"
-watch_seen="$download_dir/.repodossier-c-watch.seen"
-watch_log="$download_dir/c-watch.log"
-watch_sleep_seconds="${C_RUNNER_WATCH_SLEEP_SECONDS:-2}"
-watch_fresh_seconds="${C_RUNNER_WATCH_FRESH_SECONDS:-30}"
 
 C_USE_COLOR=1
 if [ -n "${NO_COLOR:-}" ] || [ "${C_RUNNER_COLOR:-auto}" = "never" ]; then
@@ -66,9 +62,7 @@ usage() {
 Usage:
   c
   c /path/to/patch.sh
-  c --watch-up
-  c --watch-down
-  c --watch-status
+  c --wait
   c --help
 
 Normal mode:
@@ -76,12 +70,13 @@ Normal mode:
   moves it to done/failed, logs output, prints progress context near the end,
   and prints a full-width green ERFOLG banner as the final line on success.
 
-Watch mode:
-  c --watch-up starts a background watcher for ~/Downloads/*.sh.
-  c --watch-down stops it.
-  c --watch-status shows whether it is running.
+Foreground wait mode:
+  c --wait blocks in the current terminal, waits for the next fresh *.sh file
+  directly in ~/Downloads, runs it through normal c execution, and then waits
+  again. The output stays visible in the terminal. Stop with Ctrl+C.
 
-Automatic watch execution is intentionally strict:
+Wait mode safety:
+  - foreground-only wait loop
   - no root execution
   - only scripts directly in Downloads
   - only scripts modified within the last 30 seconds
@@ -89,7 +84,6 @@ Automatic watch execution is intentionally strict:
   - bash -n must pass
   - SHA-256 hash must not already be applied
   - each seen script/hash is started only once
-  - lockfile prevents duplicate watcher instances
 USAGE
 }
 
@@ -152,97 +146,6 @@ success_band() {
 }
 
 mkdir -p "$download_dir" "$done_dir" "$failed_dir"
-
-is_pid_running() {
-  local pid="$1"
-  [ -n "$pid" ] && kill -0 "$pid" >/dev/null 2>&1
-}
-
-watch_current_pid() {
-  if [ -f "$watch_pidfile" ]; then
-    cat "$watch_pidfile" 2>/dev/null || true
-  fi
-}
-
-watch_status() {
-  local pid
-  pid="$(watch_current_pid)"
-  if is_pid_running "$pid"; then
-    success "c watch läuft. PID: $pid"
-    info "Downloads: $(show_path "$download_dir")"
-    info "Logfile: $(show_path "$watch_log")"
-    return 0
-  fi
-
-  warn "c watch läuft nicht."
-  return 1
-}
-
-watch_up() {
-  local pid
-
-  if [ "$(id -u)" -eq 0 ]; then
-    error "c watch darf nicht als root gestartet werden."
-    return 1
-  fi
-
-  mkdir -p "$download_dir" "$done_dir" "$failed_dir"
-  pid="$(watch_current_pid)"
-  if is_pid_running "$pid"; then
-    success "c watch läuft bereits. PID: $pid"
-    return 0
-  fi
-
-  rm -f "$watch_pidfile"
-  rm -rf "$watch_lockdir"
-
-  action "Starte c watch im Hintergrund."
-  nohup "$runner_source" --watch-loop >> "$watch_log" 2>&1 &
-  pid="$!"
-  sleep 0.2
-
-  if is_pid_running "$pid"; then
-    success "c watch gestartet. PID: $pid"
-    info "Logfile: $(show_path "$watch_log")"
-    info "Stoppen mit: c --watch-down"
-    return 0
-  fi
-
-  error "c watch konnte nicht gestartet werden."
-  info "Logfile: $(show_path "$watch_log")"
-  return 1
-}
-
-watch_down() {
-  local pid
-  local waited
-
-  pid="$(watch_current_pid)"
-  if ! is_pid_running "$pid"; then
-    warn "c watch läuft nicht."
-    rm -f "$watch_pidfile"
-    rm -rf "$watch_lockdir"
-    return 0
-  fi
-
-  action "Stoppe c watch. PID: $pid"
-  kill "$pid" >/dev/null 2>&1 || true
-
-  waited=0
-  while is_pid_running "$pid" && [ "$waited" -lt 30 ]; do
-    sleep 0.1
-    waited=$((waited + 1))
-  done
-
-  if is_pid_running "$pid"; then
-    warn "c watch reagiert nicht auf SIGTERM; sende SIGKILL."
-    kill -9 "$pid" >/dev/null 2>&1 || true
-  fi
-
-  rm -f "$watch_pidfile"
-  rm -rf "$watch_lockdir"
-  success "c watch gestoppt."
-}
 
 select_latest_script() {
   python3 - "$download_dir" <<'PY'
@@ -433,115 +336,125 @@ confirm_already_applied_script() {
   esac
 }
 
-watch_seen_key_exists() {
+wait_seen_key_exists() {
   local script_hash="$1"
   local script_path="$2"
   local key
 
   key="${script_hash}	${script_path}"
-  [ -f "$watch_seen" ] && grep -Fqx "$key" "$watch_seen"
+  [ -f "$wait_seen" ] && grep -Fqx "$key" "$wait_seen"
 }
 
-watch_record_seen() {
+wait_record_seen() {
   local script_hash="$1"
   local script_path="$2"
 
   mkdir -p "$download_dir"
-  touch "$watch_seen"
-  printf '%s\t%s\n' "$script_hash" "$script_path" >> "$watch_seen"
+  touch "$wait_seen"
+  printf '%s\t%s\n' "$script_hash" "$script_path" >> "$wait_seen"
 }
 
-watch_validate_candidate() {
-  local script_path="$1"
-  local age
+wait_mark_existing_scripts() {
+  local script_path
   local script_hash
 
-  [ -f "$script_path" ] || return 1
-
-  case "$script_path" in
-    "$download_dir"/*.sh) ;;
-    *) return 1 ;;
-  esac
-
-  if [ "$(id -u)" -eq 0 ]; then
-    echo "watch skip: root execution is forbidden"
-    return 1
-  fi
-
-  age="$(script_age_seconds "$script_path")"
-  if [ "$age" -lt 0 ] || [ "$age" -gt "$watch_fresh_seconds" ]; then
-    return 1
-  fi
-
-  script_hash="$(hash_script "$script_path")"
-
-  if watch_seen_key_exists "$script_hash" "$script_path"; then
-    return 1
-  fi
-
-  if find_applied_match "$script_hash" >/dev/null 2>&1; then
-    watch_record_seen "$script_hash" "$script_path"
-    echo "watch skip: already applied $(basename "$script_path")"
-    return 1
-  fi
-
-  if ! bash -n "$script_path"; then
-    echo "watch skip: bash syntax failed $(basename "$script_path")"
-    return 1
-  fi
-
-  if [ ! -x "$metadata_validator" ]; then
-    echo "watch skip: metadata validator missing"
-    return 1
-  fi
-
-  if ! python3 "$metadata_validator" --script "$script_path" --repo "$runner_repo" --quiet; then
-    echo "watch skip: metadata invalid $(basename "$script_path")"
-    return 1
-  fi
-
-  return 0
+  touch "$wait_seen"
+  for script_path in "$download_dir"/*.sh; do
+    [ -e "$script_path" ] || continue
+    script_hash="$(hash_script "$script_path")"
+    if ! wait_seen_key_exists "$script_hash" "$script_path"; then
+      wait_record_seen "$script_hash" "$script_path"
+    fi
+  done
 }
 
-watch_loop() {
+wait_candidate() {
+  local script_path
+  local script_hash
+  local age
+
+  for script_path in "$download_dir"/*.sh; do
+    [ -e "$script_path" ] || continue
+
+    case "$script_path" in
+      "$download_dir"/*.sh) ;;
+      *) continue ;;
+    esac
+
+    script_hash="$(hash_script "$script_path")"
+    if wait_seen_key_exists "$script_hash" "$script_path"; then
+      continue
+    fi
+
+    age="$(script_age_seconds "$script_path")"
+    if [ "$age" -lt 0 ]; then
+      wait_record_seen "$script_hash" "$script_path"
+      continue
+    fi
+
+    if [ "$age" -gt "$wait_fresh_seconds" ]; then
+      wait_record_seen "$script_hash" "$script_path"
+      warn "Warte-Modus überspringt altes Script: $(basename "$script_path") ($(format_age "$age") alt)."
+      continue
+    fi
+
+    if find_applied_match "$script_hash" >/dev/null 2>&1; then
+      wait_record_seen "$script_hash" "$script_path"
+      warn "Warte-Modus überspringt bereits angewendetes Script: $(basename "$script_path")."
+      continue
+    fi
+
+    printf '%s\n' "$script_path"
+    return 0
+  done
+
+  return 1
+}
+
+wait_loop() {
   local script_path
   local script_hash
   local status
 
-  mkdir -p "$download_dir" "$done_dir" "$failed_dir"
-
   if [ "$(id -u)" -eq 0 ]; then
-    echo "$(date --iso-8601=seconds) c-watch refused to run as root"
-    exit 1
+    error "c --wait darf nicht als root gestartet werden."
+    return 1
   fi
 
-  if ! mkdir "$watch_lockdir" 2>/dev/null; then
-    echo "$(date --iso-8601=seconds) c-watch lock exists: $watch_lockdir"
-    exit 1
-  fi
+  mkdir -p "$download_dir" "$done_dir" "$failed_dir"
+  touch "$wait_seen"
 
-  echo "$$" > "$watch_pidfile"
-  trap 'rm -f "$watch_pidfile"; rm -rf "$watch_lockdir"; exit 0' TERM INT EXIT
+  banner
+  section "Warte-Modus"
+  info "c --wait läuft im Vordergrund. Ausgabe bleibt sichtbar."
+  info "Beobachte: $(show_path "$download_dir")"
+  info "Starte nur neue, maximal $(format_age "$wait_fresh_seconds") alte *.sh-Dateien."
+  info "Stoppen mit: Ctrl+C"
 
-  echo "$(date --iso-8601=seconds) c-watch started"
-  echo "$(date --iso-8601=seconds) downloads=$download_dir fresh_seconds=$watch_fresh_seconds sleep=$watch_sleep_seconds"
+  wait_mark_existing_scripts
+
+  trap 'echo; warn "Warte-Modus beendet."; exit 0' INT TERM
 
   while true; do
-    for script_path in "$download_dir"/*.sh; do
-      [ -e "$script_path" ] || continue
+    if script_path="$(wait_candidate)"; then
+      script_hash="$(hash_script "$script_path")"
+      wait_record_seen "$script_hash" "$script_path"
 
-      if watch_validate_candidate "$script_path"; then
-        script_hash="$(hash_script "$script_path")"
-        watch_record_seen "$script_hash" "$script_path"
-        echo "$(date --iso-8601=seconds) c-watch auto-run $(basename "$script_path")"
+      section "Neues Patchscript erkannt"
+      info "Script: $(show_path "$script_path")"
+      action "Führe über normalen c-Runner aus."
 
-        C_RUNNER_WATCH_CHILD=1 "$runner_source" "$script_path"
-        status=$?
-        echo "$(date --iso-8601=seconds) c-watch finished $(basename "$script_path") status=$status"
+      C_RUNNER_WAIT_CHILD=1 "$runner_source" "$script_path"
+      status=$?
+
+      if [ "$status" -eq 0 ]; then
+        success "Patchlauf abgeschlossen. Warte auf das nächste Script."
+      else
+        warn "Patchlauf endete mit Exit-Code $status. Warte trotzdem weiter."
       fi
-    done
-
-    sleep "$watch_sleep_seconds"
+    else
+      sleep "$wait_sleep_seconds"
+    fi
   done
 }
 
@@ -551,23 +464,8 @@ if [ "${1:-}" = "--help" ] || [ "${1:-}" = "-h" ]; then
 fi
 
 case "${1:-}" in
-  --watch-up|--daemon-up)
-    banner
-    watch_up
-    exit $?
-    ;;
-  --watch-down|--daemon-down)
-    banner
-    watch_down
-    exit $?
-    ;;
-  --watch-status|--daemon-status)
-    banner
-    watch_status
-    exit $?
-    ;;
-  --watch-loop)
-    watch_loop
+  --wait|--loop)
+    wait_loop
     exit $?
     ;;
 esac
@@ -646,15 +544,17 @@ fi
 script_hash="$(hash_script "$patch_script")"
 applied_match=""
 if applied_match="$(find_applied_match "$script_hash")"; then
-  if [ "${C_RUNNER_WATCH_CHILD:-0}" = "1" ]; then
+  if [ "${C_RUNNER_WAIT_CHILD:-0}" = "1" ]; then
     section "Wiederholungsprüfung"
     error "Dieses Patchscript wurde bereits erfolgreich angewendet."
     info "Logfile bleibt erhalten: $(show_path "$run_log")"
+    rm -f "${progress_context_output:-}" 2>/dev/null || true
     exit 3
   fi
 
   if ! confirm_already_applied_script "$patch_script" "$script_hash" "$applied_match"; then
     info "Logfile bleibt erhalten: $(show_path "$run_log")"
+    rm -f "${progress_context_output:-}" 2>/dev/null || true
     exit 3
   fi
 else
@@ -664,15 +564,17 @@ fi
 
 age_seconds="$(script_age_seconds "$patch_script")"
 if [ "$age_seconds" -gt "$max_age_seconds" ]; then
-  if [ "${C_RUNNER_WATCH_CHILD:-0}" = "1" ]; then
+  if [ "${C_RUNNER_WAIT_CHILD:-0}" = "1" ]; then
     section "Sicherheitsprüfung"
-    error "Watch-Kindprozess verweigert altes Patchscript: $(format_age "$age_seconds") alt."
+    error "Warte-Kindprozess verweigert altes Patchscript: $(format_age "$age_seconds") alt."
     info "Logfile bleibt erhalten: $(show_path "$run_log")"
+    rm -f "${progress_context_output:-}" 2>/dev/null || true
     exit 2
   fi
 
   if ! confirm_old_script "$patch_script" "$age_seconds"; then
     info "Logfile bleibt erhalten: $(show_path "$run_log")"
+    rm -f "${progress_context_output:-}" 2>/dev/null || true
     exit 2
   fi
 else
