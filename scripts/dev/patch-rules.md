@@ -1,6 +1,6 @@
 # Patch Workflow Rules
 
-Diese Datei dokumentiert die aktuell geltenden Arbeitsregeln für `n`, Fixes und Commit-Patches in diesem Chat.
+Diese Datei dokumentiert die aktuell geltenden Arbeitsregeln für `n`, Fixes, Download-Patches und Commit-Patches in diesem Chat.
 
 Sie liegt unter `scripts/dev/`, weil sie zur Entwicklungs- und Patch-Infrastruktur gehört, nicht zur Runtime-Logik von RepoDossier.
 
@@ -61,9 +61,54 @@ Für zukünftige Commit- und Fix-Antworten gilt:
 
 ---
 
-## 4. Repo-Root-Erkennung
+## 4. Ausführung mit `c`
 
-Das Script soll das Repository-Root selbst finden.
+Auf dem Zielsystem wird das Kürzel `c` als Bash-Funktion eingerichtet.
+
+`c` ruft den repo-lokalen Runner auf:
+
+```text
+scripts/dev/run_latest_download_patch.sh
+```
+
+Ohne Argumente macht `c` Folgendes:
+
+1. Aus `~/Downloads` das neueste `*.sh`-Patchscript holen.
+2. Das Script mit `bash -n` syntaktisch prüfen.
+3. `stdout` und `stderr` zusammen in eine Logdatei schreiben.
+4. Das Script ausführen.
+5. Bei Erfolg das Script nach `~/Downloads/done/` verschieben.
+6. Bei Fehler das Script nach `~/Downloads/failed/` verschieben.
+7. Die Logdatei in `~/Downloads` belassen.
+
+Optional kann ein konkretes Script angegeben werden:
+
+```bash
+c ~/Downloads/mein_patch.sh
+```
+
+---
+
+## 5. Logging und Clipboard
+
+Ab jetzt übernimmt `c` die zentrale Log-Verwaltung.
+
+Regeln für einzelne Patch-Scripts:
+
+1. Patch-Scripts sollen keine eigene globale `exec > >(tee ...) 2>&1`-Logumleitung mehr einrichten.
+2. Patch-Scripts sollen keine eigene Clipboard-Logik mit `xclip` mehr enthalten.
+3. Patch-Scripts sollen normal auf `stdout` und `stderr` schreiben.
+4. Patch-Scripts müssen korrekte Exit-Codes liefern.
+5. `c` schreibt die vollständige Ausgabe in eine Logdatei unter `~/Downloads`.
+6. Wenn Christian Fehler postet, genügt die Terminalausgabe oder die von `c` erzeugte Logdatei.
+
+Das macht Sinn, weil Logging, Syntaxprüfung und Verschieben der Download-Scripts dadurch zentral, einheitlich und weniger fehleranfällig werden.
+
+---
+
+## 6. Repo-Root-Erkennung
+
+Patch-Scripts sollen das Repository-Root selbst finden.
 
 Regeln:
 
@@ -73,35 +118,9 @@ Regeln:
 4. Wenn das aktuelle Verzeichnis kein Git-Repo ist, nach `~/market_research/repo_dossier` wechseln und dort erneut prüfen.
 5. Wenn RepoDossier nicht gefunden wird, klar abbrechen und keinen Commit erstellen.
 
-Beispiel-Logik:
-
-```bash
-REPO_CANDIDATE="$HOME/market_research/repo_dossier"
-
-if git rev-parse --show-toplevel >/dev/null 2>&1; then
-  REPO_ROOT="$(git rev-parse --show-toplevel)"
-else
-  cd "$REPO_CANDIDATE" || {
-    echo "Fehler: RepoDossier-Verzeichnis nicht gefunden: $REPO_CANDIDATE"
-    return 1
-  }
-  REPO_ROOT="$(git rev-parse --show-toplevel)"
-fi
-
-case "$REPO_ROOT" in
-  */repo_dossier) ;;
-  *)
-    echo "Fehler: falsches Repository: $REPO_ROOT"
-    return 1
-    ;;
-esac
-
-cd "$REPO_ROOT" || return 1
-```
-
 ---
 
-## 5. Virtuelle Umgebung
+## 7. Virtuelle Umgebung
 
 Wenn `.venv` existiert, wird sie aktiviert.
 
@@ -121,7 +140,7 @@ fi
 
 ---
 
-## 6. Repository-lokaler Helper
+## 8. Repository-lokaler Helper
 
 Die bevorzugte Helper-Datei liegt im Projekt:
 
@@ -135,12 +154,6 @@ Die frühere externe Datei unter folgendem Pfad ist nur noch Fallback:
 ~/dev-scripts/repo_patch_helper.py
 ```
 
-Vor Nutzung des repo-lokalen Helpers kann geprüft werden:
-
-```bash
-[ -f "$REPO_HELPER" ] && python3 -m py_compile "$REPO_HELPER"
-```
-
 Wenn der Helper fehlt oder syntaktisch defekt ist:
 
 1. Nicht blind abbrechen, wenn ein einfacher manueller Fallback möglich ist.
@@ -150,30 +163,7 @@ Wenn der Helper fehlt oder syntaktisch defekt ist:
 
 ---
 
-## 7. Logging
-
-Alle Ausgaben sollen geloggt werden.
-
-Regeln:
-
-1. `stdout` und `stderr` zusammen in eine Logdatei schreiben.
-2. Das Logging soll auch bei erfolgreichem Lauf passieren.
-3. Dafür bevorzugt Helper-Funktionen aus `scripts/dev/repo_patch_helper.py` verwenden.
-4. Bei Fehlern soll das Log per `xclip` in die Zwischenablage kopiert werden, wenn verfügbar.
-5. Wenn `xclip` nicht installiert ist, nur Hinweis ausgeben.
-6. Der Pfad zur Logdatei soll im Terminal sichtbar sein.
-
-Typisches Pattern:
-
-```bash
-RUN_LOG="$(mktemp)"
-exec > >(tee -a "$RUN_LOG") 2>&1
-echo "Logfile: $RUN_LOG"
-```
-
----
-
-## 8. Keine Aider-Prompts
+## 9. Keine Aider-Prompts
 
 Bei Commit-Patches gilt:
 
@@ -184,7 +174,7 @@ Bei Commit-Patches gilt:
 
 ---
 
-## 9. Kein `bundle_project.sh`
+## 10. Kein `bundle_project.sh`
 
 `bundle_project.sh` wird nicht mehr verwendet.
 
@@ -192,7 +182,7 @@ Für Snapshots, Prüfungen und Exporte werden RepoDossier-/RepoContext-Befehle o
 
 ---
 
-## 10. Tests
+## 11. Tests
 
 Jeder Commit-Patch führt relevante Tests aus.
 
@@ -202,31 +192,19 @@ Regeln:
 2. Bei Testfehlern keinen Commit erstellen.
 3. Optionale Testdateien nur ausführen, wenn sie existieren.
 4. Nach Fixes dieselben relevanten Tests erneut ausführen.
-5. Testausgaben werden gemeinsam mit allen anderen Ausgaben geloggt.
+5. Testausgaben werden normal ausgegeben; `c` übernimmt die Logdatei.
 6. Wenn Tests fehlen, aber der Patch sinnvoll prüfbar ist, mindestens Syntax-/Smoke-Checks ausführen.
-
-Bevorzugt mit Helper:
-
-```bash
-python3 "$REPO_HELPER" pytest-existing --repo . --log "$TEST_LOG" tests/test_x.py tests/test_y.py
-```
-
-Fallback:
-
-```bash
-python3 -m pytest --color=yes tests/test_x.py tests/test_y.py
-```
 
 ---
 
-## 11. Syntaxchecks
+## 12. Syntaxchecks
 
 Bei Python-Änderungen werden Syntaxchecks ausgeführt.
 
 Bevorzugt mit Helper:
 
 ```bash
-python3 "$REPO_HELPER" compile --repo . --log "$TEST_LOG" path1 path2
+python3 "$REPO_HELPER" compile --repo . path1 path2
 ```
 
 Wenn der Helper selbst repariert wird, zuerst direkt prüfen:
@@ -235,25 +213,7 @@ Wenn der Helper selbst repariert wird, zuerst direkt prüfen:
 python3 -m py_compile scripts/dev/repo_patch_helper.py
 ```
 
----
-
-## 12. Clipboard bei Fehlern
-
-Bei Fehlern wird der relevante Log kopiert, wenn möglich.
-
-Mit Helper:
-
-```bash
-python3 "$REPO_HELPER" copy-log "$RUN_LOG" || true
-```
-
-Fallback:
-
-```bash
-if command -v xclip >/dev/null 2>&1; then
-  cat "$RUN_LOG" | xclip -selection clipboard
-fi
-```
+Der Download-Patch selbst wird vor Ausführung bereits durch `c` mit `bash -n` geprüft.
 
 ---
 
@@ -269,26 +229,6 @@ Regeln:
 6. Danach immer `git status --short`.
 7. Git-Ausgaben ohne Pager anzeigen.
 
-Bevorzugt mit Helper:
-
-```bash
-python3 "$REPO_HELPER" commit-if-changed --repo . --message "Commit message" path1 path2
-```
-
-Fallback:
-
-```bash
-git add path1 path2
-
-if git diff --cached --quiet; then
-  echo "Keine Änderungen zum Committen."
-else
-  git commit -m "Commit message"
-fi
-
-git status --short
-```
-
 ---
 
 ## 14. Git ohne Pager
@@ -299,13 +239,6 @@ Immer:
 git --no-pager diff
 git --no-pager log
 git --no-pager status
-```
-
-oder Helper:
-
-```bash
-python3 "$REPO_HELPER" diff --repo . path1 path2
-python3 "$REPO_HELPER" status --repo .
 ```
 
 Nie plain `git diff` oder `git log`, wenn dadurch ein Pager hängen bleiben kann.
@@ -352,16 +285,6 @@ Regeln:
 4. Aktuelle Aufgabe lila markieren.
 5. Nächste Schritte gelb markieren.
 
-Empfohlene ANSI-Farben:
-
-```bash
-GREEN='\033[0;32m'
-PURPLE='\033[0;35m'
-YELLOW='\033[1;33m'
-RED='\033[0;31m'
-NC='\033[0m'
-```
-
 ---
 
 ## 17. Fix-Nummern
@@ -384,7 +307,7 @@ Wenn `scripts/dev/repo_patch_helper.py` selbst defekt ist:
 
 1. Nicht den defekten Helper für die Reparatur voraussetzen.
 2. Erst mit `python3 -m py_compile` prüfen.
-3. Manuellen Fallback für Footer, Clipboard, Git und Tests verwenden.
+3. Manuellen Fallback für Footer, Git und Tests verwenden.
 4. Nur gezielt reparieren, nicht global gefährliche Ersetzungen durchführen.
 5. Besonders vorsichtig mit literal `backslash+n`: nicht alle Vorkommen in Python-Dateien global ersetzen, weil sie in String-Literalen gültig sein können.
 6. Wenn nur das physische Dateiende betroffen ist, nur das Dateiende reparieren.
@@ -402,7 +325,7 @@ SyntaxError: unexpected character after line continuation character
 bei Zeilen wie:
 
 ```python
-raise SystemExit(main())\n
+raise SystemExit(main())\\n
 ```
 
 Regeln:
@@ -449,6 +372,7 @@ Aktuelle zuletzt bekannte Aufgabenfolge:
 4.4.c – Centralize exporter model opt-in dispatch
 DEV.1 – Add repository-local patch helper
 DEV.2 – Add patch workflow rules
+DEV.3 – Add c download patch runner
 ```
 
 Nächste voraussichtliche Richtung:
@@ -469,12 +393,12 @@ Wenn Christian `n` schreibt:
 1. Letzten Patch als grün behandeln.
 2. Nächsten sinnvollen Commit liefern.
 3. Patch als Download-Link zu einer `.sh`-Datei bereitstellen.
-4. Repo-lokalen Helper verwenden, wenn möglich.
-5. Alle Ausgaben in ein Logfile schreiben.
-6. Tests laufen lassen.
-7. Bei grünem Ergebnis committen.
-8. Footer unten im Script.
-9. Keine separate lange Übersicht außerhalb des Scripts.
+4. Patch-Script schreibt normal nach stdout/stderr.
+5. `c` übernimmt Syntaxprüfung, Logdatei und Verschieben nach done/failed.
+6. Repo-lokalen Helper verwenden, wenn möglich.
+7. Tests laufen lassen.
+8. Bei grünem Ergebnis committen.
+9. Footer unten im Script.
 
 ---
 
@@ -501,6 +425,6 @@ Priorität bei Konflikten:
 2. Fehlerfix vor neuem Feature.
 3. Tests und Syntaxchecks vor Commit.
 4. Keine unrelated Dateien committen.
-5. Logs immer speichern.
+5. `c` verwaltet Download-Scripts und Logs zentral.
 6. Download-`.sh` statt riesigem Chat-Codeblock.
 7. Footer immer im Script.
