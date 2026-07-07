@@ -4,6 +4,10 @@ set -u
 download_dir="${PATCH_DOWNLOAD_DIR:-$HOME/Downloads}"
 repodossier_bin="${REPODOSSIER_BIN:-repodossier}"
 
+runner_source="${BASH_SOURCE[0]}"
+runner_dir="$(cd "$(dirname "$runner_source")" && pwd)"
+patch_rules_source="$runner_dir/patch-rules.md"
+
 R_USE_COLOR=1
 if [ -n "${NO_COLOR:-}" ] || [ "${R_RUNNER_COLOR:-auto}" = "never" ]; then
   R_USE_COLOR=0
@@ -41,15 +45,16 @@ Runs RepoDossier in the current git repository:
   1. detects the current git repository root,
   2. runs: repodossier full
   3. runs: repodossier export-ai
-  4. copies full.txt and ai.txt to ~/Downloads, overwriting existing files.
+  4. copies full.txt to ~/Downloads/full.txt, overwriting existing files,
+  5. copies ai.txt to ~/Downloads/ai.txt, overwriting existing files,
+  6. copies scripts/dev/patch-rules.md to ~/Downloads/patch-rules.md when available.
 USAGE
 }
 
 banner() {
   printf '\n'
-  printf '%b\n' "${R_ACCENT}${R_BOLD}╔════════════════════════════════════════════════════════════╗${R_RESET}"
-  printf '%b\n' "${R_ACCENT}${R_BOLD}║ r · RepoDossier Export Runner                             ║${R_RESET}"
-  printf '%b\n' "${R_ACCENT}${R_BOLD}╚════════════════════════════════════════════════════════════╝${R_RESET}"
+  printf '%b\n' "${R_ACCENT}${R_BOLD}r · RepoDossier Export Runner${R_RESET}"
+  printf '%b\n' "${R_ACCENT}─────────────────────────────${R_RESET}"
 }
 
 section() {
@@ -66,6 +71,10 @@ action() {
 
 success() {
   printf '%b\n' "${R_ACCENT}r${R_RESET} ${R_OK}ok${R_RESET}    $*"
+}
+
+warn() {
+  printf '%b\n' "${R_ACCENT}r${R_RESET} ${R_WARN}warn${R_RESET}  $*"
 }
 
 error() {
@@ -95,6 +104,7 @@ cd "$repo_root" || exit 1
 info "Aktuelles Repo: $(show_path "$repo_root")"
 info "Downloads: $(show_path "$download_dir")"
 info "RepoDossier-Binary: $repodossier_bin"
+info "Patch-Rules-Quelle: $(show_path "$patch_rules_source")"
 
 mkdir -p "$download_dir"
 
@@ -140,6 +150,14 @@ cp -f "$repo_root/ai.txt" "$download_dir/ai.txt"
 
 success "Kopiert: $(show_path "$download_dir/full.txt")"
 success "Kopiert: $(show_path "$download_dir/ai.txt")"
+
+if [ -f "$patch_rules_source" ]; then
+  cp -f "$patch_rules_source" "$download_dir/patch-rules.md"
+  success "Kopiert: $(show_path "$download_dir/patch-rules.md")"
+else
+  warn "Patch-Rules nicht gefunden, daher nicht kopiert: $(show_path "$patch_rules_source")"
+fi
+
 info "Vorhandene Dateien in Downloads wurden überschrieben."
 
 section "Abschluss"

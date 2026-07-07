@@ -496,9 +496,12 @@ scripts/dev/run_repodossier_exports.sh
 4. `repodossier export-ai` ausführen.
 5. `full.txt` nach `~/Downloads/full.txt` kopieren.
 6. `ai.txt` nach `~/Downloads/ai.txt` kopieren.
-7. Vorhandene Dateien in `~/Downloads` werden überschrieben.
+7. `scripts/dev/patch-rules.md` nach `~/Downloads/patch-rules.md` kopieren, wenn die Datei vorhanden ist.
+8. Vorhandene Dateien in `~/Downloads` werden überschrieben.
 
 `r` ist bewusst für das aktuelle Git-Repo gedacht, nicht nur für das RepoDossier-Entwicklungsrepo.
+
+`r` soll keinen Box-Rahmen mit `╔`, `║` oder `╚` rendern. Stattdessen nutzt `r` eine einfache farbige Überschrift mit Trennlinie und die normalen Abschnittsmarker.
 
 ---
 

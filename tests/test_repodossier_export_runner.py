@@ -7,6 +7,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 RUNNER = REPO_ROOT / "scripts" / "dev" / "run_repodossier_exports.sh"
+PATCH_RULES = REPO_ROOT / "scripts" / "dev" / "patch-rules.md"
 
 
 def _git_init(path: Path) -> None:
@@ -89,6 +90,48 @@ def test_r_runner_overwrites_existing_download_exports(tmp_path: Path) -> None:
     assert result.returncode == 0, result.stdout + result.stderr
     assert "new full" in (download_dir / "full.txt").read_text(encoding="utf-8")
     assert "new ai" in (download_dir / "ai.txt").read_text(encoding="utf-8")
+
+
+def test_r_runner_copies_patch_rules_to_downloads(tmp_path: Path) -> None:
+    target_repo = tmp_path / "target_repo"
+    target_repo.mkdir()
+    _git_init(target_repo)
+
+    download_dir = tmp_path / "Downloads"
+    download_dir.mkdir()
+
+    fake_bin_dir = tmp_path / "bin"
+    fake_bin_dir.mkdir()
+    _write_fake_repodossier(fake_bin_dir)
+
+    result = _run_r_runner(target_repo, download_dir, fake_bin_dir)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    copied_rules = download_dir / "patch-rules.md"
+    assert copied_rules.exists()
+    assert copied_rules.read_text(encoding="utf-8") == PATCH_RULES.read_text(encoding="utf-8")
+    assert "patch-rules.md" in result.stdout
+
+
+def test_r_runner_output_has_no_box_frame(tmp_path: Path) -> None:
+    target_repo = tmp_path / "target_repo"
+    target_repo.mkdir()
+    _git_init(target_repo)
+
+    download_dir = tmp_path / "Downloads"
+    download_dir.mkdir()
+
+    fake_bin_dir = tmp_path / "bin"
+    fake_bin_dir.mkdir()
+    _write_fake_repodossier(fake_bin_dir)
+
+    result = _run_r_runner(target_repo, download_dir, fake_bin_dir)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "r · RepoDossier Export Runner" in result.stdout
+    assert "╔" not in result.stdout
+    assert "║" not in result.stdout
+    assert "╚" not in result.stdout
 
 
 def test_r_runner_fails_outside_git_repo(tmp_path: Path) -> None:
