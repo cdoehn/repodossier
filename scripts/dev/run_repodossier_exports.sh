@@ -1,210 +1,249 @@
 #!/usr/bin/env bash
 set -u
 
-repo_candidate="$HOME/market_research/repo_dossier"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-C_USE_COLOR=1
-if [ -n "${NO_COLOR:-}" ]; then
-  C_USE_COLOR=0
-fi
+CYAN='\033[38;5;45m'
+INFO='\033[38;5;39m'
+GREEN='\033[0;32m'
+PURPLE='\033[0;35m'
+RED='\033[0;31m'
+BOLD='\033[1m'
+NC='\033[0m'
 
-if [ "$C_USE_COLOR" -eq 1 ]; then
-  C_RESET=$'\033[0m'
-  C_OK=$'\033[0;32m'
-  C_INFO=$'\033[38;5;39m'
-  C_WARN=$'\033[1;33m'
-  C_ERR=$'\033[0;31m'
-  C_ACCENT=$'\033[38;5;45m'
-  C_BOLD=$'\033[1m'
-else
-  C_RESET=''
-  C_OK=''
-  C_INFO=''
-  C_WARN=''
-  C_ERR=''
-  C_ACCENT=''
-  C_BOLD=''
-fi
+ALL_MODES=(all full ai docs changed)
 
-usage() {
-  cat <<'USAGE'
+log_info() {
+  printf "${CYAN}r${NC} ${INFO}info${NC}  %s\n" "$1"
+}
+
+log_do() {
+  printf "${CYAN}r${NC} ${PURPLE}do${NC}    %s\n" "$1"
+}
+
+log_ok() {
+  printf "${CYAN}r${NC} ${GREEN}ok${NC}    %s\n" "$1"
+}
+
+log_error() {
+  printf "${CYAN}r${NC} ${RED}error${NC} %s\n" "$1"
+}
+
+print_help() {
+  cat <<'HELP'
 Usage:
-  r [mode ...]
-  r --dry-run [mode ...]
-  r --list-modes
-  r --help
+  scripts/dev/run_repodossier_exports.sh [--dry-run] [--list-modes] [all] [full] [ai|quick|export-ai] [docs|doc] [changed|changes]
+
+Runs RepoDossier exports for the current Git repository and copies common export
+artifacts to the download directory.
+
+Default modes:
+  normal run: full ai
+  dry-run:    full ai docs changed
 
 Modes:
-  all       run full, ai, docs and changed exports
-  full      run repodossier full
-  ai        run repodossier export-ai
-  docs      run repodossier export-docs
-  changed   run repodossier changed
+  full       runs: repodossier full
+  ai         runs: repodossier export-ai
+  quick      alias for: ai
+  export-ai  alias for: ai
+  docs       runs: repodossier export-docs
+  doc        alias for: docs
+  changed    runs: repodossier changed
+  changes    alias for: changed
+  all        alias for: full ai docs changed
 
-Compatibility aliases:
-  quick     same as ai
-  doc       same as docs
-  changes   same as changed
-
-Without an explicit mode, r defaults to all.
-USAGE
+Environment:
+  REPODOSSIER_BIN       RepoDossier executable, default: repodossier
+  PATCH_DOWNLOAD_DIR    Download directory, default: $HOME/Downloads
+HELP
 }
 
-section() {
-  printf '\n%b▶ r:%b %b%s%b\n' "$C_ACCENT$C_BOLD" "$C_RESET" "$C_BOLD" "$1" "$C_RESET"
-}
-
-info() {
-  printf '%br%b %binfo%b  %s\n' "$C_ACCENT" "$C_RESET" "$C_INFO" "$C_RESET" "$1"
-}
-
-success() {
-  printf '%br%b %bok%b    %s\n' "$C_ACCENT" "$C_RESET" "$C_OK" "$C_RESET" "$1"
-}
-
-error() {
-  printf '%br%b %berror%b %s\n' "$C_ACCENT" "$C_RESET" "$C_ERR" "$C_RESET" "$1"
-}
-
-find_repo_root() {
-  local root=""
-
-  if git rev-parse --show-toplevel >/dev/null 2>&1; then
-    root="$(git rev-parse --show-toplevel)"
-  else
-    cd "$repo_candidate" || {
-      error "RepoDossier-Verzeichnis nicht gefunden: $repo_candidate"
-      return 1
-    }
-    root="$(git rev-parse --show-toplevel)" || return 1
-  fi
-
-  case "$root" in
-    */repo_dossier) ;;
-    *)
-      error "Falsches Repository: $root"
-      return 1
-      ;;
-  esac
-
-  cd "$root" || return 1
-  info "Repo root: $root"
+print_modes() {
+  printf '%s\n' "${ALL_MODES[@]}"
 }
 
 normalize_mode() {
   case "$1" in
-    all) echo "all" ;;
-    full) echo "full" ;;
-    ai|quick) echo "ai" ;;
-    docs|doc) echo "docs" ;;
-    changed|changes) echo "changed" ;;
+    all)
+      printf 'all\n'
+      ;;
+    full)
+      printf 'full\n'
+      ;;
+    ai|quick|export-ai)
+      printf 'ai\n'
+      ;;
+    docs|doc)
+      printf 'docs\n'
+      ;;
+    changed|changes)
+      printf 'changed\n'
+      ;;
     *)
       return 1
       ;;
   esac
 }
 
-command_for_mode() {
+DRY_RUN=0
+LIST_MODES=0
+MODES=()
+
+while [ "$#" -gt 0 ]; do
   case "$1" in
-    full) echo "repodossier full" ;;
-    ai) echo "repodossier export-ai" ;;
-    docs) echo "repodossier export-docs" ;;
-    changed) echo "repodossier changed" ;;
+    --help|-h)
+      print_help
+      exit 0
+      ;;
+    --list-modes)
+      LIST_MODES=1
+      shift
+      ;;
+    --dry-run)
+      DRY_RUN=1
+      shift
+      ;;
     *)
-      return 1
+      if normalized="$(normalize_mode "$1")"; then
+        if [ "$normalized" = "all" ]; then
+          MODES+=(full ai docs changed)
+        else
+          MODES+=("$normalized")
+        fi
+        shift
+      else
+        log_error "Unbekannter r-Modus: $1"
+        print_help
+        exit 2
+      fi
       ;;
   esac
-}
+done
 
-expand_modes() {
-  local mode
-  local normalized
+if [ "$LIST_MODES" -eq 1 ]; then
+  print_modes
+  exit 0
+fi
 
-  if [ "$#" -eq 0 ]; then
-    set -- all
+if [ "${#MODES[@]}" -eq 0 ]; then
+  if [ "$DRY_RUN" -eq 1 ]; then
+    MODES=(full ai docs changed)
+  else
+    MODES=(full ai)
   fi
+fi
 
-  for mode in "$@"; do
-    normalized="$(normalize_mode "$mode")" || {
-      error "Unbekannter r-Modus: $mode"
-      echo "Erlaubt: all, full, ai, docs, changed"
-      return 2
-    }
+if ! REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)"; then
+  log_error "Kein Git-Repository: $(pwd)"
+  exit 1
+fi
 
-    if [ "$normalized" = "all" ]; then
-      printf '%s\n' full ai docs changed
-    else
-      printf '%s\n' "$normalized"
-    fi
-  done | awk '!seen[$0]++'
+cd "$REPO_ROOT" || exit 1
+
+DOWNLOAD_DIR="${PATCH_DOWNLOAD_DIR:-$HOME/Downloads}"
+REPODOSSIER_BIN="${REPODOSSIER_BIN:-repodossier}"
+
+echo "${CYAN}${BOLD}r · RepoDossier Export Runner${NC}"
+log_info "Repo: $REPO_ROOT"
+log_info "Downloads: $DOWNLOAD_DIR"
+log_info "Modi: ${MODES[*]}"
+
+if ! command -v "$REPODOSSIER_BIN" >/dev/null 2>&1; then
+  log_error "RepoDossier-Befehl nicht gefunden: $REPODOSSIER_BIN"
+  exit 1
+fi
+
+mkdir -p "$DOWNLOAD_DIR"
+
+copy_if_exists() {
+  local source_file="$1"
+  local target_file="$2"
+
+  if [ -f "$source_file" ]; then
+    cp -f "$source_file" "$target_file"
+    log_ok "Kopiert: $target_file"
+  fi
 }
 
 run_mode() {
   local mode="$1"
-  local command
-  command="$(command_for_mode "$mode")" || return 2
 
-  section "$mode"
-  info "Befehl: $command"
-
-  if [ "$dry_run" -eq 1 ]; then
-    success "Dry-run: nicht ausgeführt."
-    return 0
-  fi
-
-  if ! command -v repodossier >/dev/null 2>&1; then
-    error "repodossier ist nicht im PATH. Aktiviere .venv oder installiere das Paket."
-    return 127
-  fi
-
-  $command
+  case "$mode" in
+    full)
+      log_do "Exportiere full"
+      if [ "$DRY_RUN" -eq 1 ]; then
+        log_info "Befehl: $REPODOSSIER_BIN full"
+      else
+        "$REPODOSSIER_BIN" full
+        local status=$?
+        if [ "$status" -ne 0 ]; then
+          log_error "full fehlgeschlagen. Exit-Code: $status"
+          exit "$status"
+        fi
+        copy_if_exists "full.txt" "$DOWNLOAD_DIR/full.txt"
+      fi
+      ;;
+    ai)
+      log_do "Exportiere ai"
+      if [ "$DRY_RUN" -eq 1 ]; then
+        log_info "Befehl: $REPODOSSIER_BIN export-ai"
+      else
+        "$REPODOSSIER_BIN" export-ai
+        local status=$?
+        if [ "$status" -ne 0 ]; then
+          log_error "ai fehlgeschlagen. Exit-Code: $status"
+          exit "$status"
+        fi
+        copy_if_exists "ai.txt" "$DOWNLOAD_DIR/ai.txt"
+      fi
+      ;;
+    docs)
+      log_do "Exportiere docs"
+      if [ "$DRY_RUN" -eq 1 ]; then
+        log_info "Befehl: $REPODOSSIER_BIN export-docs"
+      else
+        "$REPODOSSIER_BIN" export-docs
+        local status=$?
+        if [ "$status" -ne 0 ]; then
+          log_error "docs fehlgeschlagen. Exit-Code: $status"
+          exit "$status"
+        fi
+        copy_if_exists "docs.txt" "$DOWNLOAD_DIR/docs.txt"
+      fi
+      ;;
+    changed)
+      log_do "Exportiere changed"
+      if [ "$DRY_RUN" -eq 1 ]; then
+        log_info "Befehl: $REPODOSSIER_BIN changed"
+      else
+        "$REPODOSSIER_BIN" changed
+        local status=$?
+        if [ "$status" -ne 0 ]; then
+          log_error "changed fehlgeschlagen. Exit-Code: $status"
+          exit "$status"
+        fi
+        copy_if_exists "changed.txt" "$DOWNLOAD_DIR/changed.txt"
+      fi
+      ;;
+    *)
+      log_error "Unbekannter r-Modus: $mode"
+      exit 2
+      ;;
+  esac
 }
 
-dry_run=0
-
-case "${1:-}" in
-  --help|-h)
-    usage
-    exit 0
-    ;;
-  --list-modes)
-    printf '%s\n' all full ai docs changed quick doc changes
-    exit 0
-    ;;
-  --dry-run)
-    dry_run=1
-    shift
-    ;;
-esac
-
-find_repo_root || exit 1
-
-mapfile -t modes < <(expand_modes "$@")
-expand_status=$?
-if [ "$expand_status" -ne 0 ]; then
-  exit "$expand_status"
-fi
-
-section "Start"
-if [ "$dry_run" -eq 1 ]; then
-  info "Dry-run aktiv."
-fi
-info "Modi: ${modes[*]}"
-
-status=0
-for mode in "${modes[@]}"; do
-  run_mode "$mode" || status=$?
-  if [ "$status" -ne 0 ]; then
-    break
-  fi
+for mode in "${MODES[@]}"; do
+  run_mode "$mode"
 done
 
-if [ "$status" -eq 0 ]; then
-  section "Abschluss"
-  success "r abgeschlossen."
+if [ "$DRY_RUN" -eq 0 ]; then
+  if [ -f "scripts/dev/patch-rules.md" ]; then
+    copy_if_exists "scripts/dev/patch-rules.md" "$DOWNLOAD_DIR/patch-rules.md"
+  else
+    copy_if_exists "$SCRIPT_DIR/patch-rules.md" "$DOWNLOAD_DIR/patch-rules.md"
+  fi
 else
-  section "Abschluss"
-  error "r fehlgeschlagen. Exit-Code: $status"
+  log_info "Dry-run: keine Dateien geschrieben."
 fi
 
-exit "$status"
+log_ok "r abgeschlossen."

@@ -127,7 +127,7 @@ def test_make_repository_export_can_skip_validation_for_incremental_migration():
 def test_make_minimal_repository_export_builds_empty_finalized_model():
     export = make_minimal_repository_export(
         mode="docs",
-        root_path="/home/christian/repo_dossier",
+        root_path="/tmp/repo_dossier",
     )
 
     assert export.mode == "docs"

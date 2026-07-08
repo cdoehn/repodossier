@@ -128,6 +128,11 @@ def test_current_short_commit_hash_detection(tmp_path: Path) -> None:
     assert short_hash == expected_short_hash
 
 
+
+def _canonical_git_iso_date(value: str) -> str:
+    return value.replace("Z", "+00:00")
+
+
 def test_commit_metadata_detection(tmp_path: Path) -> None:
     repo_path = setup_repository(tmp_path / "repo")
     metadata = get_current_commit_metadata(repo_path)
@@ -135,7 +140,7 @@ def test_commit_metadata_detection(tmp_path: Path) -> None:
     assert metadata is not None
     assert metadata.author_name == AUTHOR_NAME
     assert metadata.author_email == AUTHOR_EMAIL
-    assert metadata.commit_date == COMMIT_ENV["GIT_AUTHOR_DATE"]
+    assert _canonical_git_iso_date(metadata.commit_date) == _canonical_git_iso_date(COMMIT_ENV["GIT_AUTHOR_DATE"])
     assert metadata.subject == "Initial commit"
 
 

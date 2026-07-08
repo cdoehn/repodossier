@@ -112,10 +112,10 @@ Patch-Scripts sollen das Repository-Root selbst finden.
 
 Regeln:
 
-1. Standardannahme bleibt `~/market_research/repo_dossier`.
+1. Standardannahme bleibt `<repo-root>`.
 2. Zusätzlich soll das Script mit `git rev-parse --show-toplevel` das tatsächliche Repo-Root ermitteln.
 3. Wenn das gefundene Repo-Root nicht zu RepoDossier gehört, abbrechen.
-4. Wenn das aktuelle Verzeichnis kein Git-Repo ist, nach `~/market_research/repo_dossier` wechseln und dort erneut prüfen.
+4. Wenn das aktuelle Verzeichnis kein Git-Repo ist, nach `<repo-root>` wechseln und dort erneut prüfen.
 5. Wenn RepoDossier nicht gefunden wird, klar abbrechen und keinen Commit erstellen.
 
 ---
@@ -178,7 +178,7 @@ Bei Commit-Patches gilt:
 
 `bundle_project.sh` wird nicht mehr verwendet.
 
-Für Snapshots, Prüfungen und Exporte werden RepoDossier-/RepoContext-Befehle oder vorhandene Exportdateien genutzt.
+Für Snapshots, Prüfungen und Exporte werden RepoDossier-/previous project name-Befehle oder vorhandene Exportdateien genutzt.
 
 ---
 
@@ -971,3 +971,51 @@ Regeln:
 2. Anchor-basierte Bereiche bleiben auf ihre aufgelöste Range begrenzt.
 3. Heading-Anchor dürfen nicht in den nächsten Markdown-Abschnitt hineinlaufen.
 4. Plain-Text-Anchor dürfen bei `context: 0` nicht automatisch die Folgezeile einschließen.
+
+
+### Public repository hygiene
+
+RepoDossier is intended to be safe for a public repository.
+
+Rules:
+
+1. Tracked files must not contain contributor-specific home paths, user names, private email addresses, or workstation names.
+2. Local convenience aliases are installed by `scripts/dev/install_aliases.sh`.
+3. Alias installation writes local paths only to the user's shell rc file, not to tracked repository files.
+4. Public hygiene can be checked with:
+
+       python3 scripts/dev/audit_public_repo.py --tracked
+
+5. Before publishing or force-pushing rewritten history, run:
+
+       python3 scripts/dev/audit_public_repo.py --history
+
+History rewrite is an explicit maintenance step and must not happen automatically inside normal patch scripts.
+
+
+### Export runner default modes
+
+The development export runner is repository-agnostic and can run in any Git repository.
+
+Default modes stay intentionally small:
+
+    full ai
+
+Additional modes such as `docs` and `changed` are explicit opt-ins.
+
+
+### Export runner mode compatibility
+
+The development export runner preserves mode compatibility:
+
+1. `--list-modes` prints canonical modes without requiring a Git repository.
+2. Normal default modes are `full ai`.
+3. Dry-run default modes are `full ai docs changed` so all actions are visible.
+4. Aliases are accepted: `quick` -> `ai`, `doc` -> `docs`, `changes` -> `changed`.
+
+
+### Export runner dry-run output
+
+The development export runner dry-run output is part of the compatibility contract.
+It must print concrete command preview lines such as `Befehl: repodossier full`.
+`--list-modes` includes `all`; `all` expands to `full ai docs changed`.

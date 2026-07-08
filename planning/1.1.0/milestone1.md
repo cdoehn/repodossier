@@ -93,7 +93,7 @@ include = ["repodossier*"]
 Bekannter funktionierender Installationsweg:
 
 ```bash
-cd ~/market_research/repo_dossier || {
+cd <repo-root> || {
   echo "Fehler: Projektverzeichnis nicht gefunden."
 }
 

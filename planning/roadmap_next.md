@@ -37,7 +37,7 @@ Dieser Schritt ist klein, klar abgegrenzt und risikoarm. Er verbessert sofort di
 ## Offizieller README-Installationsweg
 
 ```bash
-cd ~/market_research/repo_dossier || {
+cd <repo-root> || {
   echo "Fehler: Projektverzeichnis nicht gefunden."
 }
 

@@ -15,7 +15,7 @@ from repodossier.export_model_repository import (
 
 def test_make_repository_metadata_normalizes_root_and_git_fields():
     metadata = make_repository_metadata(
-        root_path=" /home/christian/project/ ",
+        root_path=" /tmp/project/ ",
         root_name=" repo_dossier ",
         git_branch=" main ",
         git_commit=" abc123 ",
@@ -23,7 +23,7 @@ def test_make_repository_metadata_normalizes_root_and_git_fields():
     )
 
     assert metadata == RepositoryMetadata(
-        root_path="/home/christian/project",
+        root_path="/tmp/project",
         root_name="repo_dossier",
         git_branch="main",
         git_commit="abc123",
@@ -33,7 +33,7 @@ def test_make_repository_metadata_normalizes_root_and_git_fields():
 
 def test_make_repository_metadata_derives_root_name_from_path():
     metadata = make_repository_metadata(
-        root_path="/home/christian/market_research/repo_dossier",
+        root_path="/tmp/repo_dossier",
     )
 
     assert metadata.root_name == "repo_dossier"

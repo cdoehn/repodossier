@@ -34,8 +34,8 @@ wait_sleep_seconds="${C_RUNNER_WAIT_SLEEP_SECONDS:-2}"
 wait_fresh_seconds="${C_RUNNER_WAIT_FRESH_SECONDS:-30}"
 
 runner_source="${C_RUNNER_ORIGINAL:-${BASH_SOURCE[0]}}"
-if [ -n "${C_RUNNER_TEMP_COPY:-}" ] && [ -x "$HOME/market_research/repo_dossier/scripts/dev/run_latest_download_patch.sh" ]; then
-  runner_source="$HOME/market_research/repo_dossier/scripts/dev/run_latest_download_patch.sh"
+if [ -n "${C_RUNNER_TEMP_COPY:-}" ] && [ -x "${REPODOSSIER_REPO:-$(pwd)}/scripts/dev/run_latest_download_patch.sh" ]; then
+  runner_source="${REPODOSSIER_REPO:-$(pwd)}/scripts/dev/run_latest_download_patch.sh"
 fi
 runner_dir="$(cd "$(dirname "$runner_source")" && pwd)"
 runner_repo="$(cd "$runner_dir/../.." && pwd)"

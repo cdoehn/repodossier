@@ -38,8 +38,8 @@ def _repo_root(start: Path) -> Path:
 def _check_git_identity(repo_root: Path) -> list[CheckResult]:
     results: list[CheckResult] = []
     for key, hint_value in [
-        ("user.name", "git config --global user.name \"Christian Döhn\""),
-        ("user.email", "git config --global user.email \"christian.doehn@gmail.com\""),
+        ("user.name", "git config --global user.name \"RepoDossier Developer\""),
+        ("user.email", "git config --global user.email \"you@example.com\""),
     ]:
         result = _run(["git", "config", "--get", key], cwd=repo_root)
         value = result.stdout.strip()

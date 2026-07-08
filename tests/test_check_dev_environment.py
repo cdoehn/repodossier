@@ -11,7 +11,7 @@ def test_render_results_reports_success() -> None:
     output = render_results(
         [
             CheckResult("repo root", True, "/tmp/repo_dossier"),
-            CheckResult("git user.name", True, "Christian Döhn"),
+            CheckResult("git user.name", True, "RepoDossier Developer"),
         ]
     )
 

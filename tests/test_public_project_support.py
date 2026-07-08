@@ -7,7 +7,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 def test_license_names_project_author():
     license_text = (PROJECT_ROOT / "LICENSE").read_text(encoding="utf-8")
 
-    assert "Copyright (c) 2024 Christian Döhn" in license_text
+    assert "Copyright (c) 2024 RepoDossier Developer" in license_text
     assert ("Repo" + "Context Authors") not in license_text
     assert "RepoDossier Authors" not in license_text
 
