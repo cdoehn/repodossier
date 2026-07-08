@@ -1,166 +1,210 @@
 #!/usr/bin/env bash
 set -u
 
-download_dir="${PATCH_DOWNLOAD_DIR:-$HOME/Downloads}"
-repodossier_bin="${REPODOSSIER_BIN:-repodossier}"
+repo_candidate="$HOME/market_research/repo_dossier"
 
-runner_source="${BASH_SOURCE[0]}"
-runner_dir="$(cd "$(dirname "$runner_source")" && pwd)"
-patch_rules_source="$runner_dir/patch-rules.md"
-
-R_USE_COLOR=1
-if [ -n "${NO_COLOR:-}" ] || [ "${R_RUNNER_COLOR:-auto}" = "never" ]; then
-  R_USE_COLOR=0
+C_USE_COLOR=1
+if [ -n "${NO_COLOR:-}" ]; then
+  C_USE_COLOR=0
 fi
 
-if [ "$R_USE_COLOR" -eq 1 ]; then
-  R_RESET=$'\033[0m'
-  R_BOLD=$'\033[1m'
-  R_ACCENT=$'\033[38;5;82m'
-  R_INFO=$'\033[38;5;120m'
-  R_OK=$'\033[0;32m'
-  R_WARN=$'\033[1;33m'
-  R_ERR=$'\033[0;31m'
-  R_PATH=$'\033[0;36m'
-  R_STEP=$'\033[0;35m'
+if [ "$C_USE_COLOR" -eq 1 ]; then
+  C_RESET=$'\033[0m'
+  C_OK=$'\033[0;32m'
+  C_INFO=$'\033[38;5;39m'
+  C_WARN=$'\033[1;33m'
+  C_ERR=$'\033[0;31m'
+  C_ACCENT=$'\033[38;5;45m'
+  C_BOLD=$'\033[1m'
 else
-  R_RESET=''
-  R_BOLD=''
-  R_ACCENT=''
-  R_INFO=''
-  R_OK=''
-  R_WARN=''
-  R_ERR=''
-  R_PATH=''
-  R_STEP=''
+  C_RESET=''
+  C_OK=''
+  C_INFO=''
+  C_WARN=''
+  C_ERR=''
+  C_ACCENT=''
+  C_BOLD=''
 fi
 
 usage() {
   cat <<'USAGE'
 Usage:
-  r
+  r [mode ...]
+  r --dry-run [mode ...]
+  r --list-modes
   r --help
 
-Runs RepoDossier in the current git repository:
-  1. detects the current git repository root,
-  2. runs: repodossier full
-  3. runs: repodossier export-ai
-  4. copies full.txt to ~/Downloads/full.txt, overwriting existing files,
-  5. copies ai.txt to ~/Downloads/ai.txt, overwriting existing files,
-  6. copies scripts/dev/patch-rules.md to ~/Downloads/patch-rules.md when available.
+Modes:
+  all       run full, ai, docs and changed exports
+  full      run repodossier full
+  ai        run repodossier export-ai
+  docs      run repodossier export-docs
+  changed   run repodossier changed
+
+Compatibility aliases:
+  quick     same as ai
+  doc       same as docs
+  changes   same as changed
+
+Without an explicit mode, r defaults to all.
 USAGE
 }
 
-banner() {
-  printf '\n'
-  printf '%b\n' "${R_ACCENT}${R_BOLD}r · RepoDossier Export Runner${R_RESET}"
-  printf '%b\n' "${R_ACCENT}─────────────────────────────${R_RESET}"
-}
-
 section() {
-  printf '\n%b\n' "${R_ACCENT}${R_BOLD}▶ r:${R_RESET} ${R_STEP}${R_BOLD}$1${R_RESET}"
+  printf '\n%b▶ r:%b %b%s%b\n' "$C_ACCENT$C_BOLD" "$C_RESET" "$C_BOLD" "$1" "$C_RESET"
 }
 
 info() {
-  printf '%b\n' "${R_ACCENT}r${R_RESET} ${R_INFO}info${R_RESET}  $*"
-}
-
-action() {
-  printf '%b\n' "${R_ACCENT}r${R_RESET} ${R_STEP}do${R_RESET}    $*"
+  printf '%br%b %binfo%b  %s\n' "$C_ACCENT" "$C_RESET" "$C_INFO" "$C_RESET" "$1"
 }
 
 success() {
-  printf '%b\n' "${R_ACCENT}r${R_RESET} ${R_OK}ok${R_RESET}    $*"
-}
-
-warn() {
-  printf '%b\n' "${R_ACCENT}r${R_RESET} ${R_WARN}warn${R_RESET}  $*"
+  printf '%br%b %bok%b    %s\n' "$C_ACCENT" "$C_RESET" "$C_OK" "$C_RESET" "$1"
 }
 
 error() {
-  printf '%b\n' "${R_ACCENT}r${R_RESET} ${R_ERR}error${R_RESET} $*"
+  printf '%br%b %berror%b %s\n' "$C_ACCENT" "$C_RESET" "$C_ERR" "$C_RESET" "$1"
 }
 
-show_path() {
-  printf '%b' "${R_PATH}$1${R_RESET}"
+find_repo_root() {
+  local root=""
+
+  if git rev-parse --show-toplevel >/dev/null 2>&1; then
+    root="$(git rev-parse --show-toplevel)"
+  else
+    cd "$repo_candidate" || {
+      error "RepoDossier-Verzeichnis nicht gefunden: $repo_candidate"
+      return 1
+    }
+    root="$(git rev-parse --show-toplevel)" || return 1
+  fi
+
+  case "$root" in
+    */repo_dossier) ;;
+    *)
+      error "Falsches Repository: $root"
+      return 1
+      ;;
+  esac
+
+  cd "$root" || return 1
+  info "Repo root: $root"
 }
 
-if [ "${1:-}" = "--help" ] || [ "${1:-}" = "-h" ]; then
-  usage
-  exit 0
+normalize_mode() {
+  case "$1" in
+    all) echo "all" ;;
+    full) echo "full" ;;
+    ai|quick) echo "ai" ;;
+    docs|doc) echo "docs" ;;
+    changed|changes) echo "changed" ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+command_for_mode() {
+  case "$1" in
+    full) echo "repodossier full" ;;
+    ai) echo "repodossier export-ai" ;;
+    docs) echo "repodossier export-docs" ;;
+    changed) echo "repodossier changed" ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+expand_modes() {
+  local mode
+  local normalized
+
+  if [ "$#" -eq 0 ]; then
+    set -- all
+  fi
+
+  for mode in "$@"; do
+    normalized="$(normalize_mode "$mode")" || {
+      error "Unbekannter r-Modus: $mode"
+      echo "Erlaubt: all, full, ai, docs, changed"
+      return 2
+    }
+
+    if [ "$normalized" = "all" ]; then
+      printf '%s\n' full ai docs changed
+    else
+      printf '%s\n' "$normalized"
+    fi
+  done | awk '!seen[$0]++'
+}
+
+run_mode() {
+  local mode="$1"
+  local command
+  command="$(command_for_mode "$mode")" || return 2
+
+  section "$mode"
+  info "Befehl: $command"
+
+  if [ "$dry_run" -eq 1 ]; then
+    success "Dry-run: nicht ausgeführt."
+    return 0
+  fi
+
+  if ! command -v repodossier >/dev/null 2>&1; then
+    error "repodossier ist nicht im PATH. Aktiviere .venv oder installiere das Paket."
+    return 127
+  fi
+
+  $command
+}
+
+dry_run=0
+
+case "${1:-}" in
+  --help|-h)
+    usage
+    exit 0
+    ;;
+  --list-modes)
+    printf '%s\n' all full ai docs changed quick doc changes
+    exit 0
+    ;;
+  --dry-run)
+    dry_run=1
+    shift
+    ;;
+esac
+
+find_repo_root || exit 1
+
+mapfile -t modes < <(expand_modes "$@")
+expand_status=$?
+if [ "$expand_status" -ne 0 ]; then
+  exit "$expand_status"
 fi
 
-banner
-
-section "Repo-Erkennung"
-if ! git rev-parse --show-toplevel >/dev/null 2>&1; then
-  error "Aktuelles Verzeichnis liegt nicht in einem Git-Repository."
-  exit 1
+section "Start"
+if [ "$dry_run" -eq 1 ]; then
+  info "Dry-run aktiv."
 fi
+info "Modi: ${modes[*]}"
 
-repo_root="$(git rev-parse --show-toplevel)"
-cd "$repo_root" || exit 1
+status=0
+for mode in "${modes[@]}"; do
+  run_mode "$mode" || status=$?
+  if [ "$status" -ne 0 ]; then
+    break
+  fi
+done
 
-info "Aktuelles Repo: $(show_path "$repo_root")"
-info "Downloads: $(show_path "$download_dir")"
-info "RepoDossier-Binary: $repodossier_bin"
-info "Patch-Rules-Quelle: $(show_path "$patch_rules_source")"
-
-mkdir -p "$download_dir"
-
-if ! command -v "$repodossier_bin" >/dev/null 2>&1; then
-  error "RepoDossier-Befehl nicht gefunden: $repodossier_bin"
-  error "Installiere repodossier oder setze REPODOSSIER_BIN."
-  exit 1
-fi
-
-section "Export full.txt"
-action "Führe aus: $repodossier_bin full"
-"$repodossier_bin" full
-full_status=$?
-if [ "$full_status" -ne 0 ]; then
-  error "repodossier full fehlgeschlagen. Exit-Code: $full_status"
-  exit "$full_status"
-fi
-
-if [ ! -f "$repo_root/full.txt" ]; then
-  error "full.txt wurde nicht erzeugt: $repo_root/full.txt"
-  exit 1
-fi
-success "full.txt erzeugt."
-
-section "Export ai.txt"
-action "Führe aus: $repodossier_bin export-ai"
-"$repodossier_bin" export-ai
-ai_status=$?
-if [ "$ai_status" -ne 0 ]; then
-  error "repodossier export-ai fehlgeschlagen. Exit-Code: $ai_status"
-  exit "$ai_status"
-fi
-
-if [ ! -f "$repo_root/ai.txt" ]; then
-  error "ai.txt wurde nicht erzeugt: $repo_root/ai.txt"
-  exit 1
-fi
-success "ai.txt erzeugt."
-
-section "Kopieren nach Downloads"
-cp -f "$repo_root/full.txt" "$download_dir/full.txt"
-cp -f "$repo_root/ai.txt" "$download_dir/ai.txt"
-
-success "Kopiert: $(show_path "$download_dir/full.txt")"
-success "Kopiert: $(show_path "$download_dir/ai.txt")"
-
-if [ -f "$patch_rules_source" ]; then
-  cp -f "$patch_rules_source" "$download_dir/patch-rules.md"
-  success "Kopiert: $(show_path "$download_dir/patch-rules.md")"
+if [ "$status" -eq 0 ]; then
+  section "Abschluss"
+  success "r abgeschlossen."
 else
-  warn "Patch-Rules nicht gefunden, daher nicht kopiert: $(show_path "$patch_rules_source")"
+  section "Abschluss"
+  error "r fehlgeschlagen. Exit-Code: $status"
 fi
 
-info "Vorhandene Dateien in Downloads wurden überschrieben."
-
-section "Abschluss"
-success "RepoDossier-Exports für aktuelles Repo fertig."
-
-exit 0
+exit "$status"

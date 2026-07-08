@@ -834,3 +834,28 @@ Regeln:
 4. Wenn der Anchor auf eine Markdown-Überschrift zeigt, rendert der Progress-Renderer den Abschnitt bis zur nächsten Überschrift gleicher oder höherer Ebene.
 5. Wenn der Anchor auf normalen Text zeigt, rendert der Progress-Renderer nur diese Zeile plus den konfigurierten Kontext.
 6. Explizite `start`/`end`-Bereiche bleiben vollständig kompatibel.
+
+
+### r: Export-Modi
+
+Der `r`-Runner unterstützt explizite Export-Modi:
+
+    r
+    r all
+    r full
+    r ai
+    r docs
+    r changed
+    r --dry-run full ai
+    r --list-modes
+
+Regeln:
+
+1. Ohne Argumente bleibt `r` kompatibel und führt `all` aus.
+2. `all` entspricht `full`, `ai`, `docs`, `changed`.
+3. Alias-Modi bleiben kurz:
+   - `quick` = `ai`
+   - `doc` = `docs`
+   - `changes` = `changed`
+4. `--dry-run` zeigt die geplanten Befehle, führt aber keine Exporte aus.
+5. Unbekannte Modi brechen mit Exit-Code 2 ab.
