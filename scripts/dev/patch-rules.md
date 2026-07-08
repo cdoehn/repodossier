@@ -904,3 +904,34 @@ Der Check prüft unter anderem:
 6. maschinenlesbare Workflow-Regeln und Validator.
 
 Mit `--strict` schlägt der Check auch dann fehl, wenn optionale Komfortwerkzeuge wie `pipx` oder die global verfügbare `repodossier` CLI fehlen.
+
+
+### Progress context column packing
+
+Der Progress-Renderer packt Roadmap- und Milestone-Spalte unabhängig voneinander.
+
+Regeln:
+
+1. Ein langer Block in einer Spalte darf den Folgestatus der anderen Spalte nicht nach unten schieben.
+2. Innerhalb einer Spalte schließen Statusbereiche direkt aneinander an, wenn der Textbereich fortlaufend ist.
+3. Wenn eine Spalte kürzer ist, darf sie mit weiterem verfügbarem Kontext aus derselben Datei aufgefüllt werden.
+4. Side-by-side bleibt Standard, nutzt aber nur eine schmale Lücke zwischen den Spalten.
+5. `NO_COLOR=1` bleibt für Tests und Log-Auswertung unterstützt.
+
+
+### Progress context status compatibility
+
+Der Progress-Renderer behält die etablierten Statusmarker bei:
+
+1. `done` → `✓`
+2. `active` → `■`
+3. `partial` → `~`
+4. `todo` → `!`
+
+Bei überlappenden Bereichen gilt eine explizite Priorität:
+
+1. `active` schlägt `todo`,
+2. `todo` schlägt `partial`,
+3. `partial` schlägt `done`.
+
+Die Marker bleiben festbreit formatiert, damit bestehende Log- und Testauswertung stabil bleibt.

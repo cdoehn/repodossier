@@ -2,32 +2,43 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import shutil
-import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-SCRIPT_DIR = Path(__file__).resolve().parent
-if str(SCRIPT_DIR) not in sys.path:
-    sys.path.insert(0, str(SCRIPT_DIR))
-
-from validate_patch_metadata import MetaRecord, parse_metadata_lines, validate_records
-
-
-STATUS_PRIORITY = {"todo": 1, "done": 2, "partial": 3, "active": 4}
-STATUS_ICON = {"done": "✓", "active": "■", "partial": "~", "todo": "!", None: " "}
-STATUS_COLOR = {
+PANELS = ("roadmap", "milestone")
+STATUSES = ("done", "active", "partial", "todo")
+STATUS_SYMBOLS = {
+    "done": "✓",
+    "active": "■",
+    "partial": "~",
+    "todo": "!",
+}
+STATUS_COLORS = {
     "done": "\033[0;32m",
     "active": "\033[0;35m",
     "partial": "\033[1;33m",
     "todo": "\033[0;31m",
 }
-RESET = "\033[0m"
+STATUS_PRIORITY = {
+    "done": 10,
+    "partial": 20,
+    "todo": 30,
+    "active": 40,
+}
 DIM = "\033[2m"
-BOLD = "\033[1m"
 ACCENT = "\033[38;5;45m"
+BOLD = "\033[1m"
+RESET = "\033[0m"
+
+
+@dataclass(frozen=True)
+class MetaRecord:
+    line_number: int
+    data: dict[str, Any]
 
 
 @dataclass(frozen=True)
@@ -46,27 +57,44 @@ class DisplayOptions:
     frame: bool = False
 
 
+@dataclass(frozen=True)
+class RenderLine:
+    file: str
+    number: int | None
+    text: str
+    status: str | None = None
+    dim: bool = False
+    header: bool = False
+
+
 def _use_color() -> bool:
-    return not os.environ.get("NO_COLOR")
+    return "NO_COLOR" not in os.environ
 
 
-def _color(text: str, status: str | None = None, *, bold: bool = False, dim: bool = False) -> str:
+def _color(text: str, code: str) -> str:
     if not _use_color():
         return text
-    prefix = ""
-    if bold:
-        prefix += BOLD
-    if dim:
-        prefix += DIM
-    if status:
-        prefix += STATUS_COLOR.get(status, "")
-    return f"{prefix}{text}{RESET}" if prefix else text
+    return f"{code}{text}{RESET}"
 
 
-def _accent(text: str) -> str:
-    if not _use_color():
-        return text
-    return f"{ACCENT}{BOLD}{text}{RESET}"
+def _parse_metadata(script_path: Path) -> list[MetaRecord]:
+    records: list[MetaRecord] = []
+    prefix = "# repodossier-meta:"
+
+    for line_number, line in enumerate(script_path.read_text(encoding="utf-8").splitlines(), start=1):
+        if not line.startswith(prefix):
+            continue
+
+        raw = line[len(prefix):].strip()
+        try:
+            data = json.loads(raw)
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"invalid metadata JSON on line {line_number}: {exc}") from exc
+        if not isinstance(data, dict):
+            raise ValueError(f"metadata line {line_number} is not an object")
+        records.append(MetaRecord(line_number=line_number, data=data))
+
+    return records
 
 
 def _markdown_heading_level(line: str) -> int | None:
@@ -76,10 +104,9 @@ def _markdown_heading_level(line: str) -> int | None:
 
     level = 0
     for char in stripped:
-        if char == "#":
-            level += 1
-            continue
-        break
+        if char != "#":
+            break
+        level += 1
 
     if level == 0 or level > 6:
         return None
@@ -120,14 +147,14 @@ def _resolve_anchor_range(file_path: Path, anchor: str) -> tuple[int, int]:
     return start, max(start, min(end, start + 80))
 
 
-
 def _records_to_progress(records: list[MetaRecord], *, repo_root: Path) -> tuple[list[ProgressRange], DisplayOptions]:
     ranges: list[ProgressRange] = []
     display = DisplayOptions()
 
     for record in records:
         data = record.data
-        if data.get("type") == "progress":
+        data_type = data.get("type")
+        if data_type == "progress":
             file_name = str(data["file"])
             if "start" in data and "end" in data:
                 start = int(data["start"])
@@ -144,7 +171,7 @@ def _records_to_progress(records: list[MetaRecord], *, repo_root: Path) -> tuple
                     end=end,
                 )
             )
-        elif data.get("type") == "display":
+        elif data_type == "display":
             display = DisplayOptions(
                 context=int(data.get("context", display.context)),
                 layout=str(data.get("layout", display.layout)),
@@ -154,219 +181,239 @@ def _records_to_progress(records: list[MetaRecord], *, repo_root: Path) -> tuple
     return ranges, display
 
 
-def _status_for_line(ranges: list[ProgressRange], file_name: str, line_number: int) -> str | None:
-    best_status: str | None = None
-    best_priority = 0
+def _line_status(line_number: int, ranges: list[ProgressRange]) -> str | None:
+    result: str | None = None
+    result_priority = -1
 
-    for item in ranges:
-        if item.file != file_name:
+    for progress in ranges:
+        if not (progress.start <= line_number <= progress.end):
             continue
-        if item.start <= line_number <= item.end:
-            priority = STATUS_PRIORITY[item.status]
-            if priority > best_priority:
-                best_status = item.status
-                best_priority = priority
 
-    return best_status
+        priority = STATUS_PRIORITY.get(progress.status, 0)
+        if priority >= result_priority:
+            result = progress.status
+            result_priority = priority
 
-
-def _truncate(value: str, width: int) -> str:
-    if len(value) <= width:
-        return value
-    if width <= 1:
-        return value[:width]
-    return value[: width - 1] + "…"
+    return result
 
 
-def _render_panel(
+def _selected_line_numbers(ranges: list[ProgressRange], *, total_lines: int, context: int) -> list[int]:
+    selected: set[int] = set()
+    for progress in ranges:
+        start = max(1, progress.start - context)
+        end = min(total_lines, progress.end + context)
+        selected.update(range(start, end + 1))
+    return sorted(selected)
+
+
+def _append_fill_lines(
+    selected: list[int],
     *,
-    title: str,
+    total_lines: int,
+    target_count: int,
+) -> list[int]:
+    if len(selected) >= target_count:
+        return selected
+
+    result = list(selected)
+    seen = set(result)
+
+    next_line = result[-1] + 1 if result else 1
+    while len(result) < target_count and next_line <= total_lines:
+        if next_line not in seen:
+            result.append(next_line)
+            seen.add(next_line)
+        next_line += 1
+
+    previous_line = result[0] - 1 if result else total_lines
+    prepend: list[int] = []
+    while len(result) + len(prepend) < target_count and previous_line >= 1:
+        if previous_line not in seen:
+            prepend.append(previous_line)
+            seen.add(previous_line)
+        previous_line -= 1
+
+    return sorted(prepend) + result
+
+
+def _panel_files(progress_ranges: list[ProgressRange]) -> list[str]:
+    result: list[str] = []
+    seen: set[str] = set()
+    for progress in progress_ranges:
+        if progress.file not in seen:
+            seen.add(progress.file)
+            result.append(progress.file)
+    return result
+
+
+def _build_panel_stream(
+    *,
     panel: str,
     ranges: list[ProgressRange],
     repo_root: Path,
-    context: int,
-    width: int,
-) -> list[str]:
-    panel_ranges = [item for item in ranges if item.panel == panel]
+    display: DisplayOptions,
+    target_body_lines: int | None = None,
+) -> list[RenderLine]:
+    panel_ranges = [progress for progress in ranges if progress.panel == panel]
     if not panel_ranges:
-        return [_accent(title), ""]
+        return []
 
-    by_file: dict[str, list[ProgressRange]] = {}
-    for item in panel_ranges:
-        by_file.setdefault(item.file, []).append(item)
-
-    rows: list[str] = [_accent(title), _color("─" * min(width, 48), bold=False)]
-
-    for file_index, (file_name, file_ranges) in enumerate(sorted(by_file.items())):
+    stream: list[RenderLine] = []
+    for file_name in _panel_files(panel_ranges):
         file_path = repo_root / file_name
         lines = file_path.read_text(encoding="utf-8").splitlines()
+        file_ranges = [progress for progress in panel_ranges if progress.file == file_name]
+        line_numbers = _selected_line_numbers(file_ranges, total_lines=len(lines), context=display.context)
+        if target_body_lines is not None:
+            line_numbers = _append_fill_lines(line_numbers, total_lines=len(lines), target_count=target_body_lines)
 
-        first = max(1, min(item.start for item in file_ranges) - context)
-        last = min(len(lines), max(item.end for item in file_ranges) + context)
+        if stream:
+            stream.append(RenderLine(file="", number=None, text="", dim=True))
+        stream.append(RenderLine(file=file_name, number=None, text=f"📄 {file_name}", header=True))
 
-        if file_index > 0:
-            rows.append("")
+        for number in line_numbers:
+            text = lines[number - 1] if 1 <= number <= len(lines) else ""
+            status = _line_status(number, file_ranges)
+            stream.append(
+                RenderLine(
+                    file=file_name,
+                    number=number,
+                    text=text,
+                    status=status,
+                    dim=status is None,
+                )
+            )
 
-        rows.append(_color(f"📄 {file_name}", bold=True))
-
-        for line_number in range(first, last + 1):
-            status = _status_for_line(file_ranges, file_name, line_number)
-            icon = STATUS_ICON[status]
-            content = lines[line_number - 1]
-            raw = f"{icon}{line_number:>4}  {content}"
-            raw = _truncate(raw, width)
-
-            if status:
-                rows.append(_color(raw, status))
-            else:
-                rows.append(_color(raw, dim=True))
-
-    return rows
-
-
-def _pad_plain(text: str, width: int) -> str:
-    plain = _strip_ansi(text)
-    visible_len = len(plain)
-    if visible_len >= width:
-        return text
-    return text + " " * (width - visible_len)
+    return stream
 
 
-def _strip_ansi(text: str) -> str:
-    result = []
-    index = 0
-    while index < len(text):
-        if text[index] == "\033":
-            end = text.find("m", index)
-            if end == -1:
-                break
-            index = end + 1
+def _body_line_count(stream: list[RenderLine]) -> int:
+    return sum(1 for line in stream if line.number is not None)
+
+
+def _format_line(line: RenderLine, *, width: int) -> str:
+    if line.number is None:
+        if line.header:
+            text = _color(line.text, BOLD)
+        else:
+            text = line.text
+    else:
+        symbol = STATUS_SYMBOLS.get(line.status or "", " ")
+        prefix = f"{symbol}{line.number:>4}  "
+        text = prefix + line.text
+        if line.status in STATUS_COLORS:
+            text = _color(text, STATUS_COLORS[line.status])
+        elif line.dim:
+            text = _color(text, DIM)
+
+    if len(text) > width:
+        visible_padding = 1 if _use_color() else 0
+        text = text[: max(1, width - visible_padding - 1)] + "…"
+    return text
+
+
+def _plain_len(text: str) -> int:
+    length = 0
+    in_escape = False
+    for char in text:
+        if char == "\033":
+            in_escape = True
             continue
-        result.append(text[index])
-        index += 1
-    return "".join(result)
+        if in_escape:
+            if char == "m":
+                in_escape = False
+            continue
+        length += 1
+    return length
 
 
-def _active_indices(rows: list[str]) -> list[int]:
-    return [
-        index
-        for index, row in enumerate(rows)
-        if STATUS_ICON["active"] in _strip_ansi(row)
+def _pad(text: str, width: int) -> str:
+    return text + " " * max(0, width - _plain_len(text))
+
+
+def _render_side_by_side(streams: dict[str, list[RenderLine]], *, terminal_width: int) -> list[str]:
+    gap = "  "
+    column_width = max(44, (terminal_width - len(gap)) // 2)
+
+    left_title = _color("ROADMAP", ACCENT + BOLD)
+    right_title = _color("MILESTONE", ACCENT + BOLD)
+    lines = [
+        _pad(left_title, column_width) + gap + right_title,
+        "─" * min(column_width, 48) + gap + "─" * min(column_width, 48),
     ]
 
+    left = streams.get("roadmap", [])
+    right = streams.get("milestone", [])
+    rows = max(len(left), len(right))
 
-def _active_center(rows: list[str]) -> float | None:
-    indices = _active_indices(rows)
-    if not indices:
-        return None
-    return (indices[0] + indices[-1]) / 2
+    for index in range(rows):
+        left_text = _format_line(left[index], width=column_width) if index < len(left) else ""
+        right_text = _format_line(right[index], width=column_width) if index < len(right) else ""
+        lines.append(_pad(left_text, column_width) + gap + right_text)
 
-
-def _pad_before_active(rows: list[str], count: int) -> list[str]:
-    if count <= 0:
-        return rows
-
-    indices = _active_indices(rows)
-    if not indices:
-        return rows
-
-    insert_at = indices[0]
-    return rows[:insert_at] + [""] * count + rows[insert_at:]
+    return lines
 
 
-def _align_active_midpoints(left: list[str], right: list[str]) -> tuple[list[str], list[str]]:
-    left_center = _active_center(left)
-    right_center = _active_center(right)
+def _render_stacked(streams: dict[str, list[RenderLine]], *, terminal_width: int) -> list[str]:
+    lines: list[str] = []
+    width = max(60, terminal_width)
 
-    if left_center is None or right_center is None:
-        return left, right
+    for panel in PANELS:
+        stream = streams.get(panel, [])
+        if not stream:
+            continue
+        if lines:
+            lines.append("")
+        lines.append(_color(panel.upper(), ACCENT + BOLD))
+        lines.append("─" * min(width, 96))
+        lines.extend(_format_line(line, width=width) for line in stream)
 
-    delta = int(round(abs(left_center - right_center)))
-    if delta <= 0:
-        return left, right
-
-    if left_center < right_center:
-        return _pad_before_active(left, delta), right
-
-    return left, _pad_before_active(right, delta)
-
-
-def render_side_by_side(left: list[str], right: list[str], *, width: int) -> str:
-    left, right = _align_active_midpoints(left, right)
-
-    gap = "    "
-    rows: list[str] = []
-    max_rows = max(len(left), len(right))
-    for index in range(max_rows):
-        left_value = left[index] if index < len(left) else ""
-        right_value = right[index] if index < len(right) else ""
-        rows.append(f"{_pad_plain(left_value, width)}{gap}{right_value}".rstrip())
-    return "\n".join(rows)
+    return lines
 
 
-def render_stacked(left: list[str], right: list[str]) -> str:
-    return "\n".join(left + [""] + right)
-
-
-def render_progress(records: list[MetaRecord], *, repo_root: Path) -> str:
+def render_progress_context(script_path: Path, repo_root: Path) -> str:
+    records = _parse_metadata(script_path)
     ranges, display = _records_to_progress(records, repo_root=repo_root)
-    if not ranges:
-        return ""
 
-    terminal_width = shutil.get_terminal_size((120, 20)).columns
-    column_width = max(44, min(72, (terminal_width - 6) // 2))
+    initial_streams = {
+        panel: _build_panel_stream(panel=panel, ranges=ranges, repo_root=repo_root, display=display)
+        for panel in PANELS
+    }
 
-    roadmap = _render_panel(
-        title="ROADMAP",
-        panel="roadmap",
-        ranges=ranges,
-        repo_root=repo_root,
-        context=display.context,
-        width=column_width,
-    )
-    milestone = _render_panel(
-        title="MILESTONE",
-        panel="milestone",
-        ranges=ranges,
-        repo_root=repo_root,
-        context=display.context,
-        width=column_width,
-    )
+    target_body_lines = max((_body_line_count(stream) for stream in initial_streams.values()), default=0)
+    streams = {
+        panel: _build_panel_stream(
+            panel=panel,
+            ranges=ranges,
+            repo_root=repo_root,
+            display=display,
+            target_body_lines=target_body_lines,
+        )
+        for panel in PANELS
+    }
 
-    if display.layout == "stacked" or terminal_width < 100:
-        return render_stacked(roadmap, milestone)
+    terminal_width = shutil.get_terminal_size((140, 24)).columns
+    lines = [_color("c · Progress Context", ACCENT + BOLD)]
 
-    return render_side_by_side(roadmap, milestone, width=column_width)
+    if display.layout == "stacked":
+        lines.extend(_render_stacked(streams, terminal_width=terminal_width))
+    else:
+        lines.extend(_render_side_by_side(streams, terminal_width=terminal_width))
+
+    return "\n".join(lines)
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Render repodossier progress context from patch metadata.")
+    parser = argparse.ArgumentParser(description="Render RepoDossier patch progress metadata.")
     parser.add_argument("--script", required=True, type=Path)
-    parser.add_argument("--repo", default=Path.cwd(), type=Path)
+    parser.add_argument("--repo", required=True, type=Path)
     args = parser.parse_args(argv)
 
-    script_path = args.script.expanduser().resolve()
-    repo_root = args.repo.expanduser().resolve()
-
-    records, parse_errors = parse_metadata_lines(script_path)
-    errors = parse_errors + validate_records(
-        records,
-        script_path=script_path,
-        repo_root=repo_root,
-        require_metadata=True,
-    )
-
-    if errors:
-        print("Cannot render progress context because metadata is invalid:")
-        for error in errors:
-            print(f"  - {error}")
+    try:
+        print(render_progress_context(args.script, args.repo))
+    except Exception as exc:
+        print(f"Progress context unavailable: {exc}")
         return 10
-
-    rendered = render_progress(records, repo_root=repo_root)
-    if rendered:
-        print(_accent("c · Progress Context"))
-        print(rendered)
-
     return 0
 
 
