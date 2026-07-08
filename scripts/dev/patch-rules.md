@@ -859,3 +859,30 @@ Regeln:
    - `changes` = `changed`
 4. `--dry-run` zeigt die geplanten Befehle, führt aber keine Exporte aus.
 5. Unbekannte Modi brechen mit Exit-Code 2 ab.
+
+
+### Patch workflow rules schema
+
+Die menschlich lesbaren Regeln in dieser Datei werden zusätzlich durch eine normalisierte maschinenlesbare Regeldatei gespiegelt:
+
+    scripts/dev/patch-workflow-rules.json
+
+Die zugehörige Schema-Beschreibung liegt hier:
+
+    scripts/dev/patch-workflow-rules.schema.json
+
+Validierung:
+
+    python3 scripts/dev/validate_patch_workflow_rules.py
+
+Ziel:
+
+1. wichtige Patch-Regeln haben stabile IDs,
+2. Kategorien und Schweregrade sind normalisiert,
+3. Tests können Regeln prüfen, ohne Markdown-Struktur zu parsen,
+4. künftige Runner- und Linter-Erweiterungen können dieselbe Regelbasis verwenden.
+
+Neue Workflow-Regeln sollen bevorzugt in beiden Formen gepflegt werden:
+
+1. lesbar in `scripts/dev/patch-rules.md`,
+2. strukturiert in `scripts/dev/patch-workflow-rules.json`.

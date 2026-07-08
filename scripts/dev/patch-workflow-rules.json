@@ -1,0 +1,218 @@
+{
+  "version": 1,
+  "categories": [
+    "artifact-handoff",
+    "metadata",
+    "safety",
+    "tests",
+    "git",
+    "progress",
+    "runner",
+    "documentation"
+  ],
+  "severities": [
+    "must",
+    "should",
+    "may"
+  ],
+  "rules": [
+    {
+      "id": "ART-001",
+      "category": "artifact-handoff",
+      "severity": "must",
+      "title": "Provide downloadable patch scripts",
+      "description": "Generated repository patch work is delivered as a downloadable shell script artifact.",
+      "rationale": "The user runs patches through the local download runner and needs a stable file artifact.",
+      "applies_to": [
+        "patch-script"
+      ],
+      "checks": [
+        "artifact path is under /mnt/data",
+        "final answer links the generated artifact",
+        "script is executable"
+      ]
+    },
+    {
+      "id": "META-001",
+      "category": "metadata",
+      "severity": "must",
+      "title": "Patch scripts include repodossier metadata",
+      "description": "Every patch script starts with a patch metadata record and progress records.",
+      "rationale": "The c runner validates metadata before executing a patch.",
+      "applies_to": [
+        "patch-script",
+        "c-runner"
+      ],
+      "checks": [
+        "patch record has id, title and commit",
+        "roadmap progress record exists",
+        "milestone progress record exists"
+      ]
+    },
+    {
+      "id": "META-002",
+      "category": "metadata",
+      "severity": "should",
+      "title": "Use anchors for future progress metadata",
+      "description": "Progress metadata can reference stable anchors instead of fragile line numbers.",
+      "rationale": "Anchors survive ordinary roadmap and milestone edits better than raw line ranges.",
+      "applies_to": [
+        "patch-script",
+        "progress-renderer"
+      ],
+      "checks": [
+        "anchor occurs in the referenced file",
+        "start and end remain accepted for compatibility",
+        "start and end are provided together when used"
+      ]
+    },
+    {
+      "id": "SAFE-001",
+      "category": "safety",
+      "severity": "must",
+      "title": "Avoid deprecated bundle workflow",
+      "description": "Patch scripts do not call the old bundle_project workflow.",
+      "rationale": "RepoDossier exports now replace the old bundle workflow.",
+      "applies_to": [
+        "patch-script",
+        "docs"
+      ],
+      "checks": [
+        "no bundle_project.sh command is executed",
+        "documentation points to repodossier exports instead"
+      ]
+    },
+    {
+      "id": "SAFE-002",
+      "category": "safety",
+      "severity": "must",
+      "title": "Do not install global logging or clipboard hooks",
+      "description": "Patch scripts do not use global tee redirection or clipboard tools.",
+      "rationale": "The c runner owns logging and terminal failure handling.",
+      "applies_to": [
+        "patch-script"
+      ],
+      "checks": [
+        "no global exec tee redirection",
+        "no xclip command",
+        "no xsel command",
+        "no wl-copy command"
+      ]
+    },
+    {
+      "id": "SAFE-003",
+      "category": "safety",
+      "severity": "must",
+      "title": "Avoid pager-based git output",
+      "description": "Patch scripts use no-pager git output for diffs and logs.",
+      "rationale": "Pager output can block copy-pasted terminal runs.",
+      "applies_to": [
+        "patch-script"
+      ],
+      "checks": [
+        "git diff/log/show uses --no-pager or GIT_PAGER=cat",
+        "git diff --quiet remains allowed"
+      ]
+    },
+    {
+      "id": "TEST-001",
+      "category": "tests",
+      "severity": "must",
+      "title": "Run focused tests before commit",
+      "description": "Patch scripts run relevant pytest or syntax checks before committing.",
+      "rationale": "Commits should only be created for green focused validation.",
+      "applies_to": [
+        "patch-script"
+      ],
+      "checks": [
+        "syntax checks run for changed scripts",
+        "focused tests run for changed behavior",
+        "commit is skipped or aborted when tests fail"
+      ]
+    },
+    {
+      "id": "GIT-001",
+      "category": "git",
+      "severity": "must",
+      "title": "Commit only staged successful changes",
+      "description": "Patch scripts stage intended files and commit only when staged changes exist.",
+      "rationale": "No empty commits and no accidental unrelated changes.",
+      "applies_to": [
+        "patch-script"
+      ],
+      "checks": [
+        "git add names explicit changed paths",
+        "git diff --cached --quiet is checked",
+        "commit message matches the requested commit target"
+      ]
+    },
+    {
+      "id": "PROG-001",
+      "category": "progress",
+      "severity": "should",
+      "title": "Print a color-coded progress footer",
+      "description": "Patch scripts end with a green, purple and yellow progress summary.",
+      "rationale": "The user can see completed, current and next work at a glance.",
+      "applies_to": [
+        "patch-script"
+      ],
+      "checks": [
+        "footer contains completed work",
+        "footer contains current work",
+        "footer contains next work where applicable",
+        "red is reserved for actual problems"
+      ]
+    },
+    {
+      "id": "RUN-001",
+      "category": "runner",
+      "severity": "must",
+      "title": "c dry-run does not mutate scripts",
+      "description": "The c dry-run path validates but does not execute or move the patch script.",
+      "rationale": "Dry-run is a safety check and must not change download state.",
+      "applies_to": [
+        "c-runner"
+      ],
+      "checks": [
+        "dry-run does not execute patch body",
+        "dry-run does not move to done",
+        "dry-run does not move to failed",
+        "dry-run prints DRY-RUN OK when successful"
+      ]
+    },
+    {
+      "id": "RUN-002",
+      "category": "runner",
+      "severity": "must",
+      "title": "c does not leak internal runner environment",
+      "description": "Patch scripts do not inherit internal C_RUNNER variables.",
+      "rationale": "Tests run nested c subprocesses and must not behave like wait children.",
+      "applies_to": [
+        "c-runner",
+        "patch-script"
+      ],
+      "checks": [
+        "C_RUNNER_WAIT_CHILD is unset",
+        "C_RUNNER_WATCH_CHILD is unset",
+        "C_RUNNER_SELF_COPY is unset",
+        "C_RUNNER_ORIGINAL is unset",
+        "C_RUNNER_TEMP_COPY is unset"
+      ]
+    },
+    {
+      "id": "DOC-001",
+      "category": "documentation",
+      "severity": "should",
+      "title": "Document workflow changes in patch rules",
+      "description": "New patch-runner behavior is recorded in the human-readable rules document.",
+      "rationale": "The rules file remains the operator-facing source of truth.",
+      "applies_to": [
+        "docs"
+      ],
+      "checks": [
+        "patch-rules.md mentions new runner behavior",
+        "machine-readable rules are referenced from patch-rules.md"
+      ]
+    }
+  ]
+}
