@@ -886,3 +886,21 @@ Neue Workflow-Regeln sollen bevorzugt in beiden Formen gepflegt werden:
 
 1. lesbar in `scripts/dev/patch-rules.md`,
 2. strukturiert in `scripts/dev/patch-workflow-rules.json`.
+
+
+### Dev environment doctor
+
+Für neue Rechner oder frisch kopierte Arbeitsbäume gibt es einen schnellen lokalen Check:
+
+    python3 scripts/dev/check_dev_environment.py
+
+Der Check prüft unter anderem:
+
+1. Git-Repository und Repo-Root,
+2. Git-Identität (`user.name`, `user.email`),
+3. Python und pytest,
+4. `repodossier` CLI und `pipx`,
+5. wichtige Dev-Runner wie `c` und `r`,
+6. maschinenlesbare Workflow-Regeln und Validator.
+
+Mit `--strict` schlägt der Check auch dann fehl, wenn optionale Komfortwerkzeuge wie `pipx` oder die global verfügbare `repodossier` CLI fehlen.
