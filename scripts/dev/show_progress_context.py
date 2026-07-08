@@ -48,6 +48,7 @@ class ProgressRange:
     file: str
     start: int
     end: int
+    follow_after: bool = False
 
 
 @dataclass(frozen=True)
@@ -65,6 +66,7 @@ class RenderLine:
     status: str | None = None
     dim: bool = False
     header: bool = False
+    padding: bool = False
 
 
 def _use_color() -> bool:
@@ -159,8 +161,10 @@ def _records_to_progress(records: list[MetaRecord], *, repo_root: Path) -> tuple
             if "start" in data and "end" in data:
                 start = int(data["start"])
                 end = int(data["end"])
+                follow_after = True
             else:
                 start, end = _resolve_anchor_range(repo_root / file_name, str(data["anchor"]))
+                follow_after = False
 
             ranges.append(
                 ProgressRange(
@@ -169,6 +173,7 @@ def _records_to_progress(records: list[MetaRecord], *, repo_root: Path) -> tuple
                     file=file_name,
                     start=start,
                     end=end,
+                    follow_after=follow_after,
                 )
             )
         elif data_type == "display":
@@ -206,34 +211,84 @@ def _selected_line_numbers(ranges: list[ProgressRange], *, total_lines: int, con
     return sorted(selected)
 
 
-def _append_fill_lines(
-    selected: list[int],
+def _active_center_in_numbers(numbers: list[int], ranges: list[ProgressRange]) -> int | None:
+    positions = [
+        index
+        for index, number in enumerate(numbers)
+        if _line_status(number, ranges) == "active"
+    ]
+    if not positions:
+        return None
+    return (positions[0] + positions[-1]) // 2
+
+
+def _prepend_available_context(numbers: list[int], *, total_lines: int, wanted_center: int, ranges: list[ProgressRange]) -> tuple[list[int], int]:
+    if not numbers:
+        return numbers, wanted_center
+
+    result = list(numbers)
+    blank_padding = 0
+
+    while True:
+        center = _active_center_in_numbers(result, ranges)
+        if center is None or center >= wanted_center:
+            return result, blank_padding
+
+        first = result[0]
+        if first > 1:
+            result.insert(0, first - 1)
+            continue
+
+        blank_padding += 1
+        result.insert(0, 0)
+
+
+def _ensure_following_context_after_active(
+    numbers: list[int],
     *,
+    ranges: list[ProgressRange],
     total_lines: int,
-    target_count: int,
+    following_lines: int = 1,
 ) -> list[int]:
-    if len(selected) >= target_count:
-        return selected
+    active_ranges = [progress for progress in ranges if progress.status == "active" and progress.follow_after]
+    if not active_ranges:
+        return numbers
 
-    result = list(selected)
-    seen = set(result)
+    result = list(numbers)
+    seen = {number for number in result if number > 0}
 
-    next_line = result[-1] + 1 if result else 1
-    while len(result) < target_count and next_line <= total_lines:
-        if next_line not in seen:
-            result.append(next_line)
-            seen.add(next_line)
-        next_line += 1
+    for progress in active_ranges:
+        added = 0
+        candidate = progress.end + 1
+        while candidate <= total_lines and added < following_lines:
+            if candidate not in seen:
+                result.append(candidate)
+                seen.add(candidate)
+                added += 1
+            candidate += 1
 
-    previous_line = result[0] - 1 if result else total_lines
-    prepend: list[int] = []
-    while len(result) + len(prepend) < target_count and previous_line >= 1:
-        if previous_line not in seen:
-            prepend.append(previous_line)
-            seen.add(previous_line)
-        previous_line -= 1
+    return result
 
-    return sorted(prepend) + result
+
+def _append_available_context(numbers: list[int], *, total_lines: int, target_count: int) -> list[int]:
+    result = list(numbers)
+    seen = {number for number in result if number > 0}
+
+    candidate = max(seen) + 1 if seen else 1
+    while len([number for number in result if number > 0]) < target_count and candidate <= total_lines:
+        if candidate not in seen:
+            result.append(candidate)
+            seen.add(candidate)
+        candidate += 1
+
+    return result
+
+
+def _append_bottom_padding(stream: list[RenderLine], *, target_rows: int) -> list[RenderLine]:
+    result = list(stream)
+    while len(result) < target_rows:
+        result.append(RenderLine(file="", number=None, text="", dim=True, padding=True))
+    return result
 
 
 def _panel_files(progress_ranges: list[ProgressRange]) -> list[str]:
@@ -253,6 +308,7 @@ def _build_panel_stream(
     repo_root: Path,
     display: DisplayOptions,
     target_body_lines: int | None = None,
+    target_active_center: int | None = None,
 ) -> list[RenderLine]:
     panel_ranges = [progress for progress in ranges if progress.panel == panel]
     if not panel_ranges:
@@ -264,14 +320,43 @@ def _build_panel_stream(
         lines = file_path.read_text(encoding="utf-8").splitlines()
         file_ranges = [progress for progress in panel_ranges if progress.file == file_name]
         line_numbers = _selected_line_numbers(file_ranges, total_lines=len(lines), context=display.context)
+
+        if target_active_center is not None:
+            line_numbers, blank_padding = _prepend_available_context(
+                line_numbers,
+                total_lines=len(lines),
+                wanted_center=target_active_center,
+                ranges=file_ranges,
+            )
+        else:
+            blank_padding = 0
+
         if target_body_lines is not None:
-            line_numbers = _append_fill_lines(line_numbers, total_lines=len(lines), target_count=target_body_lines)
+            non_padding_count = len([number for number in line_numbers if number > 0])
+            if non_padding_count < target_body_lines:
+                line_numbers = _append_available_context(
+                    line_numbers,
+                    total_lines=len(lines),
+                    target_count=target_body_lines,
+                )
+
+        line_numbers = _ensure_following_context_after_active(
+            line_numbers,
+            ranges=file_ranges,
+            total_lines=len(lines),
+        )
 
         if stream:
             stream.append(RenderLine(file="", number=None, text="", dim=True))
+
+        for _ in range(blank_padding):
+            stream.append(RenderLine(file=file_name, number=None, text="", dim=True, padding=True))
+
         stream.append(RenderLine(file=file_name, number=None, text=f"📄 {file_name}", header=True))
 
         for number in line_numbers:
+            if number <= 0:
+                continue
             text = lines[number - 1] if 1 <= number <= len(lines) else ""
             status = _line_status(number, file_ranges)
             stream.append(
@@ -291,7 +376,21 @@ def _body_line_count(stream: list[RenderLine]) -> int:
     return sum(1 for line in stream if line.number is not None)
 
 
+def _active_center_in_stream(stream: list[RenderLine]) -> int | None:
+    positions = [
+        index
+        for index, line in enumerate(stream)
+        if line.number is not None and line.status == "active"
+    ]
+    if not positions:
+        return None
+    return (positions[0] + positions[-1]) // 2
+
+
 def _format_line(line: RenderLine, *, width: int) -> str:
+    if line.padding:
+        return ""
+
     if line.number is None:
         if line.header:
             text = _color(line.text, BOLD)
@@ -371,16 +470,26 @@ def _render_stacked(streams: dict[str, list[RenderLine]], *, terminal_width: int
     return lines
 
 
-def render_progress_context(script_path: Path, repo_root: Path) -> str:
-    records = _parse_metadata(script_path)
-    ranges, display = _records_to_progress(records, repo_root=repo_root)
-
+def _aligned_streams(
+    *,
+    ranges: list[ProgressRange],
+    repo_root: Path,
+    display: DisplayOptions,
+) -> dict[str, list[RenderLine]]:
     initial_streams = {
         panel: _build_panel_stream(panel=panel, ranges=ranges, repo_root=repo_root, display=display)
         for panel in PANELS
     }
 
     target_body_lines = max((_body_line_count(stream) for stream in initial_streams.values()), default=0)
+    initial_centers = [
+        center
+        for stream in initial_streams.values()
+        for center in [_active_center_in_stream(stream)]
+        if center is not None
+    ]
+    target_active_center = max(initial_centers) if initial_centers else None
+
     streams = {
         panel: _build_panel_stream(
             panel=panel,
@@ -388,9 +497,40 @@ def render_progress_context(script_path: Path, repo_root: Path) -> str:
             repo_root=repo_root,
             display=display,
             target_body_lines=target_body_lines,
+            target_active_center=target_active_center,
         )
         for panel in PANELS
     }
+
+    final_centers = [
+        center
+        for stream in streams.values()
+        for center in [_active_center_in_stream(stream)]
+        if center is not None
+    ]
+    if final_centers:
+        final_target = max(final_centers)
+        for panel, stream in list(streams.items()):
+            center = _active_center_in_stream(stream)
+            if center is None or center >= final_target:
+                continue
+            padding = [
+                RenderLine(file="", number=None, text="", dim=True, padding=True)
+                for _ in range(final_target - center)
+            ]
+            streams[panel] = padding + stream
+
+    target_rows = max((len(stream) for stream in streams.values()), default=0)
+    return {
+        panel: _append_bottom_padding(stream, target_rows=target_rows)
+        for panel, stream in streams.items()
+    }
+
+
+def render_progress_context(script_path: Path, repo_root: Path) -> str:
+    records = _parse_metadata(script_path)
+    ranges, display = _records_to_progress(records, repo_root=repo_root)
+    streams = _aligned_streams(ranges=ranges, repo_root=repo_root, display=display)
 
     terminal_width = shutil.get_terminal_size((140, 24)).columns
     lines = [_color("c · Progress Context", ACCENT + BOLD)]

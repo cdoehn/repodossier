@@ -935,3 +935,39 @@ Bei überlappenden Bereichen gilt eine explizite Priorität:
 3. `partial` schlägt `done`.
 
 Die Marker bleiben festbreit formatiert, damit bestehende Log- und Testauswertung stabil bleibt.
+
+
+### Progress context active center alignment
+
+Der Progress-Renderer richtet Roadmap- und Milestone-Spalte am aktiven Bereich aus.
+
+Regeln:
+
+1. Wenn beide Spalten `active`-Bereiche enthalten, wird die Mitte der aktiven Bereiche auf dieselbe Ausgabehöhe gebracht.
+2. Oberhalb des aktiven Bereichs wird zuerst mit vorhandenem Text aus derselben Datei aufgefüllt.
+3. Wenn der Dateianfang erreicht ist, darf oberhalb Leerraum entstehen.
+4. Unterhalb wird mit weiterem verfügbarem Kontext aufgefüllt, solange Dateiinhalt vorhanden ist.
+5. Statusmarker und Prioritäten bleiben kompatibel: `✓`, `■`, `~`, `!`.
+
+
+### Progress context below-active fill
+
+Nach der vertikalen Ausrichtung der `active`-Bereiche füllt der Progress-Renderer unterhalb jedes aktiven Bereichs weiter auf, sofern in der Datei noch Text vorhanden ist.
+
+Regeln:
+
+1. Mindestens eine folgende Kontextzeile nach `active` wird ergänzt, wenn die Datei sie enthält.
+2. Die Active-Mitte bleibt zwischen Roadmap und Milestone ausgerichtet.
+3. Wenn kein Text mehr folgt, darf unterhalb Leerraum entstehen.
+
+
+### Progress context anchor-safe fill
+
+`active`-Ausrichtung und Kontextauffüllung unterscheiden zwischen expliziten Zeilenbereichen und Anchor-Bereichen.
+
+Regeln:
+
+1. `start`/`end`-basierte `active`-Bereiche dürfen unterhalb um verfügbare Kontextzeilen ergänzt werden.
+2. Anchor-basierte Bereiche bleiben auf ihre aufgelöste Range begrenzt.
+3. Heading-Anchor dürfen nicht in den nächsten Markdown-Abschnitt hineinlaufen.
+4. Plain-Text-Anchor dürfen bei `context: 0` nicht automatisch die Folgezeile einschließen.
