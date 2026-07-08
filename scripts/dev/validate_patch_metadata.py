@@ -11,7 +11,7 @@ from typing import Any
 PREFIX = "# repodossier-meta:"
 ALLOWED_TYPES = {"patch", "progress", "display"}
 ALLOWED_PATCH_FIELDS = {"type", "id", "title", "commit", "fix_for", "requires_direct_bash"}
-ALLOWED_PROGRESS_FIELDS = {"type", "panel", "status", "file", "start", "end", "label"}
+ALLOWED_PROGRESS_FIELDS = {"type", "panel", "status", "file", "start", "end", "anchor", "label"}
 ALLOWED_DISPLAY_FIELDS = {"type", "context", "layout", "frame"}
 ALLOWED_PANELS = {"roadmap", "milestone"}
 ALLOWED_STATUSES = {"done", "active", "partial", "todo"}
@@ -170,14 +170,29 @@ def validate_records(
             _require_string(record, errors, "panel")
             _require_string(record, errors, "status")
             _require_string(record, errors, "file")
-            _require_int(record, errors, "start")
-            _require_int(record, errors, "end")
+
+            has_start = "start" in record.data
+            has_end = "end" in record.data
+            has_anchor = "anchor" in record.data
+
+            if has_start != has_end:
+                errors.append(_error(record.line_number, '"start" and "end" must be provided together'))
+            if not has_anchor and not (has_start and has_end):
+                errors.append(_error(record.line_number, 'progress metadata must provide either "start"/"end" or "anchor"'))
+
+            if has_start:
+                _require_int(record, errors, "start")
+            if has_end:
+                _require_int(record, errors, "end")
+            if has_anchor:
+                _require_string(record, errors, "anchor")
 
             panel = record.data.get("panel")
             status = record.data.get("status")
             rel_file = record.data.get("file")
             start = record.data.get("start")
             end = record.data.get("end")
+            anchor = record.data.get("anchor")
 
             if isinstance(panel, str) and panel not in ALLOWED_PANELS:
                 errors.append(_error(record.line_number, f'panel must be one of {sorted(ALLOWED_PANELS)}'))
@@ -186,7 +201,7 @@ def validate_records(
                 errors.append(_error(record.line_number, f'status must be one of {sorted(ALLOWED_STATUSES)}'))
 
             if isinstance(rel_file, str):
-                if Path(rel_file).is_absolute() or ".." in Path(rel_file).parts:
+                if Path(rel_file).is_absolute() or "." in Path(rel_file).parts:
                     errors.append(_error(record.line_number, 'file must be a safe repo-relative path'))
                 else:
                     full_path = repo_root / rel_file
@@ -194,18 +209,24 @@ def validate_records(
                         errors.append(_error(record.line_number, f'file does not exist: {rel_file}'))
                     elif full_path.is_dir():
                         errors.append(_error(record.line_number, f'file is a directory: {rel_file}'))
-                    elif isinstance(start, int) and isinstance(end, int) and start >= 1 and end >= 1:
-                        if start > end:
-                            errors.append(_error(record.line_number, "start must be <= end"))
-                        else:
-                            count = _line_count(full_path)
-                            if end > count:
-                                errors.append(
-                                    _error(
-                                        record.line_number,
-                                        f'end line {end} exceeds file length {count}: {rel_file}',
+                    else:
+                        if isinstance(start, int) and isinstance(end, int) and start >= 1 and end >= 1:
+                            if start > end:
+                                errors.append(_error(record.line_number, "start must be <= end"))
+                            else:
+                                count = _line_count(full_path)
+                                if end > count:
+                                    errors.append(
+                                        _error(
+                                            record.line_number,
+                                            f'end line {end} exceeds file length {count}: {rel_file}',
+                                        )
                                     )
-                                )
+
+                        if isinstance(anchor, str) and anchor.strip():
+                            file_text = full_path.read_text(encoding="utf-8")
+                            if anchor not in file_text:
+                                errors.append(_error(record.line_number, f'anchor not found in file: {anchor!r}'))
 
             if "label" in record.data:
                 _require_string(record, errors, "label")

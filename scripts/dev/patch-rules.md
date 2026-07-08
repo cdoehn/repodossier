@@ -814,3 +814,23 @@ Grund:
 4. Die temporäre Selbstkopie entkoppelt den laufenden Prozess von Änderungen an der Quell-Datei.
 
 Interne Variablen wie `C_RUNNER_SELF_COPY`, `C_RUNNER_ORIGINAL`, `C_RUNNER_TEMP_COPY`, `C_RUNNER_WAIT_CHILD` und `C_RUNNER_WATCH_CHILD` dürfen nicht in Patchscripts weitergereicht werden.
+
+
+### Progress-Metadaten: anchor statt Zeilennummern
+
+Progress-Einträge dürfen weiterhin konkrete Zeilenbereiche verwenden:
+
+    # repodossier-meta: {"type":"progress","panel":"roadmap","status":"active","file":"planning/roadmap_next.md","start":10,"end":20}
+
+Alternativ darf ein stabiler Anchor verwendet werden:
+
+    # repodossier-meta: {"type":"progress","panel":"roadmap","status":"active","file":"planning/roadmap_next.md","anchor":"## Full Markdown Export"}
+
+Regeln:
+
+1. Ein Progress-Eintrag braucht entweder `start` und `end` zusammen oder `anchor`.
+2. `anchor` muss ein nichtleerer String sein.
+3. Der Anchor muss im referenzierten Repo-Dateiinhalt vorkommen.
+4. Wenn der Anchor auf eine Markdown-Überschrift zeigt, rendert der Progress-Renderer den Abschnitt bis zur nächsten Überschrift gleicher oder höherer Ebene.
+5. Wenn der Anchor auf normalen Text zeigt, rendert der Progress-Renderer nur diese Zeile plus den konfigurierten Kontext.
+6. Explizite `start`/`end`-Bereiche bleiben vollständig kompatibel.

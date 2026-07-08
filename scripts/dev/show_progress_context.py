@@ -69,20 +69,79 @@ def _accent(text: str) -> str:
     return f"{ACCENT}{BOLD}{text}{RESET}"
 
 
-def _records_to_progress(records: list[MetaRecord]) -> tuple[list[ProgressRange], DisplayOptions]:
+def _markdown_heading_level(line: str) -> int | None:
+    stripped = line.lstrip()
+    if not stripped.startswith("#"):
+        return None
+
+    level = 0
+    for char in stripped:
+        if char == "#":
+            level += 1
+            continue
+        break
+
+    if level == 0 or level > 6:
+        return None
+    if len(stripped) > level and stripped[level] not in {" ", "\t"}:
+        return None
+    return level
+
+
+def _find_anchor_line(lines: list[str], anchor: str) -> int:
+    normalized = anchor.strip()
+
+    for index, line in enumerate(lines, start=1):
+        if line.strip() == normalized:
+            return index
+
+    for index, line in enumerate(lines, start=1):
+        if normalized and normalized in line:
+            return index
+
+    raise ValueError(f"anchor not found: {anchor!r}")
+
+
+def _resolve_anchor_range(file_path: Path, anchor: str) -> tuple[int, int]:
+    lines = file_path.read_text(encoding="utf-8").splitlines()
+    start = _find_anchor_line(lines, anchor)
+    heading_level = _markdown_heading_level(lines[start - 1])
+
+    if heading_level is None:
+        return start, start
+
+    end = len(lines)
+    for index in range(start + 1, len(lines) + 1):
+        candidate_level = _markdown_heading_level(lines[index - 1])
+        if candidate_level is not None and candidate_level <= heading_level:
+            end = index - 1
+            break
+
+    return start, max(start, min(end, start + 80))
+
+
+
+def _records_to_progress(records: list[MetaRecord], *, repo_root: Path) -> tuple[list[ProgressRange], DisplayOptions]:
     ranges: list[ProgressRange] = []
     display = DisplayOptions()
 
     for record in records:
         data = record.data
         if data.get("type") == "progress":
+            file_name = str(data["file"])
+            if "start" in data and "end" in data:
+                start = int(data["start"])
+                end = int(data["end"])
+            else:
+                start, end = _resolve_anchor_range(repo_root / file_name, str(data["anchor"]))
+
             ranges.append(
                 ProgressRange(
                     panel=str(data["panel"]),
                     status=str(data["status"]),
-                    file=str(data["file"]),
-                    start=int(data["start"]),
-                    end=int(data["end"]),
+                    file=file_name,
+                    start=start,
+                    end=end,
                 )
             )
         elif data.get("type") == "display":
@@ -250,7 +309,7 @@ def render_stacked(left: list[str], right: list[str]) -> str:
 
 
 def render_progress(records: list[MetaRecord], *, repo_root: Path) -> str:
-    ranges, display = _records_to_progress(records)
+    ranges, display = _records_to_progress(records, repo_root=repo_root)
     if not ranges:
         return ""
 
