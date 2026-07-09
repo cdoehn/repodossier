@@ -32,6 +32,17 @@ wait_seen="$download_dir/.repodossier-c-wait.seen"
 max_age_seconds="${C_RUNNER_MAX_AGE_SECONDS:-3600}"
 wait_sleep_seconds="${C_RUNNER_WAIT_SLEEP_SECONDS:-2}"
 wait_fresh_seconds="${C_RUNNER_WAIT_FRESH_SECONDS:-30}"
+zip_extract_dir=""
+
+cleanup_c_runner() {
+  if [ -n "${C_RUNNER_TEMP_COPY:-}" ]; then
+    rm -f "$C_RUNNER_TEMP_COPY" 2>/dev/null || true
+  fi
+  if [ -n "${zip_extract_dir:-}" ]; then
+    rm -rf "$zip_extract_dir" 2>/dev/null || true
+  fi
+}
+trap cleanup_c_runner EXIT
 
 runner_source="${C_RUNNER_ORIGINAL:-${BASH_SOURCE[0]}}"
 if [ -n "${C_RUNNER_TEMP_COPY:-}" ] && [ -x "${REPODOSSIER_REPO:-$(pwd)}/scripts/dev/run_latest_download_patch.sh" ]; then
@@ -75,6 +86,7 @@ usage() {
 Usage:
   c
   c /path/to/patch.sh
+  c /path/to/patch.zip
   c --dry-run [path/to/patch.sh]
   c --wait
   c --help
@@ -87,17 +99,17 @@ Dry-run mode:
 Normal mode:
   c validates metadata, checks freshness and repetition, runs one patch script,
   moves it to done/failed, logs output, prints progress context near the end,
-  and prints a full-width green ERFOLG banner as the final line on success.
+  and prints a full-width ERFOLG or FEHLSCHLAG banner as the final line.
 
 Foreground wait mode:
   c --wait blocks in the current terminal, waits for the next fresh *.sh file
-  directly in ~/Downloads, runs it through normal c execution, and then waits
+  directly in the download directory, runs it through normal c execution, and then waits
   again. The output stays visible in the terminal. Stop with Ctrl+C.
 
 Wait mode safety:
   - foreground-only wait loop
   - no root execution
-  - only scripts directly in Downloads
+  - only *.sh or *.zip patch files directly in the download directory
   - only scripts modified within the last 30 seconds
   - valid repodossier-meta with roadmap and milestone progress
   - bash -n must pass
@@ -164,6 +176,29 @@ success_band() {
   printf '%b\n' "${C_OK}${C_BOLD}${line}${C_RESET}"
 }
 
+failure_band() {
+  local width
+  local token
+  local line
+
+  width="$(tput cols 2>/dev/null || true)"
+  case "$width" in
+    ''|*[!0-9]*) width=80 ;;
+  esac
+  if [ "$width" -lt 24 ]; then
+    width=24
+  fi
+
+  token="FEHLSCHLAG  "
+  line=""
+  while [ "${#line}" -lt "$width" ]; do
+    line="${line}${token}"
+  done
+  line="${line:0:$width}"
+
+  printf '%b\n' "${C_ERR}${C_BOLD}${line}${C_RESET}"
+}
+
 dry_run=0
 mkdir -p "$download_dir" "$done_dir" "$failed_dir"
 
@@ -180,7 +215,7 @@ candidates = [
     path
     for path in downloads.iterdir()
     if path.is_file()
-    and path.suffix == ".sh"
+    and path.suffix in {".sh", ".zip"}
     and not path.name.startswith(".")
 ]
 
@@ -189,6 +224,49 @@ if not candidates:
 
 latest = max(candidates, key=lambda path: (path.stat().st_mtime, path.name))
 print(latest)
+PY
+}
+
+extract_zip_patch_script() {
+  local archive_path="$1"
+
+  zip_extract_dir="$(mktemp -d "$download_dir/.repodossier-c-zip.XXXXXX")"
+  python3 - "$archive_path" "$zip_extract_dir" <<'PY'
+from pathlib import Path
+import os
+import stat
+import sys
+import zipfile
+
+archive = Path(sys.argv[1]).resolve()
+target = Path(sys.argv[2]).resolve()
+
+try:
+    with zipfile.ZipFile(archive) as zip_file:
+        members = []
+        for info in zip_file.infolist():
+            name = info.filename
+            path = Path(name)
+            if info.is_dir():
+                continue
+            if path.is_absolute() or ".." in path.parts:
+                raise SystemExit(f"unsafe zip entry: {name}")
+            if path.name.startswith(".") or path.parts[:1] == ("__MACOSX",):
+                continue
+            if path.suffix == ".sh":
+                members.append(info)
+
+        if len(members) != 1:
+            raise SystemExit(f"zip archive must contain exactly one .sh patch script, found {len(members)}")
+
+        member = members[0]
+        output = target / Path(member.filename).name
+        output.write_bytes(zip_file.read(member))
+        mode = output.stat().st_mode
+        output.chmod(mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+        print(output)
+except zipfile.BadZipFile as exc:
+    raise SystemExit(f"invalid zip archive: {archive}") from exc
 PY
 }
 
@@ -379,7 +457,7 @@ wait_mark_existing_scripts() {
   local script_hash
 
   touch "$wait_seen"
-  for script_path in "$download_dir"/*.sh; do
+  for script_path in "$download_dir"/*.sh "$download_dir"/*.zip; do
     [ -e "$script_path" ] || continue
     script_hash="$(hash_script "$script_path")"
     if ! wait_seen_key_exists "$script_hash" "$script_path"; then
@@ -393,11 +471,11 @@ wait_candidate() {
   local script_hash
   local age
 
-  for script_path in "$download_dir"/*.sh; do
+  for script_path in "$download_dir"/*.sh "$download_dir"/*.zip; do
     [ -e "$script_path" ] || continue
 
     case "$script_path" in
-      "$download_dir"/*.sh) ;;
+      "$download_dir"/*.sh|"$download_dir"/*.zip) ;;
       *) continue ;;
     esac
 
@@ -448,7 +526,7 @@ wait_loop() {
   section "Warte-Modus"
   info "c --wait läuft im Vordergrund. Ausgabe bleibt sichtbar."
   info "Beobachte: $(show_path "$download_dir")"
-  info "Starte nur neue, maximal $(format_age "$wait_fresh_seconds") alte *.sh-Dateien."
+  info "Starte nur neue, maximal $(format_age "$wait_fresh_seconds") alte *.sh- oder *.zip-Dateien."
   info "Stoppen mit: Ctrl+C"
 
   wait_mark_existing_scripts
@@ -512,14 +590,23 @@ if [ ! -f "$patch_script" ]; then
 fi
 
 case "$patch_script" in
-  "$download_dir"/*.sh|/*) ;;
+  "$download_dir"/*.sh|"$download_dir"/*.zip|/*) ;;
   *)
     patch_script="$(pwd)/$patch_script"
     ;;
 esac
 
-script_base="$(basename "$patch_script")"
-script_stem="${script_base%.sh}"
+source_artifact="$patch_script"
+source_artifact_is_zip=0
+case "$source_artifact" in
+  *.zip)
+    source_artifact_is_zip=1
+    patch_script="$(extract_zip_patch_script "$source_artifact")"
+    ;;
+esac
+
+script_base="$(basename "$source_artifact")"
+script_stem="${script_base%.*}"
 timestamp="$(date +%Y%m%d_%H%M%S)"
 run_log="$download_dir/${script_stem}_${timestamp}.log"
 
@@ -531,7 +618,12 @@ section "Start"
 info "Downloads: $(show_path "$download_dir")"
 info "Done-Ordner: $(show_path "$done_dir")"
 info "Failed-Ordner: $(show_path "$failed_dir")"
-info "Patchscript: $(show_path "$patch_script")"
+if [ "$source_artifact_is_zip" -eq 1 ]; then
+  info "Patcharchive: $(show_path "$source_artifact")"
+  info "Patchscript: $(show_path "$patch_script")"
+else
+  info "Patchscript: $(show_path "$patch_script")"
+fi
 info "Logfile: $(show_path "$run_log")"
 info "Startzeit: $(date --iso-8601=seconds)"
 
@@ -585,7 +677,7 @@ if [ -x "$progress_renderer" ]; then
   fi
 fi
 
-script_hash="$(hash_script "$patch_script")"
+script_hash="$(hash_script "$source_artifact")"
 applied_match=""
 if applied_match="$(find_applied_match "$script_hash")"; then
   if [ "${C_RUNNER_WAIT_CHILD:-0}" = "1" ]; then
@@ -596,7 +688,7 @@ if applied_match="$(find_applied_match "$script_hash")"; then
     exit 3
   fi
 
-  if ! confirm_already_applied_script "$patch_script" "$script_hash" "$applied_match"; then
+  if ! confirm_already_applied_script "$source_artifact" "$script_hash" "$applied_match"; then
     info "Logfile bleibt erhalten: $(show_path "$run_log")"
     rm -f "${progress_context_output:-}" 2>/dev/null || true
     exit 3
@@ -606,7 +698,7 @@ else
   success "Dieses Patchscript wurde noch nicht als erfolgreich angewendet erkannt."
 fi
 
-age_seconds="$(script_age_seconds "$patch_script")"
+age_seconds="$(script_age_seconds "$source_artifact")"
 if [ "$age_seconds" -gt "$max_age_seconds" ]; then
   if [ "${C_RUNNER_WAIT_CHILD:-0}" = "1" ]; then
     section "Sicherheitsprüfung"
@@ -616,7 +708,7 @@ if [ "$age_seconds" -gt "$max_age_seconds" ]; then
     exit 2
   fi
 
-  if ! confirm_old_script "$patch_script" "$age_seconds"; then
+  if ! confirm_old_script "$source_artifact" "$age_seconds"; then
     info "Logfile bleibt erhalten: $(show_path "$run_log")"
     rm -f "${progress_context_output:-}" 2>/dev/null || true
     exit 2
@@ -640,7 +732,7 @@ if [ "$syntax_status" -ne 0 ]; then
     exit "$syntax_status"
   fi
 
-  moved_to="$(move_script_to "$failed_dir" "$patch_script")"
+  moved_to="$(move_script_to "$failed_dir" "$source_artifact")"
   info "Script verschoben nach: $(show_path "$moved_to")"
   info "Logfile bleibt in Downloads: $(show_path "$run_log")"
   rm -f "${progress_context_output:-}" 2>/dev/null || true
@@ -675,13 +767,13 @@ section "Abschluss"
 info "Patchscript Exit-Code: $status"
 
 if [ "$status" -eq 0 ]; then
-  moved_to="$(move_script_to "$done_dir" "$patch_script")"
-  record_successful_application "$script_hash" "$patch_script" "$moved_to"
+  moved_to="$(move_script_to "$done_dir" "$source_artifact")"
+  record_successful_application "$script_hash" "$source_artifact" "$moved_to"
   success "Patch erfolgreich."
   info "Script verschoben nach: $(show_path "$moved_to")"
   info "Applied-Ledger aktualisiert: $(show_path "$applied_ledger")"
 else
-  moved_to="$(move_script_to "$failed_dir" "$patch_script")"
+  moved_to="$(move_script_to "$failed_dir" "$source_artifact")"
   error "Patch fehlgeschlagen."
   info "Script verschoben nach: $(show_path "$moved_to")"
 fi
@@ -689,7 +781,7 @@ fi
 info "Logfile bleibt in Downloads: $(show_path "$run_log")"
 info "Endzeit: $(date --iso-8601=seconds)"
 
-if [ "$status" -eq 0 ] && [ -n "${progress_context_output:-}" ] && [ -s "$progress_context_output" ]; then
+if [ -n "${progress_context_output:-}" ] && [ -s "$progress_context_output" ]; then
   section "Roadmap / Milestone"
   cat "$progress_context_output"
 fi
@@ -697,6 +789,8 @@ rm -f "${progress_context_output:-}" 2>/dev/null || true
 
 if [ "$status" -eq 0 ]; then
   success_band
+else
+  failure_band
 fi
 
 exit "$status"
