@@ -11,6 +11,8 @@ Installs a managed alias block for RepoDossier development:
   rdrepo  cd into the repository
   c       run the download patch runner
   r       run the export runner
+  patchharbor-patch
+          run an explicit patch file through PatchHarbor
 
 The script stores the current clone path in REPODOSSIER_REPO inside the user's shell rc file.
 HELP
@@ -92,6 +94,7 @@ export REPODOSSIER_REPO="$repo_path"
 alias rdrepo='cd "$REPODOSSIER_REPO"'
 alias c='bash "$REPODOSSIER_REPO/scripts/dev/run_latest_download_patch.sh"'
 alias r='bash "$REPODOSSIER_REPO/scripts/dev/r.sh"'
+alias patchharbor-patch='bash "$REPODOSSIER_REPO/scripts/dev/run_patchharbor_patch.sh"'
 $block_end
 EOF
 )"
@@ -137,3 +140,4 @@ echo "Aliases:"
 echo "  rdrepo"
 echo "  c"
 echo "  r"
+echo "  patchharbor-patch"
