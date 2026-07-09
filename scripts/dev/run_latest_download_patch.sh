@@ -33,17 +33,25 @@ max_age_seconds="${C_RUNNER_MAX_AGE_SECONDS:-3600}"
 wait_sleep_seconds="${C_RUNNER_WAIT_SLEEP_SECONDS:-2}"
 wait_fresh_seconds="${C_RUNNER_WAIT_FRESH_SECONDS:-30}"
 show_progress_context=1
-case "${C_RUNNER_PROGRESS_CONTEXT:-1}" in
-  0|false|False|FALSE|no|No|NO|off|Off|OFF)
-    show_progress_context=0
-    ;;
-esac
+progress_context_explicit=0
+if [ "${C_RUNNER_PROGRESS_CONTEXT+x}" = "x" ]; then
+  progress_context_explicit=1
+  case "${C_RUNNER_PROGRESS_CONTEXT:-1}" in
+    0|false|False|FALSE|no|No|NO|off|Off|OFF)
+      show_progress_context=0
+      ;;
+    *)
+      show_progress_context=1
+      ;;
+  esac
+fi
 if [ "$#" -gt 0 ]; then
   c_runner_filtered_args=()
   for c_runner_arg in "$@"; do
     case "$c_runner_arg" in
       --no-progress-context|--no-context)
         show_progress_context=0
+        progress_context_explicit=1
         ;;
       *)
         c_runner_filtered_args+=("$c_runner_arg")
@@ -578,6 +586,39 @@ wait_loop() {
   done
 }
 
+read_display_progress_context_hint() {
+  local script_path="$1"
+  python3 - "$script_path" <<'PY'
+from pathlib import Path
+import json
+import sys
+
+prefix = '# ' + 'repodossier-' + 'meta:'
+script = Path(sys.argv[1])
+try:
+    lines = script.read_text(encoding='utf-8', errors='replace').splitlines()
+except OSError:
+    raise SystemExit(0)
+for line in lines:
+    stripped = line.strip()
+    if not stripped.startswith(prefix):
+        continue
+    payload = stripped[len(prefix):].strip()
+    try:
+        data = json.loads(payload)
+    except json.JSONDecodeError:
+        continue
+    if data.get('type') != 'display':
+        continue
+    if data.get('progress_context') is False:
+        print('0')
+        raise SystemExit(0)
+    if data.get('progress_context') is True:
+        print('1')
+        raise SystemExit(0)
+PY
+}
+
 if [ "${1:-}" = "--help" ] || [ "${1:-}" = "-h" ]; then
   usage
   exit 0
@@ -665,6 +706,19 @@ if [ "$metadata_status" -ne 0 ]; then
   exit "$metadata_status"
 fi
 success "Metadaten OK."
+
+display_progress_context_hint="$(read_display_progress_context_hint "$patch_script" || true)"
+if [ "$progress_context_explicit" -eq 0 ]; then
+  case "$display_progress_context_hint" in
+    0)
+      show_progress_context=0
+      info "Dieses Patchscript wünscht keinen Progress Context."
+      ;;
+    1)
+      show_progress_context=1
+      ;;
+  esac
+fi
 
 if [ "$dry_run" -eq 1 ]; then
   section "Preflight"

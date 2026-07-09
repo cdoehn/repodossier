@@ -227,3 +227,63 @@ def test_patch_metadata_rejects_missing_anchor_text(tmp_path: Path) -> None:
 
     assert result.returncode == 10
     assert "anchor not found in file" in result.stdout
+
+
+def test_validate_patch_metadata_accepts_display_progress_context_boolean(tmp_path: Path) -> None:
+    roadmap = tmp_path / "ROADMAP.md"
+    milestone = tmp_path / "MILESTONE.md"
+    roadmap.write_text("# Roadmap\nbody\n", encoding="utf-8")
+    milestone.write_text("# Milestone\nbody\n", encoding="utf-8")
+    meta = "# " + "repodossier-" + "meta: "
+
+    target = _write_script(
+        tmp_path / "patch.sh",
+        [
+            "#!/usr/bin/env bash",
+            meta + '{"type":"patch","id":"DEV.DISPLAY","title":"Demo","commit":"Demo commit"}',
+            meta + '{"type":"progress","panel":"roadmap","status":"active","file":"ROADMAP.md","start":1,"end":2}',
+            meta + '{"type":"progress","panel":"milestone","status":"partial","file":"MILESTONE.md","start":1,"end":2}',
+            meta + '{"type":"display","context":2,"layout":"side-by-side","frame":false,"progress_context":false}',
+            "echo ok",
+        ],
+    )
+
+    result = subprocess.run(
+        [sys.executable, str(VALIDATOR), "--script", str(target), "--repo", str(tmp_path)],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "Metadata OK" in result.stdout
+
+
+def test_validate_patch_metadata_rejects_non_boolean_display_progress_context(tmp_path: Path) -> None:
+    roadmap = tmp_path / "ROADMAP.md"
+    milestone = tmp_path / "MILESTONE.md"
+    roadmap.write_text("# Roadmap\nbody\n", encoding="utf-8")
+    milestone.write_text("# Milestone\nbody\n", encoding="utf-8")
+    meta = "# " + "repodossier-" + "meta: "
+
+    target = _write_script(
+        tmp_path / "patch.sh",
+        [
+            "#!/usr/bin/env bash",
+            meta + '{"type":"patch","id":"DEV.DISPLAY","title":"Demo","commit":"Demo commit"}',
+            meta + '{"type":"progress","panel":"roadmap","status":"active","file":"ROADMAP.md","start":1,"end":2}',
+            meta + '{"type":"progress","panel":"milestone","status":"partial","file":"MILESTONE.md","start":1,"end":2}',
+            meta + '{"type":"display","context":2,"layout":"side-by-side","frame":false,"progress_context":"no"}',
+            "echo ok",
+        ],
+    )
+
+    result = subprocess.run(
+        [sys.executable, str(VALIDATOR), "--script", str(target), "--repo", str(tmp_path)],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode == 10
+    assert 'field "progress_context" must be a boolean' in result.stdout

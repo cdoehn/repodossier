@@ -12,7 +12,7 @@ PREFIX = "# repodossier-meta:"
 ALLOWED_TYPES = {"patch", "progress", "display"}
 ALLOWED_PATCH_FIELDS = {"type", "id", "title", "commit", "fix_for", "requires_direct_bash"}
 ALLOWED_PROGRESS_FIELDS = {"type", "panel", "status", "file", "start", "end", "anchor", "label"}
-ALLOWED_DISPLAY_FIELDS = {"type", "context", "layout", "frame"}
+ALLOWED_DISPLAY_FIELDS = {"type", "context", "layout", "frame", "progress_context"}
 ALLOWED_PANELS = {"roadmap", "milestone"}
 ALLOWED_STATUSES = {"done", "active", "partial", "todo"}
 ALLOWED_LAYOUTS = {"side-by-side", "stacked"}
@@ -245,6 +245,8 @@ def validate_records(
                     errors.append(_error(record.line_number, f'layout must be one of {sorted(ALLOWED_LAYOUTS)}'))
             if "frame" in record.data and not isinstance(record.data["frame"], bool):
                 errors.append(_error(record.line_number, 'field "frame" must be a boolean'))
+            if "progress_context" in record.data and not isinstance(record.data["progress_context"], bool):
+                errors.append(_error(record.line_number, 'field "progress_context" must be a boolean'))
 
     return errors
 
