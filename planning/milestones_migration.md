@@ -1,841 +1,1047 @@
-# PatchHarbor / RepoDossier Migration – verbleibende Milestones
+# PatchHarbor / RepoDossier Migration – fein granulierte Milestones
 
-Stand dieser Planung: nach `PATCHHARBOR.08d`, also nachdem PatchHarbor die generische Runner-/Compatibility-Grundlage, die Source-Wrapper-Grundlage und die Source-side-Adoption-Planung weitgehend dokumentiert hat.
+Stand: nach `PATCHHARBOR.09d-fix2` in Arbeit / letzter bekannter Verlauf.
 
-Diese Datei beschreibt die noch offenen Milestones bis zum Abschluss der Migration und zur vollständigen Bereinigung beider Repositories:
+Diese Datei ersetzt die bisherige grobe Migrations-Milestoneplanung. Ziel ist, die weiteren Patches deutlich kleiner zu schneiden, damit Fehler leichter isolierbar sind und Repair-Patches weniger Umfang haben.
+
+Repos:
 
 - Quellrepo: `repo_dossier`
 - Zielrepo: `patch-harbor`
 
-Die Datei ist bewusst als langfristige Arbeitsgrundlage geschrieben. Einzelne Punkte können später in kleinere Patch-Commits aufgeteilt werden, wenn Tests oder Scope es verlangen.
+Wichtig:
+
+- Diese Datei soll im Quellrepo unter `planning/milestones_migration.md` liegen.
+- Künftige Patchscripts sollen diese Datei im `repodossier-meta`-Milestone-Panel referenzieren.
+- Die Roadmap bleibt strategisch in `planning/roadmap_migration.md`.
+- Diese Datei ist der operative Patch-Schnitt.
 
 ---
 
-## 0. Kontextvorschau / Einbindung in den Repo-Kontext
+## 0. Grundregeln ab jetzt
 
-Empfohlener Ablageort im Zielrepo:
+### 0.1 Patchgröße
 
-```text
-planning/milestones.md
-```
+Ein normaler Patch soll möglichst nur eine der folgenden Änderungen enthalten:
 
-Alternativ, wenn PatchHarbor Planungsdateien lieber unter `docs/` hält:
+- eine neue Dokumentationsdatei
+- eine neue Testdatei
+- eine kleine Änderung an genau einer bestehenden Datei
+- eine kleine neue API-Datei plus eine direkt passende Testdatei
+- eine reine Akzeptanz-/Planungsdatei plus Test
+- eine Reparatur an genau den Dateien des fehlgeschlagenen Patches
 
-```text
-docs/milestones.md
-```
+Wenn ein Patch mehr als zwei Ziel-Dateien braucht, muss der Patch vorher begründen, warum das nicht sinnvoll kleiner geschnitten werden kann.
 
-Für die Patch-Runner-Kontextvorschau kann die Datei in zukünftigen Patchscripts über `repodossier-meta` referenziert werden:
+### 0.2 Source-Repo vs. Target-Repo
 
-```bash
-# repodossier-meta: {"type":"progress","panel":"milestone","status":"active","file":"planning/milestones.md","start":120,"end":180,"label":"PATCHHARBOR.09 Source-side runner adoption"}
-```
+Patches müssen klar einem Scope zugeordnet sein:
 
-Empfohlen ist, in jedem künftigen Patchscript neben Roadmap/Status auch den passenden Abschnitt dieser Datei als `panel:"milestone"` zu referenzieren. Dadurch kann die Kontextanzeige gezielt den aktuellen Milestone anzeigen, statt nur die allgemeine Roadmap.
+- `target-only`: nur `patch-harbor`
+- `source-only`: nur `repo_dossier`
+- `dual-read`: ein Repo wird geändert, das andere nur geprüft
+- `dual-change`: beide Repos werden geändert; nur erlaubt, wenn vorher ein Acceptance-/Preflight-Patch das ausdrücklich freigibt
 
-Damit die Datei im RepoDossier-/PatchHarbor-Export sichtbar wird:
+Aktuell bevorzugt:
 
-1. Datei im Repo ablegen, z. B. `planning/milestones.md`.
-2. Datei mit Git tracken.
-3. Sicherstellen, dass sie nicht durch `.gitignore`, Export-Ignore-Regeln oder Split-Konfiguration ausgeschlossen wird.
-4. Bei künftigen Patchscripts den passenden Abschnitt per `repodossier-meta` referenzieren.
-5. Danach den normalen Repo-Kontext-/Export-Befehl ausführen.
+- PatchHarbor-Zielrepo für generische APIs, Planung, Rendering, Doku
+- RepoDossier-Quellrepo nur für additive Source-Adoption
+- Dual-change vermeiden
 
-Wenn die Kontextvorschau nur getrackte Dateien berücksichtigt, reicht typischerweise:
+### 0.3 Fix-Regel
 
-```bash
-git add planning/milestones.md
-git commit -m "Add migration milestones"
-```
+Wenn ein Patch fehlschlägt:
 
----
+- keine neue Milestone-Nummer starten
+- Fix-ID verwenden, z. B. `PATCHHARBOR.09d-fix3`
+- Commit-Message des ursprünglichen Patches beibehalten
+- nur die kaputten Dateien anfassen
+- Focused Smoke muss den zuletzt roten Fall enthalten
+- wenn ein Text-Rewrite Python-Code erzeugt: `ast.parse` oder `py_compile` direkt danach
 
-## 1. Aktueller stabiler Stand
+### 0.4 Keine Escape-Hölle
 
-### Abgeschlossen oder als abgeschlossen geplant
+Bei Tests mit Shell-Aliasen, Quotes oder verschachtelten Strings:
 
-```text
-PATCHHARBOR.01   Dev-Script-Inventar im Quellrepo
-PATCHHARBOR.02   Zielrepo-Skeleton
-PATCHHARBOR.03   erste Extraktionsphase
-PATCHHARBOR.04   Workflow-Rules-Grundlage
-PATCHHARBOR.05   Patch-Script-Linting-Grundlage
-PATCHHARBOR.06   Runner-/Compatibility-Grundlage
-PATCHHARBOR.07   Source-Wrapper-/Compatibility-Grundlage
-PATCHHARBOR.08a  Source-side-Adoption-Inventar
-PATCHHARBOR.08b  Source-side Runner-Wrapper-Draft
-PATCHHARBOR.08c  Source-side Alias-Kompatibilitätsplan
-PATCHHARBOR.08d  Source-side Runner-Kompatibilitätstestplan
-```
+- keine einzelnen hochgeescapten Assert-Zeilen ersetzen
+- ganze Testfunktion ersetzen
+- danach Syntax prüfen
+- wenn exakte Formatierung nicht Vertrag ist, robuste Assertions verwenden
 
-### Wichtiges Prinzip ab hier
+### 0.5 Keine Self-referential Guards
 
-Bis zur echten Adoption im Quellrepo gilt:
+Wenn ein Test verbotene Strings sucht, darf die getrackte Testdatei diese Strings nicht wörtlich enthalten.
 
-- PatchHarbor bleibt das generische Zielrepo.
-- RepoDossier bleibt zunächst Quelle und Nutzer des Workflows.
-- Source-seitige Änderungen müssen klein, reversibel und mit Focused Tests abgesichert sein.
-- Keine alten RepoDossier-Spezialnamen in PatchHarbor-Core übernehmen.
-- Keine privaten Pfade, Mailadressen, Gerätenamen oder lokalen Checkout-Pfade in getrackten Dateien speichern.
-- Alte Scripts erst löschen, wenn Ersatz plus Paritätstests grün sind.
+Dynamisch zusammensetzen:
 
----
+- `"/home/" + "christian"`
+- `"christian" + "@"`
+- `"Think" + "Pad"`
+- `"~/" + "Projekte"`
+- `"run_latest_" + "download_patch"`
+- `chr(96) * 3`
 
-# Milestone 08 – Source-side Adoption vorbereiten und abschließen
+### 0.6 Bestehender Vertrag gewinnt
 
-## PATCHHARBOR.08e – Source-side Adoption Acceptance
+Bei CLI-, Alias-, Runner- und Lint-Ausgabe:
 
-**Commit:** `Add source-side adoption acceptance documentation`
-
-**Ziel:**  
-Abschlussdokumentation für 08a–08d. Noch keine Source-Repo-Änderung.
-
-**Dateien im Zielrepo:**
-
-```text
-docs/source-side-adoption-acceptance.md
-tests/test_source_side_adoption_acceptance.py
-```
-
-**Inhalt:**
-
-- Was 08a–08d vorbereitet haben.
-- Was noch nicht getan wurde.
-- Welche Voraussetzungen für echte RepoDossier-Adoption gelten.
-- Explizite Non-Goals:
-  - kein RepoDossier-Patch
-  - keine Wrapper-Datei
-  - keine Alias-Installation
-  - keine Export-Migration
-  - keine Löschung alter Scripts
-
-**Akzeptanz:**
-
-```bash
-python3 -m compileall src tests
-PYTHONPATH=src python3 -m unittest tests.test_source_side_adoption_acceptance
-PYTHONPATH=src python3 -m unittest discover -s tests -p 'test_*.py'
-PYTHONPATH=src python3 -m patchharbor doctor --repo .
-```
+- tatsächlichen bestehenden Output lesen
+- bestehende Tests als Vertrag behandeln
+- nur additiv erweitern, wenn der Patch nicht explizit Migration des Vertrags ist
 
 ---
 
-# Milestone 09 – Erste echte Source-side Runner-Adoption in RepoDossier
+# Milestone 09 – Erste echte Source-side Runner-Adoption
 
-Ab hier wird erstmals das Quellrepo gezielt geändert. Jeder Patch muss klar sagen, ob er Zielrepo, Quellrepo oder beide Repos ändert.
+Status: läuft.
 
-## PATCHHARBOR.09a – Source-side Adoption Preflight Inventory
+Ziel von Milestone 09:
 
-**Commit:** `Add source-side adoption preflight inventory`
-
-**Ziel:**  
-Vor jeder echten RepoDossier-Mutation prüfen, ob der aktuelle Stand wirklich bereit ist.
-
-**Repos:**
-
-- Zielrepo: PatchHarbor
-- Quellrepo: RepoDossier
-- Änderung bevorzugt zunächst im Zielrepo als Dokumentation/Test, noch ohne Source-Mutation.
-
-**Prüfen:**
-
-- PatchHarbor ist installiert oder über `PYTHONPATH` nutzbar.
-- `patchharbor run-script` funktioniert.
-- RepoDossier besitzt noch den bestehenden lokalen Runner.
-- Keine uncommitted Änderungen in beiden Repos.
-- Git-Identität in beiden Repos vorhanden.
-- Tests in beiden Repos grundsätzlich grün.
-
-**Akzeptanz:**
-
-- Dokumentierte Preflight-Liste.
-- Tests/Smokes, die keine Source-Dateien ändern.
+RepoDossier bekommt einen additiven PatchHarbor-Runner-Wrapper und optional additive Alias-Kompatibilität. Der alte lokale Runner, `c`, `r` und Export-Scripts bleiben unverändert, bis spätere Paritätspatches etwas anderes erlauben.
 
 ---
 
-## PATCHHARBOR.09b – Add RepoDossier PatchHarbor Runner Wrapper
+## 09d-Serie – Alias-Kompatibilität abschließen
 
-**Commit:** `Add PatchHarbor patch runner wrapper`
+### PATCHHARBOR.09d-fix2 – Alias-Kompatibilität stabil reparieren
 
-**Ziel:**  
-Erste echte additive Source-Repo-Änderung: eine neue dünne Wrapper-Datei in RepoDossier hinzufügen.
-
-**Neue Datei im Quellrepo:**
-
-```text
-scripts/dev/run_patchharbor_patch.sh
-```
-
-**Geplante Form:**
-
-```bash
-#!/usr/bin/env bash
-set -euo pipefail
-exec patchharbor run-script "$@"
-```
-
-**Wichtig:**
-
-- Bestehender Runner bleibt unverändert.
-- Keine Alias-Änderung.
-- Keine done/failed-Mutation.
-- Kein Ersatz von `run_latest_download_patch.sh`.
-- Keine Export-Scripts anfassen.
-
-**Tests im Quellrepo:**
-
-```text
-tests/test_patchharbor_runner_wrapper.py
-```
-
-**Akzeptanz:**
-
-- Wrapper existiert.
-- `bash -n scripts/dev/run_patchharbor_patch.sh` grün.
-- Wrapper enthält `patchharbor run-script`.
-- Wrapper enthält `"$@"`.
-- Bestehender Runner existiert weiter.
-- Keine privaten Werte.
-
----
-
-## PATCHHARBOR.09c – Add RepoDossier Runner Wrapper Smoke Tests
-
-**Commit:** `Add PatchHarbor runner wrapper smoke tests`
-
-**Ziel:**  
-Nicht nur statisch testen, sondern einen ungefährlichen No-Execute-Smoke über den neuen Wrapper ermöglichen.
-
-**Tests:**
-
-- Temporäres Patchscript erzeugen.
-- Wrapper mit `--no-execute` aufrufen.
-- Erwartete Runner-Phasen prüfen.
-- Sicherstellen, dass keine Ausführung und keine Dateimutation passiert.
-
-**Wichtig:**
-
-- Kein echter Migrationspatch wird ausgeführt.
-- Keine done/failed-Verzeichnisse mutieren.
-- Kein Alias wird benötigt.
-
----
-
-## PATCHHARBOR.09d – Add Source-side Alias Compatibility Update
-
-**Commit:** `Add PatchHarbor runner alias compatibility`
-
-**Ziel:**  
-Alias-Installer im Quellrepo additiv erweitern, ohne bestehende Aliase still zu brechen.
-
-**Betroffene Datei im Quellrepo:**
+**Commit:** `Add PatchHarbor runner alias compatibility`  
+**Scope:** source-only  
+**Dateien:**
 
 ```text
 scripts/dev/install_aliases.sh
+tests/test_dev_alias_installer.py
 ```
 
 **Ziel:**
 
-- Neuen optionalen Alias ergänzen, z. B. `patchharbor-patch`.
-- Bestehendes `c` zunächst nicht ändern.
-- Bestehendes `r` nicht ändern.
-- Keine Shell-RC-Dateien direkt im Patch ändern; nur Installer-Logik.
+- `patchharbor-patch` additiv ergänzen.
+- `c` bleibt auf altem Download-Runner.
+- `r` bleibt auf Export-Wrapper.
+- Keine Shell-RC-Datei beim Patchlauf schreiben.
+- Zielrepo bleibt unverändert.
 
-**Akzeptanz:**
+**Kleinschnitt-Hinweis:**
 
-- Installer enthält neuen Alias.
-- Bestehender `c`-Alias bleibt erhalten.
-- Export-Alias bleibt erhalten.
-- Tests prüfen Inhalt, nicht lokale Shell-Konfiguration.
+Wenn dieser Patch noch einmal scheitert, dann Fix nur an einer Ursache:
+
+- `09d-fix3a`: nur Installer-Patch idempotent machen
+- `09d-fix3b`: nur Testfunktion reparieren
+- `09d-fix3c`: nur Smoke/Validation anpassen
 
 ---
 
-## PATCHHARBOR.09e – Optional Controlled `c` Alias Switch Plan
+## 09e-Serie – Kontrollierten c-Alias-Umschaltplan dokumentieren
 
-**Commit:** `Document controlled c alias switch plan`
+### PATCHHARBOR.09e1 – c-Alias Ist-Vertrag dokumentieren
 
-**Ziel:**  
-Noch kein Umschalten, sondern Plan und Tests für späteren Wechsel, falls gewünscht.
+**Commit:** `Document current c alias contract`  
+**Scope:** source-only oder target-only?  
+**Empfehlung:** source-only, weil es RepoDossier-Alias-Vertrag betrifft.  
+**Datei:**
 
-**Warum separat:**  
-`c` ist der etablierte Komfortbefehl. Eine stille Änderung kann den Arbeitsfluss brechen.
+```text
+planning/patchharbor/c-alias-contract.md
+```
 
 **Inhalt:**
 
-- Wann darf `c` auf neuen Wrapper zeigen?
-- Welche Paritätstests müssen grün sein?
-- Wie wird zurückgerollt?
-- Wie wird der Nutzer informiert?
+- aktueller `c`-Alias
+- aktueller Zielpfad
+- was `c` heute macht
+- welche Outputs wichtig sind
+- was nicht still geändert werden darf
 
-**Akzeptanz:**  
-Dokumentation + Tests; keine Shell-Änderung.
-
----
-
-## PATCHHARBOR.09f – Source-side Runner Adoption Acceptance
-
-**Commit:** `Add source-side runner adoption acceptance`
-
-**Ziel:**  
-Abschluss von Milestone 09.
-
-**Akzeptanz:**
-
-- Neuer Wrapper existiert und ist getestet.
-- Bestehender Runner existiert weiterhin.
-- Optionaler Alias ist geplant oder additiv vorhanden.
-- Keine Export-Migration.
-- Keine Löschung alter Scripts.
-- Beide Repos grün.
+**Keine Tests außer Dokument-Existenztest, falls sinnvoll.**
 
 ---
 
-# Milestone 10 – Download Runner Parität und schrittweise Ablösung
+### PATCHHARBOR.09e2 – c-Alias Umschaltkriterien dokumentieren
 
-## PATCHHARBOR.10a – Download Runner Behavior Inventory
+**Commit:** `Document c alias switch criteria`  
+**Scope:** source-only  
+**Datei:**
 
-**Commit:** `Add download runner behavior inventory`
+```text
+planning/patchharbor/c-alias-switch-criteria.md
+```
 
-**Ziel:**  
-Exaktes Verhalten von `run_latest_download_patch.sh` dokumentieren.
+**Inhalt:**
 
-**Zu inventarisieren:**
+- welche Paritätstests vor Umschaltung grün sein müssen
+- Rollback-Bedingungen
+- ob `c` überhaupt umgeschaltet werden soll oder dauerhaft Legacy bleiben darf
+- explizite Entscheidung: nicht in diesem Patch umschalten
 
-- Download-Verzeichnis
-- Auswahl des neuesten Scripts
-- Metadata-Prüfung
-- Wiederholungsprüfung
+---
+
+### PATCHHARBOR.09e3 – c-Alias Umschaltplan testen
+
+**Commit:** `Add c alias switch plan tests`  
+**Scope:** source-only  
+**Datei:**
+
+```text
+tests/test_c_alias_switch_plan.py
+```
+
+**Ziel:**
+
+- Planungsdokumente existieren.
+- Plan sagt: keine stille Umschaltung.
+- Plan nennt Rollback.
+- Plan nennt Paritätstests.
+- Keine privaten Werte.
+
+---
+
+## 09f-Serie – Source-side Runner Adoption Acceptance
+
+### PATCHHARBOR.09f1 – Source-side Runner Adoption Acceptance Dokument
+
+**Commit:** `Add source-side runner adoption acceptance documentation`  
+**Scope:** source-only oder target-only?  
+**Empfehlung:** source-only, weil Adoption im Quellrepo stattfand.  
+**Datei:**
+
+```text
+planning/patchharbor/source-runner-adoption-acceptance.md
+```
+
+**Inhalt:**
+
+- Wrapper existiert.
+- Wrapper ist additiv.
+- Wrapper-Smoke existiert.
+- Alias `patchharbor-patch` ist additiv.
+- `c` und `r` bleiben erhalten.
+- Export nicht migriert.
+
+---
+
+### PATCHHARBOR.09f2 – Source-side Runner Adoption Acceptance Tests
+
+**Commit:** `Add source-side runner adoption acceptance tests`  
+**Scope:** source-only  
+**Datei:**
+
+```text
+tests/test_source_runner_adoption_acceptance.py
+```
+
+**Ziel:**
+
+- prüft 09b/09c/09d Artefakte
+- prüft, dass alte Runner existieren
+- prüft, dass keine `c`-Umschaltung dokumentiert ist
+- prüft keine privaten Werte
+
+---
+
+### PATCHHARBOR.09f3 – Dual-Repo Sanity Smoke nach 09
+
+**Commit:** `Add source runner adoption sanity smoke`  
+**Scope:** source-only, Zielrepo read-only  
+**Datei:**
+
+```text
+tests/test_patchharbor_source_adoption_sanity.py
+```
+
+**Ziel:**
+
+- PatchHarbor-Zielrepo über `PATCHHARBOR_TARGET_REPO` finden
+- Wrapper-No-Execute-Smoke
+- Alias-Dry-Run-Smoke
+- Zielrepo nicht mutieren
+
+Wenn dieser Patch zu groß wird, aufteilen:
+
+- `09f3a`: Wrapper sanity
+- `09f3b`: Alias dry-run sanity
+
+---
+
+# Milestone 10 – Download Runner Parität vor Ablösung
+
+Ziel: Der bestehende lokale Download-Runner darf erst ersetzt oder dünner gemacht werden, wenn sein Verhalten in kleinen Tests abgebildet ist.
+
+---
+
+## 10a-Serie – Verhalten inventarisieren
+
+### PATCHHARBOR.10a1 – Download Runner Datei-Inventar
+
+**Commit:** `Document download runner file inventory`  
+**Scope:** source-only  
+**Datei:**
+
+```text
+planning/patchharbor/download-runner-file-inventory.md
+```
+
+**Inhalt:**
+
+- beteiligte Dateien
+- Eingabe-/Ausgabeorte
+- Downloads, done, failed
+- Logfile
+- Metadatenvalidator
+- Helper
+
+---
+
+### PATCHHARBOR.10a2 – Download Runner Ablauf-Inventar
+
+**Commit:** `Document download runner lifecycle flow`  
+**Scope:** source-only  
+**Datei:**
+
+```text
+planning/patchharbor/download-runner-lifecycle-flow.md
+```
+
+**Inhalt:**
+
+- Auswahl neuestes Patchscript
+- Metadata OK/Fehler
+- Wiederholung
 - Freshness
 - bash -n
 - Ausführung
-- Logfile
-- done/failed-Move
+- success move
+- fail move
+- Log-Verbleib
+
+---
+
+### PATCHHARBOR.10a3 – Download Runner Output-Vertrag
+
+**Commit:** `Document download runner output contract`  
+**Scope:** source-only  
+**Datei:**
+
+```text
+planning/patchharbor/download-runner-output-contract.md
+```
+
+**Inhalt:**
+
+- wichtige UI-Zeilen
 - Footer
-- Fehlerfälle
+- Fehlertexte
+- Done/Current/Next/Problem
+- keine Änderung ohne Test
 
 ---
 
-## PATCHHARBOR.10b – Add Download Runner Parity Tests
+### PATCHHARBOR.10a4 – Download Runner Inventar-Tests
 
-**Commit:** `Add download runner parity tests`
+**Commit:** `Add download runner inventory tests`  
+**Scope:** source-only  
+**Datei:**
 
-**Ziel:**  
-Focused Tests gegen das alte Verhalten im Quellrepo.
-
-**Wichtig:**  
-Erst testen, dann ersetzen.
-
----
-
-## PATCHHARBOR.10c – Add PatchHarbor Download Runner Plan API
-
-**Commit:** `Add download runner planning API`
-
-**Ziel:**  
-Falls noch nicht ausreichend vorhanden: generische Planung für Download-Runner-Verhalten in PatchHarbor erweitern.
-
-**Wichtig:**  
-Planung zuerst, Mutation später.
+```text
+tests/test_download_runner_inventory_docs.py
+```
 
 ---
 
-## PATCHHARBOR.10d – Add PatchHarbor Download Runner Execution API
+## 10b-Serie – Paritätstests in kleinen Scheiben
 
-**Commit:** `Add download runner execution API`
+### PATCHHARBOR.10b1 – Download Runner Metadata Parity Test
 
-**Ziel:**  
-Generisches Ausführen eines neuesten Download-Patches, sofern die Parität klar ist.
+**Commit:** `Add download runner metadata parity test`  
+**Scope:** source-only  
+**Datei:**
 
-**Achtung:**  
-Dies ist der erste riskantere Zielrepo-Schritt nach der expliziten Runner-API.
+```text
+tests/test_download_runner_metadata_parity.py
+```
 
----
+**Ziel:**
 
-## PATCHHARBOR.10e – Switch RepoDossier Download Runner to PatchHarbor Internals
-
-**Commit:** `Use PatchHarbor for download patch runner`
-
-**Ziel:**  
-Der alte Source-Runner wird dünner Wrapper um PatchHarbor.
-
-**Wichtig:**
-
-- Alter Dateiname kann erhalten bleiben.
-- `c` Workflow bleibt äußerlich gleich.
-- done/failed-Verhalten bleibt gleich.
-- Logs bleiben nutzbar.
-- Rollback möglich.
+- gültige Metadaten akzeptiert
+- ungültige Metadaten stoppen vor Ausführung
 
 ---
 
-## PATCHHARBOR.10f – Download Runner Adoption Acceptance
+### PATCHHARBOR.10b2 – Download Runner Freshness Parity Test
 
-**Commit:** `Add download runner adoption acceptance`
+**Commit:** `Add download runner freshness parity test`  
+**Scope:** source-only  
+**Datei:**
 
-**Ziel:**  
-Abschluss der Download-Runner-Ablösung.
+```text
+tests/test_download_runner_freshness_parity.py
+```
 
 ---
 
-# Milestone 11 – Export Runner Migration
+### PATCHHARBOR.10b3 – Download Runner Repeat Parity Test
 
-## PATCHHARBOR.11a – Export Runner Inventory
+**Commit:** `Add download runner repeat parity test`  
+**Scope:** source-only  
+**Datei:**
 
-**Commit:** `Add export runner inventory`
+```text
+tests/test_download_runner_repeat_parity.py
+```
 
-**Betroffene Quellrepo-Dateien:**
+---
+
+### PATCHHARBOR.10b4 – Download Runner Syntax Failure Parity Test
+
+**Commit:** `Add download runner syntax failure parity test`  
+**Scope:** source-only  
+**Datei:**
+
+```text
+tests/test_download_runner_syntax_parity.py
+```
+
+---
+
+### PATCHHARBOR.10b5 – Download Runner Success Lifecycle Parity Test
+
+**Commit:** `Add download runner success lifecycle parity test`  
+**Scope:** source-only  
+**Datei:**
+
+```text
+tests/test_download_runner_success_lifecycle_parity.py
+```
+
+---
+
+### PATCHHARBOR.10b6 – Download Runner Failure Lifecycle Parity Test
+
+**Commit:** `Add download runner failure lifecycle parity test`  
+**Scope:** source-only  
+**Datei:**
+
+```text
+tests/test_download_runner_failure_lifecycle_parity.py
+```
+
+---
+
+### PATCHHARBOR.10b7 – Download Runner Footer Parity Test
+
+**Commit:** `Add download runner footer parity test`  
+**Scope:** source-only  
+**Datei:**
+
+```text
+tests/test_download_runner_footer_parity.py
+```
+
+---
+
+## 10c-Serie – PatchHarbor Download Runner APIs, falls nötig
+
+Nur wenn 10b zeigt, dass generische Zielrepo-API fehlt.
+
+### PATCHHARBOR.10c1 – Target Download Runner Inventory
+
+**Commit:** `Add target download runner API inventory`  
+**Scope:** target-only  
+**Datei:**
+
+```text
+docs/download-runner-api-inventory.md
+```
+
+---
+
+### PATCHHARBOR.10c2 – Download Runner Selection API
+
+**Commit:** `Add download runner selection API`  
+**Scope:** target-only  
+**Dateien:**
+
+```text
+src/patchharbor/download_selection.py
+tests/test_download_selection.py
+```
+
+---
+
+### PATCHHARBOR.10c3 – Download Runner Lifecycle Execution API
+
+**Commit:** `Add download runner lifecycle execution API`  
+**Scope:** target-only  
+**Dateien:**
+
+```text
+src/patchharbor/download_runner.py
+tests/test_download_runner.py
+```
+
+Falls zu groß:
+
+- `10c3a`: Modell/Dataclasses
+- `10c3b`: no-execute behavior
+- `10c3c`: success move
+- `10c3d`: failure move
+- `10c3e`: logs
+
+---
+
+## 10d-Serie – Source Runner dünner machen
+
+### PATCHHARBOR.10d1 – Source Download Runner Wrapper Draft
+
+**Commit:** `Document source download runner wrapper draft`  
+**Scope:** source-only  
+**Datei:**
+
+```text
+planning/patchharbor/source-download-runner-wrapper-draft.md
+```
+
+---
+
+### PATCHHARBOR.10d2 – Source Download Runner Wrapper Test Harness
+
+**Commit:** `Add source download runner wrapper test harness`  
+**Scope:** source-only  
+**Datei:**
+
+```text
+tests/test_source_download_runner_wrapper_harness.py
+```
+
+---
+
+### PATCHHARBOR.10d3 – Switch internal implementation behind old filename
+
+**Commit:** `Use PatchHarbor for download patch runner internals`  
+**Scope:** source-only  
+**Datei:**
+
+```text
+scripts/dev/run_latest_download_patch.sh
+```
+
+**Sehr riskant. Nur wenn 10b und 10c grün.**
+
+---
+
+### PATCHHARBOR.10d4 – Download Runner Adoption Acceptance Doc
+
+**Commit:** `Add download runner adoption acceptance documentation`  
+**Scope:** source-only  
+**Datei:**
+
+```text
+planning/patchharbor/download-runner-adoption-acceptance.md
+```
+
+---
+
+### PATCHHARBOR.10d5 – Download Runner Adoption Acceptance Test
+
+**Commit:** `Add download runner adoption acceptance tests`  
+**Scope:** source-only  
+**Datei:**
+
+```text
+tests/test_download_runner_adoption_acceptance.py
+```
+
+---
+
+# Milestone 11 – Export Runner Migration in kleinen Teilen
+
+---
+
+## 11a-Serie – Export-Inventar
+
+### PATCHHARBOR.11a1 – Export Runner File Inventory
+
+**Commit:** `Document export runner file inventory`  
+**Scope:** source-only  
+**Datei:**
+
+```text
+planning/patchharbor/export-runner-file-inventory.md
+```
+
+### PATCHHARBOR.11a2 – Export Runner Behavior Inventory
+
+**Commit:** `Document export runner behavior inventory`  
+**Scope:** source-only  
+**Datei:**
+
+```text
+planning/patchharbor/export-runner-behavior-inventory.md
+```
+
+### PATCHHARBOR.11a3 – Export Runner Inventory Tests
+
+**Commit:** `Add export runner inventory tests`  
+**Scope:** source-only  
+**Datei:**
+
+```text
+tests/test_export_runner_inventory_docs.py
+```
+
+---
+
+## 11b-Serie – Zielrepo Exportmodell
+
+### PATCHHARBOR.11b1 – Export Job Model
+
+**Commit:** `Add export job model`  
+**Scope:** target-only  
+**Dateien:**
+
+```text
+src/patchharbor/export_model.py
+tests/test_export_model.py
+```
+
+### PATCHHARBOR.11b2 – Export Plan Model
+
+**Commit:** `Add export plan model`  
+**Scope:** target-only  
+**Dateien:**
+
+```text
+src/patchharbor/export_planning.py
+tests/test_export_planning.py
+```
+
+### PATCHHARBOR.11b3 – Export Render/Display Helpers
+
+**Commit:** `Add export display helpers`  
+**Scope:** target-only  
+**Dateien:**
+
+```text
+src/patchharbor/export_display.py
+tests/test_export_display.py
+```
+
+---
+
+## 11c-Serie – Source-Adoption Export
+
+### PATCHHARBOR.11c1 – Export Source Wrapper Draft
+
+**Commit:** `Document source export wrapper draft`  
+**Scope:** source-only  
+**Datei:**
+
+```text
+planning/patchharbor/source-export-wrapper-draft.md
+```
+
+### PATCHHARBOR.11c2 – Export Wrapper Smoke Tests
+
+**Commit:** `Add source export wrapper smoke tests`  
+**Scope:** source-only  
+**Datei:**
+
+```text
+tests/test_source_export_wrapper_smoke.py
+```
+
+### PATCHHARBOR.11c3 – Switch r wrapper additively or internally
+
+**Commit:** `Use PatchHarbor for source exports`  
+**Scope:** source-only  
+**Dateien nach Bedarf:**
 
 ```text
 scripts/dev/r.sh
 scripts/dev/run_repodossier_exports.sh
 ```
 
-**Ziel:**  
-Export-Verhalten exakt inventarisieren, bevor generische Teile migriert werden.
+Wenn zu groß:
+
+- `11c3a`: nur `r.sh`
+- `11c3b`: nur `run_repodossier_exports.sh`
+- `11c3c`: Tests
 
 ---
 
-## PATCHHARBOR.11b – Export Runner Target Model
-
-**Commit:** `Add export runner model`
-
-**Ziel:**  
-PatchHarbor bekommt ein generisches Modell für Export-Jobs, aber ohne RepoDossier-Speziallogik.
+# Milestone 12 – Dev Helper Migration
 
 ---
 
-## PATCHHARBOR.11c – Export Runner Planning API
+## 12a-Serie – Helper-Inventar
 
-**Commit:** `Add export runner planning API`
+### PATCHHARBOR.12a1 – Helper File Inventory
 
-**Ziel:**  
-Export-Aktionen planen, ohne Dateien zu erzeugen oder Befehle auszuführen.
+**Commit:** `Document development helper file inventory`  
+**Scope:** source-only  
+**Datei:**
 
----
+```text
+planning/patchharbor/helper-file-inventory.md
+```
 
-## PATCHHARBOR.11d – Export Runner Execution API
+### PATCHHARBOR.12a2 – Helper Classification
 
-**Commit:** `Add export runner execution API`
+**Commit:** `Classify development helpers`  
+**Scope:** source-only  
+**Datei:**
 
-**Ziel:**  
-Generische Ausführung mit klarer Fehlerbehandlung.
+```text
+planning/patchharbor/helper-classification.md
+```
 
----
+### PATCHHARBOR.12a3 – Helper Inventory Tests
 
-## PATCHHARBOR.11e – RepoDossier Export Wrapper Adoption
+**Commit:** `Add helper inventory tests`  
+**Scope:** source-only  
+**Datei:**
 
-**Commit:** `Use PatchHarbor for RepoDossier exports`
-
-**Ziel:**  
-RepoDossier-Export-Scripts dünner machen und auf PatchHarbor delegieren.
-
----
-
-## PATCHHARBOR.11f – Export Runner Adoption Acceptance
-
-**Commit:** `Add export runner adoption acceptance`
-
-**Ziel:**  
-Abschluss Export-Migration.
+```text
+tests/test_helper_inventory_docs.py
+```
 
 ---
 
-# Milestone 12 – Audit-, Public-Repo- und Dev-Environment-Helper
+## 12b-Serie – Public Audit Helpers
 
-## PATCHHARBOR.12a – Helper Inventory
+### PATCHHARBOR.12b1 – Public Audit Model
 
-**Commit:** `Add development helper inventory`
+**Commit:** `Add public audit model`  
+**Scope:** target-only
 
-**Zu prüfen:**
+### PATCHHARBOR.12b2 – Public Audit Checks
 
-- Public-Repo-Audit
-- Dev-Environment-Checks
-- Branch-/Release-Hilfen
-- sonstige scripts/dev-Helfer
+**Commit:** `Add public audit checks`  
+**Scope:** target-only
 
----
+### PATCHHARBOR.12b3 – Public Audit CLI
 
-## PATCHHARBOR.12b – Generic Helper Classification
+**Commit:** `Add public audit CLI`  
+**Scope:** target-only
 
-**Commit:** `Classify generic development helpers`
+### PATCHHARBOR.12b4 – Source Public Audit Wrapper
 
-**Ziel:**  
-Entscheiden:
-
-- gehört nach PatchHarbor
-- bleibt in RepoDossier
-- wird gelöscht
-- wird dokumentiert, aber nicht migriert
+**Commit:** `Use PatchHarbor public audit helper`  
+**Scope:** source-only
 
 ---
 
-## PATCHHARBOR.12c – Public Audit Helper Migration
+## 12c-Serie – Dev Environment Helpers
 
-**Commit:** `Add public repository audit helpers`
+### PATCHHARBOR.12c1 – Environment Check Model
 
-**Ziel:**  
-Generische Audit-Helfer nach PatchHarbor migrieren.
+**Commit:** `Add environment check model`  
+**Scope:** target-only
 
----
+### PATCHHARBOR.12c2 – Environment Check CLI
 
-## PATCHHARBOR.12d – Dev Environment Helper Migration
+**Commit:** `Add environment check CLI`  
+**Scope:** target-only
 
-**Commit:** `Add development environment helpers`
+### PATCHHARBOR.12c3 – Source Environment Wrapper
 
-**Ziel:**  
-Generische Environment-Checks nach PatchHarbor migrieren.
-
----
-
-## PATCHHARBOR.12e – Helper Adoption in RepoDossier
-
-**Commit:** `Use PatchHarbor development helpers`
-
-**Ziel:**  
-RepoDossier ruft generische PatchHarbor-Helfer auf.
+**Commit:** `Use PatchHarbor environment helper`  
+**Scope:** source-only
 
 ---
 
-## PATCHHARBOR.12f – Helper Migration Acceptance
-
-**Commit:** `Add helper migration acceptance`
-
-**Ziel:**  
-Abschluss der Helper-Migration.
+# Milestone 13 – Packaging, pipx und CLI-Härtung
 
 ---
 
-# Milestone 13 – Packaging, CLI, Installation und pipx
+## 13a-Serie – CLI Review
 
-## PATCHHARBOR.13a – PatchHarbor CLI Surface Review
+### PATCHHARBOR.13a1 – CLI Command Inventory
 
-**Commit:** `Review PatchHarbor CLI surface`
+**Commit:** `Document PatchHarbor CLI command inventory`  
+**Scope:** target-only
 
-**Ziel:**  
-Alle CLI-Kommandos prüfen:
+### PATCHHARBOR.13a2 – CLI Exit Code Contract
 
-- `doctor`
-- `lint-script`
-- `run-script`
-- spätere Wrapper-/Export-/Helper-Kommandos
+**Commit:** `Document PatchHarbor CLI exit code contract`  
+**Scope:** target-only
 
----
+### PATCHHARBOR.13a3 – CLI Help Snapshot Tests
 
-## PATCHHARBOR.13b – Packaging Metadata Hardening
-
-**Commit:** `Harden PatchHarbor packaging metadata`
-
-**Ziel:**  
-`pyproject.toml`, Entry Points, README, Lizenz, Paketdaten prüfen.
+**Commit:** `Add CLI help snapshot tests`  
+**Scope:** target-only
 
 ---
 
-## PATCHHARBOR.13c – pipx Installation Smoke
+## 13b-Serie – Packaging
 
-**Commit:** `Add pipx installation smoke checks`
+### PATCHHARBOR.13b1 – pyproject Metadata Review
 
-**Ziel:**  
-PatchHarbor lokal und isoliert per pipx installieren/testen.
+**Commit:** `Harden PatchHarbor pyproject metadata`  
+**Scope:** target-only
 
----
+### PATCHHARBOR.13b2 – README Installation Section
 
-## PATCHHARBOR.13d – RepoDossier Dependency Documentation
+**Commit:** `Document PatchHarbor installation`  
+**Scope:** target-only
 
-**Commit:** `Document RepoDossier PatchHarbor dependency`
+### PATCHHARBOR.13b3 – pipx Smoke Script
 
-**Ziel:**  
-Dokumentieren, wie RepoDossier PatchHarbor erwartet:
+**Commit:** `Add pipx smoke script`  
+**Scope:** target-only
 
-- als pipx Tool
-- als venv Dependency
-- als lokaler Entwicklungscheckout
+### PATCHHARBOR.13b4 – Packaging Acceptance
 
----
-
-## PATCHHARBOR.13e – Packaging Acceptance
-
-**Commit:** `Add packaging acceptance`
-
-**Ziel:**  
-Abschluss Installation/Distribution.
+**Commit:** `Add packaging acceptance documentation`  
+**Scope:** target-only
 
 ---
 
-# Milestone 14 – Vollständige Source-Repo-Bereinigung RepoDossier
-
-## PATCHHARBOR.14a – RepoDossier Cleanup Inventory
-
-**Commit:** `Add RepoDossier cleanup inventory`
-
-**Ziel:**  
-Alle alten Scripts markieren:
-
-- behalten
-- dünner Wrapper
-- löschen
-- später klären
+# Milestone 14 – RepoDossier Cleanup in kleinen Teilen
 
 ---
 
-## PATCHHARBOR.14b – Remove Replaced Source Logic
+## 14a-Serie – Cleanup-Inventar
 
-**Commit:** `Remove replaced source-side logic`
+### PATCHHARBOR.14a1 – RepoDossier Script Cleanup Inventory
 
-**Ziel:**  
-Nur Logik löschen, die nachweislich durch PatchHarbor ersetzt ist.
+**Commit:** `Document RepoDossier script cleanup inventory`  
+**Scope:** source-only
 
-**Wichtig:**  
-Keine Löschung ohne Paritätstest.
+### PATCHHARBOR.14a2 – Replaced Logic Map
 
----
+**Commit:** `Document replaced source logic map`  
+**Scope:** source-only
 
-## PATCHHARBOR.14c – Update RepoDossier Developer Documentation
+### PATCHHARBOR.14a3 – Cleanup Safety Tests
 
-**Commit:** `Update RepoDossier developer documentation`
-
-**Ziel:**  
-README/Docs auf neuen Workflow aktualisieren.
+**Commit:** `Add RepoDossier cleanup safety tests`  
+**Scope:** source-only
 
 ---
 
-## PATCHHARBOR.14d – Update RepoDossier Tests and CI Expectations
+## 14b-Serie – Alte Logik entfernen, nur mit Parität
 
-**Commit:** `Update RepoDossier migration tests`
+Jede Löschung einzeln.
 
-**Ziel:**  
-Tests auf neuen Zustand bringen.
+### PATCHHARBOR.14b1 – Remove obsolete metadata helper wrapper
 
----
+**Commit:** `Remove obsolete metadata helper wrapper`  
+**Scope:** source-only
 
-## PATCHHARBOR.14e – RepoDossier Cleanup Acceptance
+### PATCHHARBOR.14b2 – Remove obsolete lint wrapper
 
-**Commit:** `Add RepoDossier cleanup acceptance`
+**Commit:** `Remove obsolete lint wrapper`  
+**Scope:** source-only
 
-**Ziel:**  
-RepoDossier ist bereinigt, aber Workflow weiterhin nutzbar.
+### PATCHHARBOR.14b3 – Remove obsolete runner helper part 1
 
----
+**Commit:** `Remove obsolete runner helper part 1`  
+**Scope:** source-only
 
-# Milestone 15 – PatchHarbor-Bereinigung und Public Readiness
+### PATCHHARBOR.14b4 – Remove obsolete runner helper part 2
 
-## PATCHHARBOR.15a – PatchHarbor Internal Cleanup Inventory
+**Commit:** `Remove obsolete runner helper part 2`  
+**Scope:** source-only
 
-**Commit:** `Add PatchHarbor cleanup inventory`
-
-**Ziel:**  
-Zielrepo auf temporäre Migrationsartefakte prüfen.
-
----
-
-## PATCHHARBOR.15b – Remove Temporary Migration Docs or Mark Historical
-
-**Commit:** `Clean up migration documentation`
-
-**Ziel:**  
-Temporäre Dateien entweder löschen oder als historische Migrationsdokumente markieren.
+Nur wenn Tests beweisen, dass nichts mehr genutzt wird.
 
 ---
 
-## PATCHHARBOR.15c – Consolidate Documentation
+## 14c-Serie – RepoDossier Doku
 
-**Commit:** `Consolidate PatchHarbor documentation`
+### PATCHHARBOR.14c1 – Update RepoDossier Developer Workflow Docs
 
-**Ziel:**  
-Aus vielen Migrationsdocs eine klare Nutzer-/Entwicklerdoku machen.
+**Commit:** `Update RepoDossier developer workflow documentation`
 
----
+### PATCHHARBOR.14c2 – Update RepoDossier Install Docs
 
-## PATCHHARBOR.15d – Public API Review
+**Commit:** `Update RepoDossier installation documentation`
 
-**Commit:** `Review PatchHarbor public API`
+### PATCHHARBOR.14c3 – Update RepoDossier Migration Notes
 
-**Ziel:**  
-Prüfen:
-
-- Modulnamen
-- Dataclasses
-- Exceptions
-- CLI-Verträge
-- Exit-Codes
-- Output-Verträge
+**Commit:** `Update RepoDossier migration notes`
 
 ---
 
-## PATCHHARBOR.15e – PatchHarbor Public Readiness Acceptance
+# Milestone 15 – PatchHarbor Cleanup und Public Readiness
+
+---
+
+## 15a-Serie – Target Cleanup-Inventar
+
+### PATCHHARBOR.15a1 – PatchHarbor Migration Artifact Inventory
+
+**Commit:** `Document PatchHarbor migration artifacts`
+
+### PATCHHARBOR.15a2 – PatchHarbor Public Docs Inventory
+
+**Commit:** `Document PatchHarbor public docs inventory`
+
+---
+
+## 15b-Serie – Docs konsolidieren
+
+### PATCHHARBOR.15b1 – Consolidate Runner Docs
+
+**Commit:** `Consolidate runner documentation`
+
+### PATCHHARBOR.15b2 – Consolidate Compatibility Docs
+
+**Commit:** `Consolidate compatibility documentation`
+
+### PATCHHARBOR.15b3 – Consolidate CLI Docs
+
+**Commit:** `Consolidate CLI documentation`
+
+### PATCHHARBOR.15b4 – Mark Migration Docs Historical
+
+**Commit:** `Mark migration documentation historical`
+
+---
+
+## 15c-Serie – Public API
+
+### PATCHHARBOR.15c1 – Public API Inventory
+
+**Commit:** `Document PatchHarbor public API inventory`
+
+### PATCHHARBOR.15c2 – Public API Stability Tests
+
+**Commit:** `Add public API stability tests`
+
+### PATCHHARBOR.15c3 – Public Readiness Acceptance
 
 **Commit:** `Add PatchHarbor public readiness acceptance`
 
-**Ziel:**  
-PatchHarbor ist als eigenständiges öffentliches Tool sauber.
+---
+
+# Milestone 16 – Dual-Repo End-to-End Acceptance
 
 ---
 
-# Milestone 16 – End-to-End Migration Acceptance
+## 16a-Serie – E2E Smokes
 
-## PATCHHARBOR.16a – Dual-Repo End-to-End Smoke
+### PATCHHARBOR.16a1 – Dual Repo Discovery Smoke
 
-**Commit:** `Add dual repository end-to-end smoke`
+**Commit:** `Add dual repository discovery smoke`
 
-**Ziel:**  
-Beide Repos im Zusammenspiel prüfen.
+### PATCHHARBOR.16a2 – Dual Repo Wrapper Smoke
 
-**Prüfen:**
+**Commit:** `Add dual repository wrapper smoke`
 
-- PatchHarbor Tests grün.
-- RepoDossier Tests grün.
-- RepoDossier kann PatchHarbor-Wrapper nutzen.
-- Alter Komfortworkflow funktioniert oder ist bewusst ersetzt.
-- Exportworkflow funktioniert.
-- Keine privaten Werte in beiden Repos.
+### PATCHHARBOR.16a3 – Dual Repo Export Smoke
+
+**Commit:** `Add dual repository export smoke`
+
+### PATCHHARBOR.16a4 – Dual Repo Private Value Audit
+
+**Commit:** `Add dual repository private value audit`
 
 ---
 
-## PATCHHARBOR.16b – Migration Rollback Notes
+## 16b-Serie – Abschlussdokumente
+
+### PATCHHARBOR.16b1 – Migration Rollback Notes
 
 **Commit:** `Add migration rollback notes`
 
-**Ziel:**  
-Dokumentieren, wie man bei Problemen zurückkommt.
-
----
-
-## PATCHHARBOR.16c – Migration Completion Checklist
+### PATCHHARBOR.16b2 – Migration Completion Checklist
 
 **Commit:** `Add migration completion checklist`
 
-**Ziel:**  
-Finale Checkliste:
-
-- beide Repos grün
-- installierbar
-- keine alten toten Scripts
-- keine privaten Werte
-- Docs aktuell
-- Tags/Releases geplant
-- Remote-Branches bereinigt
-
----
-
-## PATCHHARBOR.16d – Final Migration Acceptance
+### PATCHHARBOR.16b3 – Final Migration Acceptance
 
 **Commit:** `Add final migration acceptance`
 
-**Ziel:**  
-Migration offiziell abgeschlossen.
+---
+
+# Milestone 17 – Release und Branch-Hygiene
 
 ---
 
-# Milestone 17 – Release und Branch-Bereinigung
+## 17a-Serie – Versionierung
 
-## PATCHHARBOR.17a – Versioning Decision
+### PATCHHARBOR.17a1 – PatchHarbor Version Decision
 
 **Commit:** `Document PatchHarbor release version`
 
-**Ziel:**  
-Festlegen, ob erster Release `0.1.0`, `1.0.0` oder anderer Stand wird.
+### PATCHHARBOR.17a2 – RepoDossier Follow-up Version Decision
+
+**Commit:** `Document RepoDossier follow-up release version`
 
 ---
 
-## PATCHHARBOR.17b – PatchHarbor Release Preparation
+## 17b-Serie – Release
 
-**Commit:** `Prepare PatchHarbor release`
+### PATCHHARBOR.17b1 – PatchHarbor Release Notes
 
-**Ziel:**  
-Release-Notes, Tag, Build, Installationstest.
+**Commit:** `Add PatchHarbor release notes`
 
----
+### PATCHHARBOR.17b2 – PatchHarbor Release Build Smoke
 
-## PATCHHARBOR.17c – RepoDossier Follow-up Release Preparation
+**Commit:** `Add PatchHarbor release build smoke`
 
-**Commit:** `Prepare RepoDossier follow-up release`
+### PATCHHARBOR.17b3 – RepoDossier Follow-up Release Notes
 
-**Ziel:**  
-RepoDossier-Version nach Migration vorbereiten.
+**Commit:** `Add RepoDossier follow-up release notes`
 
 ---
 
-## PATCHHARBOR.17d – Branch Cleanup Plan
+## 17c-Serie – Branch Cleanup
 
-**Commit:** `Add branch cleanup plan`
+### PATCHHARBOR.17c1 – Branch Inventory
 
-**Ziel:**  
-Lokale und Remote-Branches prüfen und alte Migrationsbranches löschen.
+**Commit:** `Document migration branch inventory`
 
----
+### PATCHHARBOR.17c2 – Local Branch Cleanup Commands
 
-## PATCHHARBOR.17e – Final Repository Hygiene Acceptance
+**Commit:** `Document local branch cleanup commands`
+
+### PATCHHARBOR.17c3 – Remote Branch Cleanup Commands
+
+**Commit:** `Document remote branch cleanup commands`
+
+### PATCHHARBOR.17c4 – Final Repository Hygiene Acceptance
 
 **Commit:** `Add final repository hygiene acceptance`
 
-**Ziel:**  
-Beide Repos sind sauber:
+---
 
-- klare main-Branches
-- keine toten Migrationsbranches
-- keine untracked Migrationsartefakte
-- keine privaten Pfade
-- keine alten temporären Logs
-- installierbarer Endzustand
+# Operativer nächster Pfad
+
+Ab sofort halten wir uns an diese feinere Reihenfolge.
+
+Direkt als nächstes:
+
+```text
+PATCHHARBOR.09d-fix2
+```
+
+Wenn 09d-fix2 grün ist:
+
+```text
+PATCHHARBOR.09e1
+PATCHHARBOR.09e2
+PATCHHARBOR.09e3
+PATCHHARBOR.09f1
+PATCHHARBOR.09f2
+PATCHHARBOR.09f3a
+PATCHHARBOR.09f3b
+```
+
+Erst danach beginnt Milestone 10.
 
 ---
 
 # Abschlussdefinition
 
-Die Migration ist vollständig abgeschlossen, wenn alle folgenden Punkte wahr sind:
+Die Migration ist erst abgeschlossen, wenn:
 
-## PatchHarbor
-
-- eigenständiges GitHub-Projekt
-- installierbar
-- CLI dokumentiert
-- Tests grün
-- keine privaten Werte
-- generische APIs statt RepoDossier-Speziallogik
-- Release vorbereitet oder veröffentlicht
-
-## RepoDossier
-
-- nutzt PatchHarbor für generische Patch-/Runner-/Helper-Logik
-- enthält nur noch source-spezifische Wrapper und Projektlogik
-- alte duplizierte Scripts gelöscht oder historisch dokumentiert
-- Tests grün
-- Entwicklerdoku aktuell
-- Installation weiterhin klar
-
-## Beide Repos
-
-- keine ungeklärten Migrationsreste
-- keine uncommitted Änderungen
-- keine privaten Pfade oder Mailadressen
-- keine temporären Logs im Repo
-- Branches bereinigt
-- End-to-End-Smoke grün
-
----
-
-# Empfohlene direkte nächste Commits
-
-Ausgehend vom aktuellen Stand nach 08d:
-
-```text
-PATCHHARBOR.08e  Add source-side adoption acceptance documentation
-PATCHHARBOR.09a  Add source-side adoption preflight inventory
-PATCHHARBOR.09b  Add PatchHarbor patch runner wrapper
-PATCHHARBOR.09c  Add PatchHarbor runner wrapper smoke tests
-PATCHHARBOR.09d  Add PatchHarbor runner alias compatibility
-PATCHHARBOR.09e  Document controlled c alias switch plan
-PATCHHARBOR.09f  Add source-side runner adoption acceptance
-```
-
-Danach erst:
-
-```text
-PATCHHARBOR.10x  Download runner parity and replacement
-PATCHHARBOR.11x  Export runner migration
-PATCHHARBOR.12x  Helper migration
-PATCHHARBOR.13x  Packaging / pipx / CLI hardening
-PATCHHARBOR.14x  RepoDossier cleanup
-PATCHHARBOR.15x  PatchHarbor public readiness cleanup
-PATCHHARBOR.16x  End-to-end final acceptance
-PATCHHARBOR.17x  Release and branch cleanup
-```
+- PatchHarbor generisch und installierbar ist
+- RepoDossier nur noch source-spezifische Wrapper/Fachlogik enthält
+- beide Repos grün sind
+- End-to-End-Smokes grün sind
+- private Werte geprüft sind
+- alte Migrationsartefakte bereinigt oder historisch markiert sind
+- Branches und Releases vorbereitet sind
