@@ -130,7 +130,14 @@ def validate_records(
     requires_direct_bash = any(
         record.data.get("requires_direct_bash") is True for record in patch_records
     )
-    if patch_records and not requires_direct_bash:
+    display_progress_context_disabled = any(
+        record.data.get("progress_context") is False for record in display_records
+    )
+    if display_progress_context_disabled and progress_records:
+        errors.append(
+            "display progress_context=false must not be combined with progress metadata records"
+        )
+    if patch_records and not requires_direct_bash and not display_progress_context_disabled:
         progress_panels = {
             record.data.get("panel")
             for record in progress_records

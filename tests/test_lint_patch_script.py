@@ -213,3 +213,54 @@ def test_lint_patch_script_still_checks_commands_after_heredoc(tmp_path: Path) -
 
     assert result.returncode == 20
     assert "git-no-pager" in result.stdout
+
+
+def test_lint_patch_script_accepts_progress_context_false_without_progress_metadata(tmp_path: Path) -> None:
+    meta = "# " + "repodossier-" + "meta: "
+    script = _write_script(
+        tmp_path / "patch.sh",
+        "\n".join(
+            [
+                "#!/usr/bin/env bash",
+                meta + '{"type":"patch","id":"TEST","title":"Test patch","commit":"Test patch"}',
+                meta + '{"type":"display","context":1,"layout":"side-by-side","frame":false,"progress_context":false}',
+                "print_footer() {",
+                "  echo footer",
+                "}",
+                "python3 -m py_compile scripts/dev/validate_patch_metadata.py",
+            ]
+        )
+        + "\n",
+    )
+
+    result = _run_linter(script)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "Patch preflight OK" in result.stdout
+
+
+def test_lint_patch_script_rejects_progress_context_false_with_progress_metadata(tmp_path: Path) -> None:
+    meta = "# " + "repodossier-" + "meta: "
+    script = _write_script(
+        tmp_path / "patch.sh",
+        "\n".join(
+            [
+                "#!/usr/bin/env bash",
+                meta + '{"type":"patch","id":"TEST","title":"Test patch","commit":"Test patch"}',
+                meta + '{"type":"progress","panel":"roadmap","status":"active","file":"scripts/dev/patch-rules.md","start":1,"end":1}',
+                meta + '{"type":"progress","panel":"milestone","status":"partial","file":"scripts/dev/patch-rules.md","start":2,"end":2}',
+                meta + '{"type":"display","context":1,"layout":"side-by-side","frame":false,"progress_context":false}',
+                "print_footer() {",
+                "  echo footer",
+                "}",
+                "python3 -m py_compile scripts/dev/validate_patch_metadata.py",
+            ]
+        )
+        + "\n",
+    )
+
+    result = _run_linter(script)
+
+    assert result.returncode == 20
+    assert "metadata" in result.stdout
+    assert "display progress_context=false must not be combined with progress metadata records" in result.stdout
