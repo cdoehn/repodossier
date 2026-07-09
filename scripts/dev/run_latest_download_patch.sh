@@ -32,6 +32,26 @@ wait_seen="$download_dir/.repodossier-c-wait.seen"
 max_age_seconds="${C_RUNNER_MAX_AGE_SECONDS:-3600}"
 wait_sleep_seconds="${C_RUNNER_WAIT_SLEEP_SECONDS:-2}"
 wait_fresh_seconds="${C_RUNNER_WAIT_FRESH_SECONDS:-30}"
+show_progress_context=1
+case "${C_RUNNER_PROGRESS_CONTEXT:-1}" in
+  0|false|False|FALSE|no|No|NO|off|Off|OFF)
+    show_progress_context=0
+    ;;
+esac
+if [ "$#" -gt 0 ]; then
+  c_runner_filtered_args=()
+  for c_runner_arg in "$@"; do
+    case "$c_runner_arg" in
+      --no-progress-context|--no-context)
+        show_progress_context=0
+        ;;
+      *)
+        c_runner_filtered_args+=("$c_runner_arg")
+        ;;
+    esac
+  done
+  set -- "${c_runner_filtered_args[@]}"
+fi
 zip_extract_dir=""
 
 cleanup_c_runner() {
@@ -87,6 +107,8 @@ Usage:
   c
   c /path/to/patch.sh
   c /path/to/patch.zip
+  c --no-progress-context /path/to/patch.sh
+  c --no-context /path/to/patch.zip
   c --dry-run [path/to/patch.sh]
   c --wait
   c --help
@@ -781,7 +803,7 @@ fi
 info "Logfile bleibt in Downloads: $(show_path "$run_log")"
 info "Endzeit: $(date --iso-8601=seconds)"
 
-if [ -n "${progress_context_output:-}" ] && [ -s "$progress_context_output" ]; then
+if [ "$show_progress_context" -eq 1 ] && [ -n "${progress_context_output:-}" ] && [ -s "$progress_context_output" ]; then
   section "Roadmap / Milestone"
   cat "$progress_context_output"
 fi
