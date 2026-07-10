@@ -19,7 +19,7 @@ Nothing is deleted by PATCHHARBOR.14a1.
 | `scripts/dev/audit_public_repo.py` | source public-audit wrapper around PatchHarbor public-audit behavior | candidate for wrapper cleanup after source workflow docs are updated | prove `patchharbor audit-public` covers tracked-file audit needs |
 | `scripts/dev/check_dev_environment.py` | source environment wrapper using PatchHarbor environment model additively | candidate for wrapper cleanup after source workflow docs are updated | prove `patchharbor check-env` covers source doctor needs or keep documented source wrapper |
 | `scripts/dev/install_aliases.sh` | source alias installer for local developer shell aliases | keep source-side integration for now | only change after alias contract tests and install docs are updated |
-| `scripts/dev/lint_patch_script.py` | legacy/source patch lint helper | candidate for obsolete lint wrapper removal | prove `patchharbor lint-script` covers the workflow and old helper is not referenced |
+| `scripts/dev/lint_patch_script.py` | legacy/source patch lint helper | removed obsolete lint wrapper | prove `patchharbor lint-script` covers the workflow and old helper is not referenced |
 | `scripts/dev/patch-rules.md` | human patch policy and workflow rules | keep as source policy documentation for now | only split after generic policy model exists |
 | `scripts/dev/patch-workflow-rules.json` | machine-readable workflow rules | keep source-side data for now | only move after generic workflow-rule model and rule ID compatibility tests exist |
 | `scripts/dev/patch-workflow-rules.schema.json` | workflow-rule schema | keep source-side schema for now | only move after schema compatibility tests exist |
@@ -131,3 +131,10 @@ PATCHHARBOR.14a1 is accepted when:
 - `scripts/dev/validate_patch_metadata.py` was removed as an obsolete metadata helper wrapper.
 - `scripts/dev/run_latest_download_patch.sh` calls `scripts/dev/lint_patch_script.py --metadata-only` for `c` metadata checks.
 - `scripts/dev/lint_patch_script.py` keeps temporary metadata compatibility until PATCHHARBOR.14b2 removes the obsolete lint wrapper.
+
+
+## PATCHHARBOR.14b2 applied
+
+- `scripts/dev/lint_patch_script.py` was removed as an obsolete lint wrapper.
+- `scripts/dev/run_latest_download_patch.sh` calls PatchHarbor `lint-script` for dry-run preflight linting.
+- `scripts/dev/run_latest_download_patch.sh` keeps internal metadata validation for `c` compatibility.

@@ -12,7 +12,6 @@ CURRENT_HELPERS = [
     "scripts/dev/audit_public_repo.py",
     "scripts/dev/check_dev_environment.py",
     "scripts/dev/install_aliases.sh",
-    "scripts/dev/lint_patch_script.py",
     "scripts/dev/patch-rules.md",
     "scripts/dev/patch-workflow-rules.json",
     "scripts/dev/patch-workflow-rules.schema.json",
@@ -29,6 +28,7 @@ OPTIONAL_HELPERS = [
 ]
 REMOVED_HELPERS = [
     "scripts/dev/validate_patch_metadata.py",
+    "scripts/dev/lint_patch_script.py",
 ]
 
 def _read(path: Path) -> str:

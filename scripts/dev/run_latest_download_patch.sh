@@ -79,7 +79,6 @@ fi
 runner_dir="$(cd "$(dirname "$runner_source")" && pwd)"
 runner_repo="$(cd "$runner_dir/../.." && pwd)"
 progress_renderer="$runner_dir/show_progress_context.py"
-preflight_linter="$runner_dir/lint_patch_script.py"
 
 C_USE_COLOR=1
 if [ -n "${NO_COLOR:-}" ] || [ "${C_RUNNER_COLOR:-auto}" = "never" ]; then
@@ -689,15 +688,211 @@ fi
 info "Logfile: $(show_path "$run_log")"
 info "Startzeit: $(date --iso-8601=seconds)"
 
-section "Metadatenprüfung"
-if [ ! -x "$preflight_linter" ]; then
-  error "Patch-Preflight-Linter fehlt oder ist nicht ausführbar: $preflight_linter"
-  info "Logfile bleibt erhalten: $(show_path "$run_log")"
-  exit 10
-fi
 
+
+run_patchharbor_cli() {
+  local target_repo="${PATCHHARBOR_REPO:-}"
+  if [ -z "$target_repo" ]; then
+    local parent_dir
+    parent_dir="$(cd "$runner_repo/.." && pwd)"
+    if [ -d "$parent_dir/patch-harbor/src/patchharbor" ]; then
+      target_repo="$parent_dir/patch-harbor"
+    fi
+  fi
+
+  if [ -n "$target_repo" ] && [ -d "$target_repo/src/patchharbor" ]; then
+    PYTHONPATH="$target_repo/src${PYTHONPATH:+:$PYTHONPATH}" python3 -m patchharbor "$@"
+    return $?
+  fi
+
+  if command -v patchharbor >/dev/null 2>&1; then
+    patchharbor "$@"
+    return $?
+  fi
+
+  echo "PatchHarbor CLI not found. Set PATCHHARBOR_REPO or install patchharbor." >&2
+  return 127
+}
+
+section "Metadatenprüfung"
 action "Validiere repodossier-meta JSON-Kommentarzeilen."
-python3 "$preflight_linter" --metadata-only --script "$patch_script" --repo "$runner_repo"
+python3 - "$patch_script" "$runner_repo" <<'PY_META_C_RUNNER_14B2'
+from __future__ import annotations
+
+import json
+import sys
+from pathlib import Path
+from typing import Any
+
+PREFIX = "# repodossier-meta:"
+ALLOWED_TYPES = {"patch", "progress", "display"}
+ALLOWED_PATCH_FIELDS = {"type", "id", "title", "commit", "fix_for", "requires_direct_bash"}
+ALLOWED_PROGRESS_FIELDS = {"type", "panel", "status", "file", "start", "end", "anchor", "label"}
+ALLOWED_DISPLAY_FIELDS = {"type", "context", "layout", "frame", "progress_context"}
+ALLOWED_PANELS = {"roadmap", "milestone"}
+ALLOWED_STATUSES = {"done", "active", "partial", "todo"}
+ALLOWED_LAYOUTS = {"side-by-side", "stacked"}
+
+
+def fmt(line_number: int | None, message: str) -> str:
+    return message if line_number is None else f"line {line_number}: {message}"
+
+
+def require_string(line_number: int, data: dict[str, Any], errors: list[str], key: str) -> None:
+    value = data.get(key)
+    if not isinstance(value, str):
+        errors.append(fmt(line_number, f'missing or invalid string field "{key}"'))
+    elif not value.strip():
+        errors.append(fmt(line_number, f'field "{key}" must not be empty'))
+
+
+def require_bool(line_number: int, data: dict[str, Any], errors: list[str], key: str) -> None:
+    if key in data and not isinstance(data[key], bool):
+        errors.append(fmt(line_number, f'field "{key}" must be a boolean'))
+
+
+def require_int(line_number: int, data: dict[str, Any], errors: list[str], key: str, *, minimum: int = 1) -> None:
+    value = data.get(key)
+    if not isinstance(value, int) or isinstance(value, bool):
+        errors.append(fmt(line_number, f'missing or invalid integer field "{key}"'))
+    elif value < minimum:
+        errors.append(fmt(line_number, f'field "{key}" must be >= {minimum}'))
+
+
+def parse_records(script_path: Path) -> tuple[list[tuple[int, dict[str, Any]]], list[str]]:
+    records: list[tuple[int, dict[str, Any]]] = []
+    errors: list[str] = []
+    try:
+        lines = script_path.read_text(encoding="utf-8").splitlines()
+    except UnicodeDecodeError as exc:
+        return [], [f"cannot read script as UTF-8: {exc}"]
+    for line_number, line in enumerate(lines, start=1):
+        stripped = line.strip()
+        if not stripped.startswith(PREFIX):
+            continue
+        payload = stripped[len(PREFIX):].strip()
+        if not payload:
+            errors.append(fmt(line_number, "empty repodossier-meta payload"))
+            continue
+        try:
+            decoded = json.loads(payload)
+        except json.JSONDecodeError as exc:
+            errors.append(fmt(line_number, f"invalid JSON: {exc.msg}"))
+            continue
+        if not isinstance(decoded, dict):
+            errors.append(fmt(line_number, "metadata payload must be a JSON object"))
+            continue
+        records.append((line_number, decoded))
+    return records, errors
+
+
+def validate_records(records: list[tuple[int, dict[str, Any]]], repo_root: Path) -> list[str]:
+    errors: list[str] = []
+    if not records:
+        return ["missing required repodossier-meta block"]
+
+    patch_records = [(line, data) for line, data in records if data.get("type") == "patch"]
+    progress_records = [(line, data) for line, data in records if data.get("type") == "progress"]
+    display_records = [(line, data) for line, data in records if data.get("type") == "display"]
+
+    if len(patch_records) != 1:
+        errors.append(f"expected exactly one patch metadata record, found {len(patch_records)}")
+    if len(display_records) > 1:
+        errors.append(f"expected at most one display metadata record, found {len(display_records)}")
+
+    requires_direct_bash = any(data.get("requires_direct_bash") is True for _line, data in patch_records)
+    display_progress_context_disabled = any(data.get("progress_context") is False for _line, data in display_records)
+    if display_progress_context_disabled and progress_records:
+        errors.append("display progress_context=false must not be combined with progress metadata records")
+    if patch_records and not requires_direct_bash and not display_progress_context_disabled:
+        panels = {data.get("panel") for _line, data in progress_records if isinstance(data.get("panel"), str)}
+        if "roadmap" not in panels:
+            errors.append("missing required roadmap progress metadata record")
+        if "milestone" not in panels:
+            errors.append("missing required milestone progress metadata record")
+
+    for line_number, data in records:
+        meta_type = data.get("type")
+        if not isinstance(meta_type, str):
+            errors.append(fmt(line_number, 'missing or invalid string field "type"'))
+            continue
+        if meta_type not in ALLOWED_TYPES:
+            errors.append(fmt(line_number, f"type must be one of {sorted(ALLOWED_TYPES)}, got {meta_type!r}"))
+            continue
+        if meta_type == "patch":
+            for key in sorted(set(data) - ALLOWED_PATCH_FIELDS):
+                errors.append(fmt(line_number, f'unknown field "{key}"'))
+            for key in ("id", "title", "commit"):
+                require_string(line_number, data, errors, key)
+            if "fix_for" in data:
+                require_string(line_number, data, errors, "fix_for")
+            require_bool(line_number, data, errors, "requires_direct_bash")
+        elif meta_type == "progress":
+            for key in sorted(set(data) - ALLOWED_PROGRESS_FIELDS):
+                errors.append(fmt(line_number, f'unknown field "{key}"'))
+            for key in ("panel", "status", "file"):
+                require_string(line_number, data, errors, key)
+            has_start = "start" in data
+            has_end = "end" in data
+            has_anchor = "anchor" in data
+            if has_start != has_end:
+                errors.append(fmt(line_number, '"start" and "end" must be provided together'))
+            if not has_anchor and not (has_start and has_end):
+                errors.append(fmt(line_number, 'progress metadata must provide either "start"/"end" or "anchor"'))
+            if has_start:
+                require_int(line_number, data, errors, "start")
+            if has_end:
+                require_int(line_number, data, errors, "end")
+            if has_anchor:
+                require_string(line_number, data, errors, "anchor")
+            panel = data.get("panel")
+            status = data.get("status")
+            rel_file = data.get("file")
+            if isinstance(panel, str) and panel not in ALLOWED_PANELS:
+                errors.append(fmt(line_number, f"panel must be one of {sorted(ALLOWED_PANELS)}"))
+            if isinstance(status, str) and status not in ALLOWED_STATUSES:
+                errors.append(fmt(line_number, f"status must be one of {sorted(ALLOWED_STATUSES)}"))
+            if isinstance(rel_file, str):
+                rel_path = Path(rel_file)
+                if rel_path.is_absolute() or "." in rel_path.parts:
+                    errors.append(fmt(line_number, "file must be a safe repo-relative path"))
+                else:
+                    full_path = repo_root / rel_file
+                    if not full_path.exists():
+                        errors.append(fmt(line_number, f"file does not exist: {rel_file}"))
+                    elif full_path.is_dir():
+                        errors.append(fmt(line_number, f"file is a directory: {rel_file}"))
+        elif meta_type == "display":
+            for key in sorted(set(data) - ALLOWED_DISPLAY_FIELDS):
+                errors.append(fmt(line_number, f'unknown field "{key}"'))
+            if "context" in data:
+                require_int(line_number, data, errors, "context", minimum=0)
+                context = data.get("context")
+                if isinstance(context, int) and context > 50:
+                    errors.append(fmt(line_number, 'field "context" must be <= 50'))
+            if "layout" in data:
+                require_string(line_number, data, errors, "layout")
+                layout = data.get("layout")
+                if isinstance(layout, str) and layout not in ALLOWED_LAYOUTS:
+                    errors.append(fmt(line_number, f"layout must be one of {sorted(ALLOWED_LAYOUTS)}"))
+            if "frame" in data and not isinstance(data["frame"], bool):
+                errors.append(fmt(line_number, 'field "frame" must be a boolean'))
+            if "progress_context" in data and not isinstance(data["progress_context"], bool):
+                errors.append(fmt(line_number, 'field "progress_context" must be a boolean'))
+    return errors
+
+
+script_path = Path(sys.argv[1]).expanduser().resolve()
+repo_root = Path(sys.argv[2]).expanduser().resolve()
+records, parse_errors = parse_records(script_path)
+errors = parse_errors + validate_records(records, repo_root)
+if errors:
+    print("Metadata invalid:")
+    for item in errors:
+        print(f"  - {item}")
+    raise SystemExit(10)
+print("Metadata OK")
+PY_META_C_RUNNER_14B2
 metadata_status=$?
 if [ "$metadata_status" -ne 0 ]; then
   error "Metadatenprüfung fehlgeschlagen. Patch wird nicht ausgeführt."
@@ -705,6 +900,8 @@ if [ "$metadata_status" -ne 0 ]; then
   exit "$metadata_status"
 fi
 success "Metadaten OK."
+
+
 
 display_progress_context_hint="$(read_display_progress_context_hint "$patch_script" || true)"
 if [ "$progress_context_explicit" -eq 0 ]; then
@@ -721,19 +918,13 @@ fi
 
 if [ "$dry_run" -eq 1 ]; then
   section "Preflight"
-  if [ ! -x "$preflight_linter" ]; then
-    error "Patch-Preflight-Linter fehlt oder ist nicht ausführbar: $preflight_linter"
-    info "Patchscript wurde nicht ausgeführt und bleibt unverändert: $(show_path "$patch_script")"
-    exit 20
-  fi
-
-  action "Prüfe Patchscript mit lint_patch_script.py."
-  python3 "$preflight_linter" --script "$patch_script" --repo "$runner_repo"
+  action "Prüfe Patchscript mit patchharbor lint-script."
+  run_patchharbor_cli lint-script "$patch_script"
   preflight_status=$?
   if [ "$preflight_status" -ne 0 ]; then
     error "Preflight-Linter hat das Patchscript beanstandet."
     info "Patchscript wurde nicht ausgeführt und bleibt unverändert: $(show_path "$patch_script")"
-    exit "$preflight_status"
+    exit 20
   fi
   success "Preflight OK."
 fi

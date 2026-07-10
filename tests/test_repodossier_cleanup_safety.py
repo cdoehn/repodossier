@@ -215,10 +215,29 @@ def test_removed_metadata_helper_has_no_active_source_references() -> None:
 
     checked = [
         "scripts/dev/run_latest_download_patch.sh",
-        "scripts/dev/lint_patch_script.py",
         "scripts/dev/install_aliases.sh",
         "scripts/dev/run_patchharbor_patch.sh",
         "scripts/dev/r.sh",
+    ]
+    offenders = [
+        relative
+        for relative in checked
+        if candidate in (ROOT / relative).read_text(encoding="utf-8")
+    ]
+    assert not offenders, offenders
+
+
+def test_removed_lint_wrapper_has_no_active_source_references() -> None:
+    candidate = "scripts/dev/lint_patch_script.py"
+    if (ROOT / candidate).exists():
+        return
+
+    checked = [
+        "scripts/dev/run_latest_download_patch.sh",
+        "scripts/dev/install_aliases.sh",
+        "scripts/dev/run_patchharbor_patch.sh",
+        "scripts/dev/r.sh",
+        "scripts/dev/patch-rules.md",
     ]
     offenders = [
         relative

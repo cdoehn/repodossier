@@ -28,7 +28,8 @@ def _broken_body(*, patch_id: str = "PATCHHARBOR.SYNTAX.PARITY") -> str:
         "print_footer() {\n"
         "  echo footer\n"
         "}\n"
-        "python3 -m py_compile scripts/dev/lint_patch_script.py\n"
+        "trap print_footer EXIT\n"
+        "bash -n scripts/dev/run_latest_download_patch.sh\n"
         "if true; then\n"
         "echo broken\n"
     )

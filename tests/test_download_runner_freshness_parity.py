@@ -27,8 +27,9 @@ def _valid_preflight_body(commands: str, *, patch_id: str = "PATCHHARBOR.FRESHNE
         "print_footer() {\n"
         "  echo footer\n"
         "}\n"
+        "trap print_footer EXIT\n"
         f"{commands}\n"
-        "python3 -m py_compile scripts/dev/lint_patch_script.py\n"
+        "bash -n scripts/dev/run_latest_download_patch.sh\n"
     )
 
 

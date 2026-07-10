@@ -21,7 +21,7 @@ This document maps RepoDossier source-side development script logic to the Patch
 | patch metadata validation | `scripts/dev/validate_patch_metadata.py` | `src/patchharbor/metadata.py`, `src/patchharbor/runner_preflight.py`, runner preflight tests | replaced | candidate for 14b1 after cleanup safety tests prove no source references require the legacy helper |
 | patch lifecycle runner | `scripts/dev/run_latest_download_patch.sh` | `src/patchharbor/runner_core.py`, `src/patchharbor/runner_lifecycle.py`, `src/patchharbor/runner_preflight.py`, `src/patchharbor/runner_display.py` | wrapped / high-risk | cleanup only in small parts; keep `c` compatibility until alias/docs are updated |
 | PatchHarbor source wrapper | `scripts/dev/run_patchharbor_patch.sh` | PatchHarbor CLI `run-script` and runner modules | wrapped | keep as source-side bridge for now |
-| shell/script linting | `scripts/dev/lint_patch_script.py` | `src/patchharbor/patch_lint.py`, `src/patchharbor/patch_lint_api.py`, `src/patchharbor/patch_lint_rules.py`, CLI `lint-script` | replaced | candidate for 14b2 if no source docs/tests still depend on the old helper path |
+| shell/script linting | `scripts/dev/lint_patch_script.py` | `src/patchharbor/patch_lint.py`, `src/patchharbor/patch_lint_api.py`, `src/patchharbor/patch_lint_rules.py`, CLI `lint-script` | replaced | removed by 14b2 after cleanup safety tests |
 | workflow rule validation | `scripts/dev/validate_patch_workflow_rules.py`, `scripts/dev/patch-workflow-rules.json`, `scripts/dev/patch-workflow-rules.schema.json` | `src/patchharbor/workflow_rules.py`, `src/patchharbor/workflow_validation.py` | source-policy / blocked | keep until rule data ownership and schema compatibility are explicitly migrated |
 | public repository audit | `scripts/dev/audit_public_repo.py` | `src/patchharbor/public_audit.py`, `src/patchharbor/public_audit_checks.py`, CLI `audit-public` | wrapped | keep source wrapper until source workflow docs point to target command |
 | environment doctor | `scripts/dev/check_dev_environment.py` | `src/patchharbor/environment_check.py`, CLI `check-env` | wrapped | keep source wrapper until source workflow docs point to target command |
@@ -306,3 +306,10 @@ PATCHHARBOR.14a2 is accepted when:
 - `scripts/dev/validate_patch_metadata.py` was removed as an obsolete metadata helper wrapper.
 - `scripts/dev/run_latest_download_patch.sh` calls `scripts/dev/lint_patch_script.py --metadata-only` for `c` metadata checks.
 - `scripts/dev/lint_patch_script.py` keeps temporary metadata compatibility until PATCHHARBOR.14b2 removes the obsolete lint wrapper.
+
+
+## PATCHHARBOR.14b2 applied
+
+- `scripts/dev/lint_patch_script.py` was removed as an obsolete lint wrapper.
+- `scripts/dev/run_latest_download_patch.sh` calls PatchHarbor `lint-script` for dry-run preflight linting.
+- `scripts/dev/run_latest_download_patch.sh` keeps internal metadata validation for `c` compatibility.

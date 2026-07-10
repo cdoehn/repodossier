@@ -81,3 +81,10 @@ This inventory is accepted when:
 ## Next step
 
 PATCHHARBOR.12a2 should classify helpers using this inventory as input.
+
+
+## PATCHHARBOR.14b2 applied
+
+- `scripts/dev/lint_patch_script.py` was removed as an obsolete lint wrapper.
+- `scripts/dev/run_latest_download_patch.sh` calls PatchHarbor `lint-script` for dry-run preflight linting.
+- `scripts/dev/run_latest_download_patch.sh` keeps internal metadata validation for `c` compatibility.

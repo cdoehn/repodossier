@@ -1,266 +1,44 @@
 from __future__ import annotations
 
-import subprocess
-import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-LINTER = REPO_ROOT / "scripts" / "dev" / "lint_patch_script.py"
+DELETED_LINTER = REPO_ROOT / "scripts" / "dev" / "lint_patch_script.py"
+RUNNER = REPO_ROOT / "scripts" / "dev" / "run_latest_download_patch.sh"
 
 
-def _write_script(path: Path, body: str) -> Path:
-    path.write_text(body, encoding="utf-8")
-    path.chmod(0o755)
-    return path
+def test_obsolete_lint_wrapper_is_removed() -> None:
+    assert not DELETED_LINTER.exists()
 
 
-def _valid_script(tmp_path: Path, commands: str = "python3 -m py_compile scripts/dev/lint_patch_script.py\nprint_footer\n") -> Path:
-    return _write_script(
-        tmp_path / "patch.sh",
-        "\n".join(
-            [
-                "#!/usr/bin/env bash",
-                '# repodossier-meta: {"type":"patch","id":"TEST","title":"Test patch","commit":"Test patch"}',
-                '# repodossier-meta: {"type":"progress","panel":"roadmap","status":"active","file":"scripts/dev/patch-rules.md","start":1,"end":1}',
-                '# repodossier-meta: {"type":"progress","panel":"milestone","status":"partial","file":"scripts/dev/patch-rules.md","start":2,"end":2}',
-                '# repodossier-meta: {"type":"display","context":1,"layout":"side-by-side","frame":false}',
-                "print_footer() {",
-                "  echo footer",
-                "}",
-                commands,
-            ]
-        )
-        + "\n",
-    )
+def test_c_runner_no_longer_references_deleted_lint_wrapper() -> None:
+    text = RUNNER.read_text(encoding="utf-8")
 
+    assert "scripts/dev/lint_patch_script.py" not in text
+    assert "preflight_linter=" not in text
+    assert "run_patchharbor_cli lint-script" in text
+    assert "Prüfe Patchscript mit patchharbor lint-script." in text
 
-def _run_linter(script: Path):
-    return subprocess.run(
-        [sys.executable, str(LINTER), "--script", str(script), "--repo", str(REPO_ROOT)],
-        text=True,
-        capture_output=True,
-        check=False,
-    )
 
+def test_c_runner_keeps_internal_metadata_validation() -> None:
+    text = RUNNER.read_text(encoding="utf-8")
 
-def test_lint_patch_script_accepts_valid_patch(tmp_path: Path) -> None:
-    script = _valid_script(tmp_path)
+    assert "PY_META_C_RUNNER_14B2" in text
+    assert "Metadata invalid:" in text
+    assert "display progress_context=false must not be combined with progress metadata records" in text
+    assert "progress_context" in text
 
-    result = _run_linter(script)
 
-    assert result.returncode == 0, result.stdout + result.stderr
-    assert "Patch preflight OK" in result.stdout
-
-
-def test_lint_patch_script_rejects_missing_metadata(tmp_path: Path) -> None:
-    script = _write_script(
-        tmp_path / "patch.sh",
-        "#!/usr/bin/env bash\nprint_footer() { echo footer; }\npython3 -m py_compile scripts/dev/lint_patch_script.py\n",
-    )
-
-    result = _run_linter(script)
-
-    assert result.returncode == 20
-    assert "metadata" in result.stdout
-    assert "missing required repodossier-meta block" in result.stdout
-
-
-def test_lint_patch_script_rejects_bundle_project(tmp_path: Path) -> None:
-    script = _valid_script(tmp_path, "./bundle_project.sh\npython3 -m py_compile scripts/dev/lint_patch_script.py\n")
-
-    result = _run_linter(script)
-
-    assert result.returncode == 20
-    assert "no-bundle-project" in result.stdout
-
-
-def test_lint_patch_script_rejects_own_global_tee_logging(tmp_path: Path) -> None:
-    script = _valid_script(tmp_path, "exec > >(tee patch.log) 2>&1\npython3 -m py_compile scripts/dev/lint_patch_script.py\n")
-
-    result = _run_linter(script)
-
-    assert result.returncode == 20
-    assert "no-global-tee-log" in result.stdout
-
-
-def test_lint_patch_script_rejects_clipboard_tools(tmp_path: Path) -> None:
-    script = _valid_script(tmp_path, "echo bad | xclip -selection clipboard\npython3 -m py_compile scripts/dev/lint_patch_script.py\n")
-
-    result = _run_linter(script)
-
-    assert result.returncode == 20
-    assert "no-clipboard" in result.stdout
-
-
-def test_lint_patch_script_allows_git_diff_and_forbidden_terms_in_quoted_diagnostics(tmp_path: Path) -> None:
-    script = _valid_script(
-        tmp_path,
-        "echo \"git diff --cached --quiet is documented here\"\n"
-        "echo 'bundle_project.sh xclip aider git diff are quoted diagnostics'\n"
-        "python3 -m py_compile scripts/dev/lint_patch_script.py\n",
-    )
-
-    result = _run_linter(script)
-
-    assert result.returncode == 0, result.stdout + result.stderr
-
-
-def test_lint_patch_script_rejects_git_diff_without_no_pager(tmp_path: Path) -> None:
-    script = _valid_script(tmp_path, "git diff -- src\npython3 -m py_compile scripts/dev/lint_patch_script.py\n")
-
-    result = _run_linter(script)
-
-    assert result.returncode == 20
-    assert "git-no-pager" in result.stdout
-
-
-def test_lint_patch_script_allows_git_diff_quiet_commit_guard(tmp_path: Path) -> None:
-    script = _valid_script(
-        tmp_path,
-        "if git diff --cached --quiet; then\n"
-        "  echo nothing-to-commit\n"
-        "fi\n"
-        "python3 -m py_compile scripts/dev/lint_patch_script.py\n",
-    )
-
-    result = _run_linter(script)
-
-    assert result.returncode == 0, result.stdout + result.stderr
-
-
-def test_lint_patch_script_allows_git_no_pager_diff(tmp_path: Path) -> None:
-    script = _valid_script(tmp_path, "git --no-pager diff -- src\npython3 -m py_compile scripts/dev/lint_patch_script.py\n")
-
-    result = _run_linter(script)
-
-    assert result.returncode == 0, result.stdout + result.stderr
-
-
-def test_lint_patch_script_rejects_missing_footer(tmp_path: Path) -> None:
-    script = _write_script(
-        tmp_path / "patch.sh",
-        "\n".join(
-            [
-                "#!/usr/bin/env bash",
-                '# repodossier-meta: {"type":"patch","id":"TEST","title":"Test patch","commit":"Test patch"}',
-                '# repodossier-meta: {"type":"progress","panel":"roadmap","status":"active","file":"scripts/dev/patch-rules.md","start":1,"end":1}',
-                '# repodossier-meta: {"type":"progress","panel":"milestone","status":"partial","file":"scripts/dev/patch-rules.md","start":2,"end":2}',
-                "python3 -m py_compile scripts/dev/lint_patch_script.py",
-            ]
-        )
-        + "\n",
-    )
-
-    result = _run_linter(script)
-
-    assert result.returncode == 20
-    assert "missing-footer" in result.stdout
-
-
-def test_lint_patch_script_rejects_literal_triple_backticks(tmp_path: Path) -> None:
-    fence = chr(96) * 3
-    script = _valid_script(
-        tmp_path,
-        f"cat > README.md <<'EOF'\n{fence}\nEOF\npython3 -m py_compile scripts/dev/lint_patch_script.py\n",
-    )
-
-    result = _run_linter(script)
-
-    assert result.returncode == 20
-    assert "literal-triple-backtick" in result.stdout
-
-
-def test_lint_patch_script_ignores_forbidden_terms_inside_test_fixture_heredoc(tmp_path: Path) -> None:
-    script = _valid_script(
-        tmp_path,
-        "\n".join(
-            [
-                "cat > tests/test_fixture.py <<'PYTEST'",
-                "def test_fixture_strings():",
-                "    assert 'bundle_project.sh' in 'bundle_project.sh'",
-                "    assert 'xclip' in 'xclip'",
-                "    assert 'aider' in 'aider'",
-                "    assert 'git diff' in 'git diff'",
-                "PYTEST",
-                "python3 -m py_compile scripts/dev/lint_patch_script.py",
-                "",
-            ]
-        ),
-    )
-
-    result = _run_linter(script)
-
-    assert result.returncode == 0, result.stdout + result.stderr
-
-
-def test_lint_patch_script_still_checks_commands_after_heredoc(tmp_path: Path) -> None:
-    script = _valid_script(
-        tmp_path,
-        "\n".join(
-            [
-                "cat > tests/test_fixture.py <<'PYTEST'",
-                "def test_fixture_strings():",
-                "    assert 'bundle_project.sh' in 'bundle_project.sh'",
-                "PYTEST",
-                "git diff -- src",
-                "python3 -m py_compile scripts/dev/lint_patch_script.py",
-                "",
-            ]
-        ),
-    )
-
-    result = _run_linter(script)
-
-    assert result.returncode == 20
-    assert "git-no-pager" in result.stdout
-
-
-def test_lint_patch_script_accepts_progress_context_false_without_progress_metadata(tmp_path: Path) -> None:
-    meta = "# " + "repodossier-" + "meta: "
-    script = _write_script(
-        tmp_path / "patch.sh",
-        "\n".join(
-            [
-                "#!/usr/bin/env bash",
-                meta + '{"type":"patch","id":"TEST","title":"Test patch","commit":"Test patch"}',
-                meta + '{"type":"display","context":1,"layout":"side-by-side","frame":false,"progress_context":false}',
-                "print_footer() {",
-                "  echo footer",
-                "}",
-                "python3 -m py_compile scripts/dev/lint_patch_script.py",
-            ]
-        )
-        + "\n",
-    )
-
-    result = _run_linter(script)
-
-    assert result.returncode == 0, result.stdout + result.stderr
-    assert "Patch preflight OK" in result.stdout
-
-
-def test_lint_patch_script_rejects_progress_context_false_with_progress_metadata(tmp_path: Path) -> None:
-    meta = "# " + "repodossier-" + "meta: "
-    script = _write_script(
-        tmp_path / "patch.sh",
-        "\n".join(
-            [
-                "#!/usr/bin/env bash",
-                meta + '{"type":"patch","id":"TEST","title":"Test patch","commit":"Test patch"}',
-                meta + '{"type":"progress","panel":"roadmap","status":"active","file":"scripts/dev/patch-rules.md","start":1,"end":1}',
-                meta + '{"type":"progress","panel":"milestone","status":"partial","file":"scripts/dev/patch-rules.md","start":2,"end":2}',
-                meta + '{"type":"display","context":1,"layout":"side-by-side","frame":false,"progress_context":false}',
-                "print_footer() {",
-                "  echo footer",
-                "}",
-                "python3 -m py_compile scripts/dev/lint_patch_script.py",
-            ]
-        )
-        + "\n",
-    )
-
-    result = _run_linter(script)
-
-    assert result.returncode == 20
-    assert "metadata" in result.stdout
-    assert "display progress_context=false must not be combined with progress metadata records" in result.stdout
+def test_lint_wrapper_cleanup_tests_do_not_store_private_local_values() -> None:
+    text = "\n".join(path.read_text(encoding="utf-8") for path in [Path(__file__).resolve(), RUNNER])
+    forbidden = [
+        "/home/" + "christian",
+        "christian" + "@",
+        "christian.doehn" + "@" + "gmail.com",
+        "Think" + "Pad",
+        "Blade-" + "15",
+        "~/" + "Projekte",
+        chr(96) * 3,
+    ]
+    for value in forbidden:
+        assert value not in text

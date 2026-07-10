@@ -212,3 +212,10 @@ This classification is accepted when:
 - immediate next steps match `planning/milestones_migration.md`
 - no helper behavior is changed
 - both repositories remain clean except for this classification document
+
+
+## PATCHHARBOR.14b2 applied
+
+- `scripts/dev/lint_patch_script.py` was removed as an obsolete lint wrapper.
+- `scripts/dev/run_latest_download_patch.sh` calls PatchHarbor `lint-script` for dry-run preflight linting.
+- `scripts/dev/run_latest_download_patch.sh` keeps internal metadata validation for `c` compatibility.

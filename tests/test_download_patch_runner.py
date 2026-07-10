@@ -49,8 +49,9 @@ def _preflight_script_body(commands: str) -> str:
         "print_footer() {\n"
         "  echo footer\n"
         "}\n"
+        "trap print_footer EXIT\n"
         f"{commands}\n"
-        "python3 -m py_compile scripts/dev/lint_patch_script.py\n"
+        "bash -n scripts/dev/run_latest_download_patch.sh\n"
     )
 
 
@@ -429,7 +430,7 @@ def test_c_runner_dry_run_rejects_preflight_failure_without_moving(tmp_path: Pat
     assert not (download_dir / "done" / "bad_dry_run_patch.sh").exists()
     assert not (download_dir / "failed" / "bad_dry_run_patch.sh").exists()
     assert "Preflight-Linter hat das Patchscript beanstandet" in result.stdout
-    assert "missing-footer" in result.stdout
+    assert "patch.footer" in result.stdout
 
 
 def test_c_runner_dry_run_accepts_explicit_script_path(tmp_path: Path) -> None:
@@ -467,7 +468,7 @@ def test_c_runner_dry_run_syntax_failure_does_not_move_script(tmp_path: Path) ->
     broken = _write_script(
         download_dir,
         "dry_run_broken_patch.sh",
-        f"#!/usr/bin/env bash\n{_meta()}\nprint_footer() {{ echo footer; }}\npython3 -m py_compile scripts/dev/lint_patch_script.py\nif true; then\necho broken\n",
+        f"#!/usr/bin/env bash\n{_meta()}\nprint_footer() {{ echo footer; }}\ntrap print_footer EXIT\ntrap print_footer EXIT\nbash -n scripts/dev/run_latest_download_patch.sh\nif true; then\necho broken\n",
     )
 
     result = _run_runner(download_dir, "--dry-run")
