@@ -21,6 +21,12 @@ ROOT = Path(__file__).resolve().parents[1]
 SRC_ROOT = ROOT / "src"
 
 
+def _git_init(path: Path) -> Path:
+    path.mkdir(parents=True, exist_ok=True)
+    subprocess.run(["git", "-C", str(path), "init"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
+    return path
+
+
 def test_split_archive_positionals_requires_source_and_output() -> None:
     with pytest.raises(ArchiveCliArgumentError):
         split_archive_positionals([])
@@ -76,26 +82,44 @@ def test_main_reports_error_for_one_positional(capsys: pytest.CaptureFixture[str
     assert "one or more source folders followed by the output folder" in captured.err
 
 
-def test_main_accepts_two_positionals(capsys: pytest.CaptureFixture[str]) -> None:
-    exit_code = main(["repo", "out"])
+def test_main_rejects_non_git_source(capsys: pytest.CaptureFixture[str], tmp_path: Path) -> None:
+    source = tmp_path / "plain"
+    source.mkdir()
+
+    exit_code = main([str(source), str(tmp_path / "out")])
+
+    captured = capsys.readouterr()
+    assert exit_code != 0
+    assert "not inside a Git repository" in captured.err
+
+
+def test_main_accepts_two_positionals(capsys: pytest.CaptureFixture[str], tmp_path: Path) -> None:
+    repo = _git_init(tmp_path / "repo")
+    output_dir = tmp_path / "out"
+
+    exit_code = main([str(repo), str(output_dir)])
 
     captured = capsys.readouterr()
     assert exit_code == 0
     assert "RepoDossier archive CLI contract accepted." in captured.out
     assert "Sources: 1" in captured.out
-    assert "Output folder: out" in captured.out
+    assert f"Output folder: {output_dir}" in captured.out
     assert "Archive filename: repodossier-archive.zip" in captured.out
+    assert "Repositories: 1" in captured.out
 
 
-def test_main_accepts_multiple_sources_and_output_name(capsys: pytest.CaptureFixture[str]) -> None:
-    exit_code = main(["repo-a", "repo-b", "out", "--output-name", "mein-paket.zip"])
+def test_main_accepts_multiple_sources_and_output_name(capsys: pytest.CaptureFixture[str], tmp_path: Path) -> None:
+    repo_a = _git_init(tmp_path / "repo-a")
+    repo_b = _git_init(tmp_path / "repo-b")
+    output_dir = tmp_path / "out"
+
+    exit_code = main([str(repo_a), str(repo_b), str(output_dir), "--output-name", "mein-paket.zip"])
 
     captured = capsys.readouterr()
     assert exit_code == 0
     assert "Sources: 2" in captured.out
-    assert "1. repo-a" in captured.out
-    assert "2. repo-b" in captured.out
     assert "Archive filename: mein-paket.zip" in captured.out
+    assert "Repositories: 2" in captured.out
 
 
 def test_help_screen_describes_archive_contract() -> None:

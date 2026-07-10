@@ -6,9 +6,11 @@ from .cli_split import add_split_export_options, enable_split_write_interceptor_
 from .dependencies import append_dependencies_full_section
 from .archive_cli import (
     ArchiveCliArgumentError,
+    ArchiveSourceResolutionError,
     build_archive_parser,
-    format_archive_contract_summary,
+    format_resolved_archive_summary,
     parse_archive_cli_arguments,
+    resolve_archive_inputs,
 )
 
 import argparse
@@ -213,14 +215,21 @@ def _print_archive_cli_error(parser: argparse.ArgumentParser, message: str) -> N
 
 
 def _handle_archive_contract_command(arguments: object) -> int:
-    """Handle the new archive contract after parsing.
+    """Resolve sources for the new archive contract.
 
-    Later hotfix commits wire this contract to source resolution, snapshots, and
-    ZIP generation. Commit 1 deliberately stops after a successful parse so the
-    CLI surface can be tested independently.
+    Later hotfix commits wire the resolved model to snapshot enumeration,
+    ZIP generation, and report source references.
     """
 
-    print(format_archive_contract_summary(arguments))
+    try:
+        resolved = resolve_archive_inputs(arguments)  # type: ignore[arg-type]
+    except ArchiveSourceResolutionError as exc:
+        import sys
+
+        print(f"repodossier: error: {exc}", file=sys.stderr)
+        return 2
+
+    print(format_resolved_archive_summary(resolved))
     return 0
 
 
