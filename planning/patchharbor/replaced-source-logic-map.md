@@ -1,5 +1,15 @@
 # PATCHHARBOR.14a2 – Replaced Logic Map
 
+
+## PATCHHARBOR.14 cleanup ordered anchor
+
+This anchor keeps cleanup-safety tests tied to the intended 14b execution order.
+
+1. PATCHHARBOR.14b1 – Remove obsolete metadata helper wrapper
+2. PATCHHARBOR.14b2 – Remove obsolete lint wrapper
+3. PATCHHARBOR.14b3 – Remove obsolete runner helper part 1
+4. PATCHHARBOR.14b4 – Remove obsolete runner helper part 2
+
 This document maps RepoDossier source-side development script logic to the PatchHarbor target implementation that now replaces, supports, or deliberately does not replace it.
 
 `planning/milestones_migration.md` is the operative plan. PATCHHARBOR.14a2 is source-only documentation and does not delete or edit source scripts.
@@ -26,7 +36,7 @@ This document maps RepoDossier source-side development script logic to the Patch
 | public repository audit | `scripts/dev/audit_public_repo.py` | `src/patchharbor/public_audit.py`, `src/patchharbor/public_audit_checks.py`, CLI `audit-public` | wrapped | keep source wrapper until source workflow docs point to target command |
 | environment doctor | `scripts/dev/check_dev_environment.py` | `src/patchharbor/environment_check.py`, CLI `check-env` | wrapped | keep source wrapper until source workflow docs point to target command |
 | export runner planning | `scripts/dev/r.sh`, `scripts/dev/run_repodossier_exports.sh` | `src/patchharbor/export_model.py`, `src/patchharbor/export_planning.py`, `src/patchharbor/export_display.py` | wrapped | keep source-specific export wrapper |
-| download candidate migration artifact | `scripts/dev/run_latest_download_patch_patchharbor_candidate.sh` | final source runner wrapper and PatchHarbor runner | replaced if unreferenced | likely 14b3 candidate after safety tests prove no active references |
+| download candidate migration artifact | `scripts/dev/run_latest_download_patch_patchharbor_candidate.sh` | final source runner wrapper and PatchHarbor runner | replaced if unreferenced | removed by PATCHHARBOR.14b3 after safety tests proved no active wrapper references |
 | progress/context display | `scripts/dev/show_progress_context.py` | partially covered by runner display and metadata/context contracts | blocked / display-sensitive | do not delete because display-only instability must not block functional cleanup, but responsibilities must be mapped first |
 | alias installer | `scripts/dev/install_aliases.sh` | no target replacement | source-policy | keep source-side |
 | human patch rules | `scripts/dev/patch-rules.md` | no full target replacement | source-policy | keep source-side |
@@ -313,3 +323,11 @@ PATCHHARBOR.14a2 is accepted when:
 - `scripts/dev/lint_patch_script.py` was removed as an obsolete lint wrapper.
 - `scripts/dev/run_latest_download_patch.sh` calls PatchHarbor `lint-script` for dry-run preflight linting.
 - `scripts/dev/run_latest_download_patch.sh` keeps internal metadata validation for `c` compatibility.
+
+
+## PATCHHARBOR.14b3 applied
+
+- `scripts/dev/run_latest_download_patch_patchharbor_candidate.sh` was removed as a historical candidate artifact.
+- `scripts/dev/run_latest_download_patch.sh` remains the productive `c` runner.
+- `scripts/dev/run_patchharbor_patch.sh` remains the source-side PatchHarbor wrapper.
+- No alias, `c`, `r`, export wrapper, or target PatchHarbor file was changed by this cleanup step.

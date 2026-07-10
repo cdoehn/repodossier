@@ -26,7 +26,7 @@ Nothing is deleted by PATCHHARBOR.14a1.
 | `scripts/dev/r.sh` | source `r` export wrapper entry point | keep thin compatibility wrapper | only remove if alias/docs no longer require `r` |
 | `scripts/dev/repo_patch_helper.py` | source repository patch helper library/CLI | high-risk candidate, not first cleanup target | requires explicit replaced-logic map and tests before any deletion |
 | `scripts/dev/run_latest_download_patch.sh` | source `c` download patch runner | candidate for obsolete runner helper cleanup in small parts | prove `scripts/dev/run_patchharbor_patch.sh` and PatchHarbor runner cover the workflow |
-| `scripts/dev/run_latest_download_patch_patchharbor_candidate.sh` | migration candidate artifact for download runner transition | candidate for cleanup artifact removal | prove no alias, test, or docs path still points at it |
+| `scripts/dev/run_latest_download_patch_patchharbor_candidate.sh` | migration candidate artifact for download runner transition | removed cleanup artifact | prove no alias, test, or docs path still points at it |
 | `scripts/dev/run_patchharbor_patch.sh` | source wrapper around PatchHarbor patch runner | keep source-side compatibility wrapper for now | only change after `c` alias and source docs point to the final wrapper |
 | `scripts/dev/run_repodossier_exports.sh` | source export runner using PatchHarbor export planning additively | keep source-specific export wrapper | only remove if RepoDossier export workflow is replaced by documented PatchHarbor command config |
 | `scripts/dev/show_progress_context.py` | source progress/context display helper | display-sensitive, do not block cleanup on display-only tests | remove only after metadata/context display responsibilities are mapped |
@@ -138,3 +138,11 @@ PATCHHARBOR.14a1 is accepted when:
 - `scripts/dev/lint_patch_script.py` was removed as an obsolete lint wrapper.
 - `scripts/dev/run_latest_download_patch.sh` calls PatchHarbor `lint-script` for dry-run preflight linting.
 - `scripts/dev/run_latest_download_patch.sh` keeps internal metadata validation for `c` compatibility.
+
+
+## PATCHHARBOR.14b3 applied
+
+- `scripts/dev/run_latest_download_patch_patchharbor_candidate.sh` was removed as a historical candidate artifact.
+- `scripts/dev/run_latest_download_patch.sh` remains the productive `c` runner.
+- `scripts/dev/run_patchharbor_patch.sh` remains the source-side PatchHarbor wrapper.
+- No alias, `c`, `r`, export wrapper, or target PatchHarbor file was changed by this cleanup step.

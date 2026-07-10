@@ -15,7 +15,7 @@ This document classifies RepoDossier development helper files after the PATCHHAR
 | patch metadata helpers | `scripts/dev/validate_patch_metadata.py`, `scripts/dev/show_progress_context.py` | compatibility-sensitive; keep source-side until metadata/display contracts are explicitly migrated |
 | source alias and wrapper helpers | `scripts/dev/install_aliases.sh`, `scripts/dev/run_patchharbor_patch.sh` | source integration wrappers; keep source-side unless a later patch explicitly changes alias behavior |
 | source export helpers | `scripts/dev/r.sh`, `scripts/dev/run_repodossier_exports.sh` | already covered by PATCHHARBOR.11 migration |
-| source download helpers | `scripts/dev/run_latest_download_patch.sh`, `scripts/dev/run_latest_download_patch_patchharbor_candidate.sh` | already covered by PATCHHARBOR.10 migration |
+| source download helpers | `scripts/dev/run_latest_download_patch.sh` | already covered by PATCHHARBOR.10 migration; candidate artifact removed by PATCHHARBOR.14b3 |
 | repository patch helper | `scripts/dev/repo_patch_helper.py` | candidate for later classification only; do not move before exact contract tests exist |
 | documentation and policy data | `scripts/dev/patch-rules.md` | source policy/rule documentation; keep source-side unless a later generic policy model is introduced |
 
@@ -219,3 +219,11 @@ This classification is accepted when:
 - `scripts/dev/lint_patch_script.py` was removed as an obsolete lint wrapper.
 - `scripts/dev/run_latest_download_patch.sh` calls PatchHarbor `lint-script` for dry-run preflight linting.
 - `scripts/dev/run_latest_download_patch.sh` keeps internal metadata validation for `c` compatibility.
+
+
+## PATCHHARBOR.14b3 applied
+
+- `scripts/dev/run_latest_download_patch_patchharbor_candidate.sh` was removed as a historical candidate artifact.
+- `scripts/dev/run_latest_download_patch.sh` remains the productive `c` runner.
+- `scripts/dev/run_patchharbor_patch.sh` remains the source-side PatchHarbor wrapper.
+- No alias, `c`, `r`, export wrapper, or target PatchHarbor file was changed by this cleanup step.

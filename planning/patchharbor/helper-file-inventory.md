@@ -28,7 +28,7 @@ Optional/currently migration-created helpers may also exist:
 
 | Path | Current role | Migration note |
 | --- | --- | --- |
-| `scripts/dev/run_latest_download_patch_patchharbor_candidate.sh` | candidate download runner wrapper | migration artifact from PATCHHARBOR.10d |
+| `scripts/dev/run_latest_download_patch_patchharbor_candidate.sh` | removed candidate download runner wrapper | migration artifact from PATCHHARBOR.10d, removed by PATCHHARBOR.14b3 |
 
 ## Helper groups for the next classification step
 
@@ -88,3 +88,11 @@ PATCHHARBOR.12a2 should classify helpers using this inventory as input.
 - `scripts/dev/lint_patch_script.py` was removed as an obsolete lint wrapper.
 - `scripts/dev/run_latest_download_patch.sh` calls PatchHarbor `lint-script` for dry-run preflight linting.
 - `scripts/dev/run_latest_download_patch.sh` keeps internal metadata validation for `c` compatibility.
+
+
+## PATCHHARBOR.14b3 applied
+
+- `scripts/dev/run_latest_download_patch_patchharbor_candidate.sh` was removed as a historical candidate artifact.
+- `scripts/dev/run_latest_download_patch.sh` remains the productive `c` runner.
+- `scripts/dev/run_patchharbor_patch.sh` remains the source-side PatchHarbor wrapper.
+- No alias, `c`, `r`, export wrapper, or target PatchHarbor file was changed by this cleanup step.

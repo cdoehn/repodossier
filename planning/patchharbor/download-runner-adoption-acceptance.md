@@ -9,7 +9,7 @@ The accepted state is deliberately conservative: the PatchHarbor-backed download
 | Area | Path |
 | --- | --- |
 | productive download runner | `scripts/dev/run_latest_download_patch.sh` |
-| PatchHarbor-backed candidate runner | `scripts/dev/run_latest_download_patch_patchharbor_candidate.sh` |
+| historical historical historical PatchHarbor-backed candidate runner | `scripts/dev/run_latest_download_patch_patchharbor_candidate.sh` |
 | wrapper draft | `planning/patchharbor/source-download-runner-wrapper-draft.md` |
 | wrapper harness tests | `tests/test_download_runner_wrapper_harness.py` |
 | wrapper candidate tests | `tests/test_download_runner_wrapper_candidate.py` |
@@ -28,7 +28,7 @@ The source-side candidate depends on the accepted PATCHHARBOR.10c target plannin
 PATCHHARBOR.10d accepts the following behavior:
 
 - the old productive source runner remains present
-- the candidate runner remains additive
+- the historical candidate runner was additive before PATCHHARBOR.14b3
 - the user-facing `c` workflow is not switched by this patch
 - the candidate can be compared against the old runner by tests
 - the candidate keeps `progress_context=false` metadata support in dummy patches
@@ -46,7 +46,7 @@ This acceptance documentation does not:
 - edit alias installers
 - edit export scripts
 - remove the old runner
-- delete the candidate runner
+- delete the candidate runner before PATCHHARBOR.14b3 before PATCHHARBOR.14b3 before PATCHHARBOR.14b3
 - change PatchHarbor target code
 - change runner output contracts
 
@@ -70,3 +70,17 @@ Those tests should verify:
 - the document records rollback instructions
 - the candidate and harness files exist
 - no private/local values are stored
+
+
+## PATCHHARBOR.14b3 applied
+
+- `scripts/dev/run_latest_download_patch_patchharbor_candidate.sh` was removed as a historical candidate artifact.
+- `scripts/dev/run_latest_download_patch.sh` remains the productive `c` runner.
+- `scripts/dev/run_patchharbor_patch.sh` remains the source-side PatchHarbor wrapper.
+- No alias, `c`, `r`, export wrapper, or target PatchHarbor file was changed by this cleanup step.
+
+
+the historical candidate runner was removed by PATCHHARBOR.14b3
+
+
+the historical candidate runner was removed by PATCHHARBOR.14b3

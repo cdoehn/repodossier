@@ -24,11 +24,11 @@ CURRENT_HELPERS = [
     "scripts/dev/validate_patch_workflow_rules.py",
 ]
 OPTIONAL_HELPERS = [
-    "scripts/dev/run_latest_download_patch_patchharbor_candidate.sh",
 ]
 REMOVED_HELPERS = [
     "scripts/dev/validate_patch_metadata.py",
     "scripts/dev/lint_patch_script.py",
+    "scripts/dev/run_latest_download_patch_patchharbor_candidate.sh",
 ]
 
 def _read(path: Path) -> str:
