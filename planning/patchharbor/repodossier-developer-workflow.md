@@ -129,3 +129,11 @@ This patch does not:
 Install documentation is handled by PATCHHARBOR.14c2.
 
 Migration-note cleanup is handled by PATCHHARBOR.14c3.
+
+
+## PATCHHARBOR.14c2 applied
+
+- RepoDossier installation documentation now lives in `README.md` and `docs/installation.md`.
+- The docs separate the `pipx` user install from the editable development install.
+- Optional developer aliases remain documented in `docs/dev-aliases.md`.
+- The install docs do not change `c`, `r`, aliases, package metadata, or PatchHarbor target files.

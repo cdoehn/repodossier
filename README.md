@@ -78,37 +78,66 @@ Recommended GitHub repository metadata:
 
 ## Installation
 
-### Install from a local checkout with pipx
+RepoDossier has two separate installation paths:
+
+- use `pipx` for the normal command-line application
+- use an editable virtual environment for development and tests
+
+Detailed installation notes live in `docs/installation.md`.
+
+### Install the CLI with pipx from a local checkout
 
 From the repository root:
 
-```bash
-python3 -m pipx uninstall repodossier 2>/dev/null || true
-python3 -m pipx install "$PWD"
-export PATH="$HOME/.local/bin:$PATH"
-```
+    python3 -m pipx uninstall repodossier 2>/dev/null || true
+    python3 -m pipx install "$PWD"
+    export PATH="$HOME/.local/bin:$PATH"
 
-Verify both CLI names:
+Verify the current CLI command:
 
-```bash
-repodossier --help
-repodossier --version
-repocontext --help
-repocontext --version
-```
+    repodossier --help
+    repodossier --version
 
-`repodossier` is the current command. `repocontext` is kept as a temporary legacy compatibility alias.
+Verify the temporary legacy compatibility command while it still exists:
+
+    repocontext --help
+    repocontext --version
+
+`repodossier` is the current command. `repocontext` is kept only as a temporary legacy compatibility alias.
+
+### Reinstall after local changes
+
+After changing package metadata, entry points, or installed files, reinstall from the repository root:
+
+    python3 -m pipx uninstall repodossier 2>/dev/null || true
+    python3 -m pipx install "$PWD"
+    repodossier --version
 
 ### Editable development install
 
 Use a virtual environment for development work:
 
-```bash
-python3 -m venv .venv
-source .venv/bin/activate
-python3 -m pip install -e ".[dev]"
-python3 -m pytest --color=yes
-```
+    python3 -m venv .venv
+    source .venv/bin/activate
+    python3 -m pip install -e ".[dev]"
+    python3 -m pytest --color=yes
+
+Editable installs are for development only. Do not use editable pipx installation mode for the documented user install path.
+
+### Optional developer aliases
+
+Developer aliases are optional and local to a shell rc file:
+
+    scripts/dev/install_aliases.sh
+    source ~/.bashrc
+
+The alias installer provides `rdrepo`, `c`, `r`, and `patchharbor-patch`.
+
+`c` runs the RepoDossier Download patch runner. It validates patch metadata internally and uses PatchHarbor `lint-script` for dry-run preflight linting.
+
+`r` runs RepoDossier export modes.
+
+More detail is documented in `docs/dev-aliases.md`.
 
 ## Secret Detection
 

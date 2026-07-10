@@ -4,6 +4,9 @@ RepoDossier does not require machine-specific shell aliases, but the repository 
 
 ## Install local aliases
 
+See also: `docs/installation.md`.
+
+
 From the RepoDossier repository root:
 
     scripts/dev/install_aliases.sh
