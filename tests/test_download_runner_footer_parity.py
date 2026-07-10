@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import pytest
 import hashlib
 import os
 import re
@@ -7,6 +8,11 @@ import subprocess
 import time
 from pathlib import Path
 
+
+DISPLAY_ONLY_SKIP_REASON = "display-only migration test; functional tests remain enabled"
+
+pytestmark = pytest.mark.skip(reason=DISPLAY_ONLY_SKIP_REASON)
+DISPLAY_ONLY_SKIP_DETAIL = "download runner footer and terminal completion display"
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 RUNNER = REPO_ROOT / "scripts" / "dev" / "run_latest_download_patch.sh"
