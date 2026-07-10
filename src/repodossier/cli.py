@@ -4,6 +4,12 @@ from __future__ import annotations
 
 from .cli_split import add_split_export_options, enable_split_write_interceptor_for_args
 from .dependencies import append_dependencies_full_section
+from .archive_cli import (
+    ArchiveCliArgumentError,
+    build_archive_parser,
+    format_archive_contract_summary,
+    parse_archive_cli_arguments,
+)
 
 import argparse
 from importlib import metadata
@@ -179,6 +185,45 @@ def _handle_info_command(_args: argparse.Namespace) -> int:
     return 0
 
 
+_LEGACY_COMMANDS = frozenset(
+    {
+        "changed",
+        "info",
+        "full",
+        "export",
+        "export-ai",
+        "export-docs",
+    }
+)
+
+
+def _should_use_legacy_parser(raw_args: list[str]) -> bool:
+    """Return True when args start with one of the existing subcommands."""
+
+    return bool(raw_args) and raw_args[0] in _LEGACY_COMMANDS
+
+
+def _print_archive_cli_error(parser: argparse.ArgumentParser, message: str) -> None:
+    """Print an archive CLI error without raising SystemExit."""
+
+    import sys
+
+    parser.print_usage(sys.stderr)
+    print(f"repodossier: error: {message}", file=sys.stderr)
+
+
+def _handle_archive_contract_command(arguments: object) -> int:
+    """Handle the new archive contract after parsing.
+
+    Later hotfix commits wire this contract to source resolution, snapshots, and
+    ZIP generation. Commit 1 deliberately stops after a successful parse so the
+    CLI surface can be tested independently.
+    """
+
+    print(format_archive_contract_summary(arguments))
+    return 0
+
+
 def _build_parser() -> argparse.ArgumentParser:
     """Create the top-level argument parser."""
     parser = argparse.ArgumentParser(
@@ -217,11 +262,26 @@ def _build_parser() -> argparse.ArgumentParser:
 
 def _main_without_export_secret_safety_net(argv: Optional[Iterable[str]] = None) -> int:
     """CLI entrypoint."""
-    parser = _build_parser()
-    arguments = parser.parse_args(list(argv) if argv is not None else None)
-    config = _load_config_for_cli_args(arguments)
-    enable_split_write_interceptor_for_args(arguments, base_config=config)
-    return arguments.handler(arguments)
+    import sys
+
+    raw_args = list(argv) if argv is not None else sys.argv[1:]
+
+    if _should_use_legacy_parser(raw_args):
+        parser = _build_parser()
+        arguments = parser.parse_args(raw_args)
+        config = _load_config_for_cli_args(arguments)
+        enable_split_write_interceptor_for_args(arguments, base_config=config)
+        return arguments.handler(arguments)
+
+    parser = build_archive_parser(get_version())
+    namespace = parser.parse_args(raw_args)
+    try:
+        archive_arguments = parse_archive_cli_arguments(namespace)
+    except ArchiveCliArgumentError as exc:
+        _print_archive_cli_error(parser, str(exc))
+        return 2
+
+    return _handle_archive_contract_command(archive_arguments)
 
 
 

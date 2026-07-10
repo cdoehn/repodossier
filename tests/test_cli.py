@@ -292,7 +292,7 @@ def test_cli_default_command_creates_ai_export_together_with_full_export(
     run_git_command(repo_path, "commit", "-m", "Add Python package", env=COMMIT_ENV)
     monkeypatch.chdir(repo_path)
 
-    exit_code = main([])
+    exit_code = main(["full"])
 
     assert exit_code == 0
 
@@ -383,7 +383,7 @@ def test_cli_default_export_keeps_ai_txt_untracked_after_generation(
     repo_path = setup_repository(tmp_path / "repo_default_ai_untracked")
     monkeypatch.chdir(repo_path)
 
-    exit_code = main([])
+    exit_code = main(["full"])
 
     assert exit_code == 0
     assert (repo_path / "ai.txt").exists()
@@ -418,7 +418,7 @@ def test_cli_default_command_creates_full_export(tmp_path: Path, monkeypatch: py
     repo_path = setup_repository(tmp_path / "repo_default")
     monkeypatch.chdir(repo_path)
 
-    exit_code = main([])
+    exit_code = main(["full"])
 
     assert exit_code == 0
     output_path = repo_path / "full.txt"
@@ -445,7 +445,7 @@ def test_cli_default_command_creates_gitignore_entries_for_exports(
 
     assert not (repo_path / ".gitignore").exists()
 
-    exit_code = main([])
+    exit_code = main(["full"])
 
     assert exit_code == 0
     gitignore_content = (repo_path / ".gitignore").read_text(encoding="utf-8")
@@ -465,7 +465,7 @@ def test_cli_default_command_preserves_existing_gitignore_content(
     gitignore_path.write_text(".venv/\n__pycache__/\n", encoding="utf-8")
     monkeypatch.chdir(repo_path)
 
-    exit_code = main([])
+    exit_code = main(["full"])
 
     assert exit_code == 0
     gitignore_content = gitignore_path.read_text(encoding="utf-8")
@@ -482,7 +482,7 @@ def test_cli_default_command_gitignore_prevents_full_txt_untracked_status(
     repo_path = setup_repository(tmp_path / "repo_gitignore_status")
     monkeypatch.chdir(repo_path)
 
-    exit_code = main([])
+    exit_code = main(["full"])
 
     assert exit_code == 0
     status_output = run_git_command(repo_path, "status", "--short").stdout
@@ -499,7 +499,7 @@ def test_cli_default_command_writes_full_txt_to_repository_root_from_subdirector
     nested_dir.mkdir(parents=True)
     monkeypatch.chdir(nested_dir)
 
-    exit_code = main([])
+    exit_code = main(["full"])
 
     assert exit_code == 0
     assert (repo_path / "full.txt").exists()
@@ -521,7 +521,7 @@ def test_cli_default_full_export_contains_tracked_text_file_in_all_mvp_sections(
     run_git_command(repo_path, "commit", "-m", "Add notes", env=COMMIT_ENV)
     monkeypatch.chdir(repo_path)
 
-    exit_code = main([])
+    exit_code = main(["full"])
 
     assert exit_code == 0
     full_export = repo_path / "full.txt"
@@ -555,7 +555,7 @@ def test_cli_default_full_export_excludes_binary_file_from_source_dump_and_warns
     run_git_command(repo_path, "commit", "-m", "Add binary file", env=COMMIT_ENV)
     monkeypatch.chdir(repo_path)
 
-    exit_code = main([])
+    exit_code = main(["full"])
 
     assert exit_code == 0
     content = (repo_path / "full.txt").read_text(encoding="utf-8")
@@ -581,7 +581,7 @@ def test_cli_default_full_export_preserves_known_text_line_and_token_values(
     run_git_command(repo_path, "commit", "-m", "Add data file", env=COMMIT_ENV)
     monkeypatch.chdir(repo_path)
 
-    exit_code = main([])
+    exit_code = main(["full"])
 
     assert exit_code == 0
     content = (repo_path / "full.txt").read_text(encoding="utf-8")
@@ -608,7 +608,7 @@ def test_cli_default_command_outside_repository(tmp_path: Path, monkeypatch: pyt
     non_repo_path.mkdir()
     monkeypatch.chdir(non_repo_path)
 
-    exit_code = main([])
+    exit_code = main(["full"])
 
     assert exit_code == 1
     captured = capsys.readouterr()
