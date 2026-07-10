@@ -1019,3 +1019,36 @@ The development export runner preserves mode compatibility:
 The development export runner dry-run output is part of the compatibility contract.
 It must print concrete command preview lines such as `Befehl: repodossier full`.
 `--list-modes` includes `all`; `all` expands to `full ai docs changed`.
+
+---
+
+---
+
+## 14c1. Current RepoDossier developer workflow after PatchHarbor cleanup
+
+The current source-side developer workflow is documented in:
+
+    planning/patchharbor/repodossier-developer-workflow.md
+    docs/dev-aliases.md
+
+Active source-side workflow commands remain:
+
+    c
+    r
+    rdrepo
+
+The active `c` implementation remains:
+
+    scripts/dev/run_latest_download_patch.sh
+
+The active `r` implementation remains:
+
+    scripts/dev/r.sh
+
+The `c` runner validates patch metadata internally and uses PatchHarbor `lint-script` for dry-run preflight linting.
+
+Removed legacy metadata, lint, and candidate-runner helpers are not active workflow commands. Their exact historical paths belong in migration docs, not in this active workflow rules file.
+
+Historical migration notes may mention removed helper paths, but new instructions must not tell users to run them.
+
+Source-only documentation patches must leave the PatchHarbor target repository unchanged.

@@ -2,52 +2,52 @@
 
 RepoDossier does not require machine-specific shell aliases, but the repository ships a small installer for local development convenience.
 
-## Install
+## Install local aliases
 
-From the repository root:
+From the RepoDossier repository root:
 
     scripts/dev/install_aliases.sh
 
-Then reload your shell rc file as printed by the installer, for example:
+Then reload the shell rc file printed by the installer, for example:
 
     source ~/.bashrc
 
-## Installed aliases
-
-    rdrepo
-
-Change into the current RepoDossier clone.
-
-    c
-
-Run the download patch runner:
-
-    bash "$REPODOSSIER_REPO/scripts/dev/run_latest_download_patch.sh"
-
-    r
-
-Run the export runner:
-
-    bash "$REPODOSSIER_REPO/scripts/dev/r.sh"
-
-## Dry-run
-
-To preview the managed shell block without editing a shell rc file:
+Preview the managed shell block without editing a shell rc file:
 
     scripts/dev/install_aliases.sh --dry-run
 
-## Custom rc file
+Use a custom rc file for testing:
 
     scripts/dev/install_aliases.sh --rc-file /tmp/repodossier-aliases.rc
 
-## Public repository note
+## Installed aliases
 
-The installer writes local paths only into the user's shell rc file. The repository itself must not store a contributor-specific home path, user name, email address, or workstation name.
+### `rdrepo`
 
+Change into the current RepoDossier checkout.
 
-## Export runner defaults
+### `c`
 
-By default, `r` runs `full ai`.
+Run the RepoDossier Download patch runner:
+
+    bash "$REPODOSSIER_REPO/scripts/dev/run_latest_download_patch.sh"
+
+The `c` runner accepts downloaded patch scripts and patch ZIP archives. It validates patch metadata internally, runs syntax checks, uses PatchHarbor `lint-script` for dry-run preflight linting, writes a log file, and moves successful or failed patch archives into the matching Downloads subdirectory.
+
+A concrete script or ZIP can be passed explicitly:
+
+    c /tmp/example_patch.sh
+    c /tmp/example_patch.zip
+
+### `r`
+
+Run the RepoDossier export runner:
+
+    bash "$REPODOSSIER_REPO/scripts/dev/r.sh"
+
+By default, `r` runs:
+
+    full ai
 
 Additional modes can be selected explicitly:
 
@@ -55,24 +55,44 @@ Additional modes can be selected explicitly:
     r changed
     r full ai docs
 
+The export runner also supports mode aliases:
 
-## Patch rules copy
-
-The export runner copies `patch-rules.md` from its own installed script directory when the target Git repository does not contain RepoDossier development rules.
-
-
-## Export runner mode aliases
-
-The export runner also supports mode aliases for convenience:
-
-    quick  -> ai
-    doc    -> docs
+    quick   -> ai
+    doc     -> docs
     changes -> changed
 
-Use `r --list-modes` to print canonical modes.
+Use this to print canonical modes:
 
+    r --list-modes
 
-## Dry-run command preview
+Use this to preview commands without writing export files:
 
-`r --dry-run` prints the concrete RepoDossier commands without writing export files.
-The `all` mode expands to `full ai docs changed`.
+    r --dry-run
+
+## Current PatchHarbor relationship
+
+RepoDossier keeps source-side wrappers for user workflows, while generic patch infrastructure lives in PatchHarbor.
+
+Current active source commands:
+
+    scripts/dev/run_latest_download_patch.sh
+    scripts/dev/run_patchharbor_patch.sh
+    scripts/dev/r.sh
+    scripts/dev/run_repodossier_exports.sh
+
+Current generic PatchHarbor commands used by the source workflow:
+
+    patchharbor lint-script
+    patchharbor run-script
+    patchharbor audit-public
+    patchharbor check-env
+
+Removed legacy helper paths are not active commands:
+
+    scripts/dev/validate_patch_metadata.py
+    scripts/dev/lint_patch_script.py
+    scripts/dev/run_latest_download_patch_patchharbor_candidate.sh
+
+## Public repository note
+
+The installer writes local paths only into the user's shell rc file. The repository itself must not store a contributor-specific home path, user name, email address, workstation name, or private checkout path.
