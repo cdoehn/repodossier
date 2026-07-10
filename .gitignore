@@ -72,3 +72,4 @@ changed.txt
 # Aider
 .aider*
 src/*.egg-info/
+.runtests/

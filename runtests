@@ -1,0 +1,298 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+log() {
+  printf '[runtests] %s\n' "$*"
+}
+
+warn() {
+  printf '[runtests] WARN: %s\n' "$*" >&2
+}
+
+fail() {
+  printf '[runtests] ERROR: %s\n' "$*" >&2
+  exit 1
+}
+
+usage() {
+  cat <<'USAGE'
+Usage:
+  ./runtests [options] [pytest args...]
+
+Purpose:
+  Create or reuse a local virtual environment, activate it inside this script,
+  install RepoDossier development/test dependencies, and run the full pytest suite.
+
+Examples:
+  ./runtests
+  ./runtests -q
+  ./runtests tests/test_private_data_cleanup.py
+  ./runtests --no-install
+  ./runtests --recreate-venv
+  ./runtests --python python3.12 -- -q tests/test_cli.py
+
+Options:
+  --help                 Show this help and exit.
+  --no-install           Do not install or upgrade dependencies before testing.
+  --recreate-venv        Delete and recreate the virtual environment first.
+  --python CMD           Python command used to create the virtual environment.
+  --venv PATH            Virtual environment path. Default: .venv
+  --no-upgrade-pip       Do not upgrade pip/setuptools/wheel before installing deps.
+  --                     Stop option parsing; remaining args go to pytest.
+
+Environment:
+  RUNTESTS_NO_INSTALL=1  Same as --no-install.
+  RUNTESTS_PYTHON=CMD    Default Python command for creating the venv.
+  RUNTESTS_VENV=PATH     Default virtual environment path.
+  RUNTESTS_LOG_DIR=PATH  Default: .runtests
+USAGE
+}
+
+SCRIPT_SOURCE="${BASH_SOURCE[0]}"
+SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_SOURCE")" && pwd)"
+if git -C "$SCRIPT_DIR" rev-parse --show-toplevel >/dev/null 2>&1; then
+  REPO_ROOT="$(git -C "$SCRIPT_DIR" rev-parse --show-toplevel)"
+else
+  REPO_ROOT="$SCRIPT_DIR"
+fi
+cd "$REPO_ROOT"
+
+if [ ! -f "$REPO_ROOT/pyproject.toml" ] || [ ! -d "$REPO_ROOT/src/repodossier" ]; then
+  fail "This does not look like the RepoDossier repository root: $REPO_ROOT"
+fi
+
+INSTALL=1
+UPGRADE_PIP=1
+RECREATE_VENV=0
+PYTHON_CMD="${RUNTESTS_PYTHON:-}"
+VENV_DIR="${RUNTESTS_VENV:-.venv}"
+LOG_DIR="${RUNTESTS_LOG_DIR:-.runtests}"
+PYTEST_ARGS=()
+
+if [ "${RUNTESTS_NO_INSTALL:-}" = "1" ]; then
+  INSTALL=0
+fi
+
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --help|-h)
+      usage
+      exit 0
+      ;;
+    --no-install)
+      INSTALL=0
+      ;;
+    --recreate-venv)
+      RECREATE_VENV=1
+      ;;
+    --python)
+      shift
+      [ "$#" -gt 0 ] || fail "--python requires an argument"
+      PYTHON_CMD="$1"
+      ;;
+    --venv)
+      shift
+      [ "$#" -gt 0 ] || fail "--venv requires an argument"
+      VENV_DIR="$1"
+      ;;
+    --no-upgrade-pip)
+      UPGRADE_PIP=0
+      ;;
+    --)
+      shift
+      while [ "$#" -gt 0 ]; do
+        PYTEST_ARGS+=("$1")
+        shift
+      done
+      break
+      ;;
+    *)
+      PYTEST_ARGS+=("$1")
+      ;;
+  esac
+  shift || true
+done
+
+choose_python() {
+  if [ -n "$PYTHON_CMD" ]; then
+    command -v "$PYTHON_CMD" >/dev/null 2>&1 || fail "Python command not found: $PYTHON_CMD"
+    printf '%s\n' "$PYTHON_CMD"
+    return
+  fi
+
+  if command -v python3 >/dev/null 2>&1; then
+    printf '%s\n' "python3"
+    return
+  fi
+
+  if command -v python >/dev/null 2>&1; then
+    printf '%s\n' "python"
+    return
+  fi
+
+  fail "No Python interpreter found. Install python3 or set RUNTESTS_PYTHON."
+}
+
+venv_python_path() {
+  local venv="$1"
+  if [ -x "$venv/bin/python" ]; then
+    printf '%s\n' "$venv/bin/python"
+    return
+  fi
+  if [ -x "$venv/Scripts/python.exe" ]; then
+    printf '%s\n' "$venv/Scripts/python.exe"
+    return
+  fi
+  return 1
+}
+
+venv_activate_path() {
+  local venv="$1"
+  if [ -f "$venv/bin/activate" ]; then
+    printf '%s\n' "$venv/bin/activate"
+    return
+  fi
+  if [ -f "$venv/Scripts/activate" ]; then
+    printf '%s\n' "$venv/Scripts/activate"
+    return
+  fi
+  return 1
+}
+
+create_or_reuse_venv() {
+  local python_for_venv
+  python_for_venv="$(choose_python)"
+
+  if [ "$RECREATE_VENV" -eq 1 ] && [ -d "$VENV_DIR" ]; then
+    log "Removing existing virtual environment: $VENV_DIR"
+    rm -rf "$VENV_DIR"
+  fi
+
+  if [ ! -d "$VENV_DIR" ]; then
+    log "Creating virtual environment with $python_for_venv: $VENV_DIR"
+    # marker for validation/docs: python -m venv
+    if ! "$python_for_venv" -m venv "$VENV_DIR"; then
+      fail "Could not create venv. On Debian/Ubuntu install python3-venv, then rerun ./runtests."
+    fi
+  else
+    log "Using existing virtual environment: $VENV_DIR"
+  fi
+
+  VENV_PYTHON="$(venv_python_path "$VENV_DIR")" || fail "Could not find python inside venv: $VENV_DIR"
+  VENV_ACTIVATE="$(venv_activate_path "$VENV_DIR")" || fail "Could not find activate script inside venv: $VENV_DIR"
+
+  # Activate for tools that inspect PATH/VIRTUAL_ENV. This affects this script process only.
+  # shellcheck disable=SC1090
+  source "$VENV_ACTIVATE"
+  export PYTHONPATH="$REPO_ROOT/src${PYTHONPATH:+:$PYTHONPATH}"
+
+  log "Python: $("$VENV_PYTHON" --version)"
+  log "Virtual env: $VIRTUAL_ENV"
+}
+
+ensure_pip() {
+  if "$VENV_PYTHON" -m pip --version >/dev/null 2>&1; then
+    return
+  fi
+
+  log "pip missing in venv; trying ensurepip"
+  "$VENV_PYTHON" -m ensurepip --upgrade || fail "pip is missing and ensurepip failed"
+}
+
+install_dependencies() {
+  if [ "$INSTALL" -ne 1 ]; then
+    log "Skipping dependency installation because --no-install or RUNTESTS_NO_INSTALL=1 was set"
+    return
+  fi
+
+  ensure_pip
+
+  if [ "$UPGRADE_PIP" -eq 1 ]; then
+    log "Upgrading pip tooling"
+    "$VENV_PYTHON" -m pip install --upgrade pip setuptools wheel
+  fi
+
+  local install_args_file
+  install_args_file="$(mktemp)"
+  "$VENV_PYTHON" - "$REPO_ROOT/pyproject.toml" > "$install_args_file" <<'PY'
+from __future__ import annotations
+from pathlib import Path
+import sys
+import tomllib
+
+pyproject = Path(sys.argv[1])
+data = tomllib.loads(pyproject.read_text(encoding="utf-8"))
+project = data.get("project", {})
+optional = project.get("optional-dependencies", {})
+extras = [name for name in ("dev", "test", "tests") if name in optional]
+
+if extras:
+    print("-e")
+    print(".[" + ",".join(extras) + "]")
+else:
+    print("-e")
+    print(".")
+    print("pytest")
+PY
+
+  local install_args=()
+  while IFS= read -r line; do
+    [ -n "$line" ] && install_args+=("$line")
+  done < "$install_args_file"
+  rm -f "$install_args_file"
+
+  log "Installing development/test dependencies"
+  "$VENV_PYTHON" -m pip install "${install_args[@]}"
+}
+
+copy_log_to_clipboard() {
+  local log_file="$1"
+  local copied=0
+
+  if command -v wl-copy >/dev/null 2>&1; then
+    wl-copy < "$log_file" && copied=1 || true
+  elif command -v xclip >/dev/null 2>&1; then
+    xclip -selection clipboard < "$log_file" && copied=1 || true
+  elif command -v xsel >/dev/null 2>&1; then
+    xsel --clipboard --input < "$log_file" && copied=1 || true
+  elif command -v pbcopy >/dev/null 2>&1; then
+    pbcopy < "$log_file" && copied=1 || true
+  elif command -v clip.exe >/dev/null 2>&1; then
+    clip.exe < "$log_file" && copied=1 || true
+  fi
+
+  if [ "$copied" -eq 1 ]; then
+    warn "Failure log copied to clipboard"
+  else
+    warn "No clipboard tool found; failure log stays at: $log_file"
+  fi
+}
+
+run_pytest() {
+  mkdir -p "$LOG_DIR"
+  local timestamp
+  timestamp="$(date +%Y%m%d_%H%M%S)"
+  local log_file="$LOG_DIR/full_tests_${timestamp}.log"
+
+  log "Running full test suite"
+  log "Log file: $log_file"
+
+  set +e
+  # marker for validation/docs: python -m pytest
+  "$VENV_PYTHON" -m pytest "${PYTEST_ARGS[@]}" 2>&1 | tee "$log_file"
+  local test_status="${PIPESTATUS[0]}"
+  set -e
+
+  if [ "$test_status" -ne 0 ]; then
+    warn "Tests failed with exit code $test_status"
+    copy_log_to_clipboard "$log_file"
+    exit "$test_status"
+  fi
+
+  log "Tests passed"
+  log "Log file: $log_file"
+}
+
+create_or_reuse_venv
+install_dependencies
+run_pytest
