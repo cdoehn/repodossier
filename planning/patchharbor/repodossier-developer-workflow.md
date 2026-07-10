@@ -137,3 +137,10 @@ Migration-note cleanup is handled by PATCHHARBOR.14c3.
 - The docs separate the `pipx` user install from the editable development install.
 - Optional developer aliases remain documented in `docs/dev-aliases.md`.
 - The install docs do not change `c`, `r`, aliases, package metadata, or PatchHarbor target files.
+
+
+## PATCHHARBOR.14c3 applied
+
+- Migration notes now live in `planning/patchharbor/repodossier-migration-notes.md`.
+- The notes summarize 14b helper cleanup, 14c1 workflow docs, and 14c2 installation docs.
+- Exact removed helper paths are historical migration facts and must not be reintroduced into active workflow files.

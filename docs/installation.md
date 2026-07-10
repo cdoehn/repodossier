@@ -98,3 +98,13 @@ PATCHHARBOR.14c2 does not:
 - change export behavior
 
 Migration-note cleanup is handled by PATCHHARBOR.14c3.
+
+
+## Migration note reference
+
+PATCHHARBOR.14c3 records source-cleanup migration notes in `planning/patchharbor/repodossier-migration-notes.md`.
+
+
+## Migration note reference
+
+PATCHHARBOR.14c3 records source-cleanup migration notes in `planning/patchharbor/repodossier-migration-notes.md`.
