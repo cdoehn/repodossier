@@ -265,3 +265,14 @@ def test_removed_download_runner_candidate_has_no_active_source_references() -> 
         if candidate in (ROOT / relative).read_text(encoding="utf-8")
     ]
     assert not offenders, offenders
+
+
+def test_runner_helper_part2_cleanup_keeps_single_c_self_copy_bootstrap() -> None:
+    runner = ROOT / "scripts/dev/run_latest_download_patch.sh"
+    text = runner.read_text(encoding="utf-8")
+
+    assert text.count('original_runner="${BASH_SOURCE[0]}"') == 1
+    assert text.count('C_RUNNER_SELF_COPY=1 C_RUNNER_ORIGINAL=') == 1
+    assert 'self_copy="$(mktemp' not in text
+    assert "run_patchharbor_cli lint-script" in text
+    assert "PY_META_C_RUNNER_14B2" in text

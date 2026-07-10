@@ -13,17 +13,6 @@ if [ -n "${C_RUNNER_TEMP_COPY:-}" ]; then
   trap 'rm -f "$C_RUNNER_TEMP_COPY" 2>/dev/null || true' EXIT
 fi
 
-if [ "${C_RUNNER_SELF_COPY:-0}" != "1" ]; then
-  self_copy="$(mktemp "${TMPDIR:-/tmp}/repodossier-c-runner.XXXXXX.sh")"
-  cp "$0" "$self_copy"
-  chmod +x "$self_copy"
-  C_RUNNER_SELF_COPY=1 C_RUNNER_TEMP_COPY="$self_copy" exec "$self_copy" "$@"
-fi
-
-if [ -n "${C_RUNNER_TEMP_COPY:-}" ]; then
-  trap 'rm -f "$C_RUNNER_TEMP_COPY"' EXIT
-fi
-
 download_dir="${PATCH_DOWNLOAD_DIR:-$HOME/Downloads}"
 done_dir="$download_dir/done"
 failed_dir="$download_dir/failed"

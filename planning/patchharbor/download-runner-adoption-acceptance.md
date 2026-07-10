@@ -84,3 +84,11 @@ the historical candidate runner was removed by PATCHHARBOR.14b3
 
 
 the historical candidate runner was removed by PATCHHARBOR.14b3
+
+
+## PATCHHARBOR.14b4 applied
+
+- Removed the obsolete duplicate `self_copy` bootstrap block from `scripts/dev/run_latest_download_patch.sh`.
+- Kept the productive `c` runner file and its download, zip, dry-run, ledger, and lifecycle behavior intact.
+- Kept PatchHarbor `lint-script` dry-run preflight and internal metadata validation in the productive runner.
+- Did not change aliases, `c`, `r`, export wrappers, or PatchHarbor target files.

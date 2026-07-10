@@ -331,3 +331,11 @@ PATCHHARBOR.14a2 is accepted when:
 - `scripts/dev/run_latest_download_patch.sh` remains the productive `c` runner.
 - `scripts/dev/run_patchharbor_patch.sh` remains the source-side PatchHarbor wrapper.
 - No alias, `c`, `r`, export wrapper, or target PatchHarbor file was changed by this cleanup step.
+
+
+## PATCHHARBOR.14b4 applied
+
+- Removed the obsolete duplicate `self_copy` bootstrap block from `scripts/dev/run_latest_download_patch.sh`.
+- Kept the productive `c` runner file and its download, zip, dry-run, ledger, and lifecycle behavior intact.
+- Kept PatchHarbor `lint-script` dry-run preflight and internal metadata validation in the productive runner.
+- Did not change aliases, `c`, `r`, export wrappers, or PatchHarbor target files.
