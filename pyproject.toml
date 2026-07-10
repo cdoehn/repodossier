@@ -27,11 +27,11 @@ classifiers = [
 keywords = ["git", "export", "ai", "context"]
 
 [project.urls]
-Homepage = "https://github.com/cdoehn/repodossier"
-Repository = "https://github.com/cdoehn/repodossier"
-Issues = "https://github.com/cdoehn/repodossier/issues"
-Documentation = "https://github.com/cdoehn/repodossier#readme"
-Changelog = "https://github.com/cdoehn/repodossier/releases"
+Homepage = "https://github.com/repodossier/repodossier"
+Repository = "https://github.com/repodossier/repodossier"
+Issues = "https://github.com/repodossier/repodossier/issues"
+Documentation = "https://github.com/repodossier/repodossier#readme"
+Changelog = "https://github.com/repodossier/repodossier/releases"
 
 [project.scripts]
 repodossier = "repodossier.cli:main"

@@ -12,8 +12,8 @@ from typing import Iterable, Sequence
 
 
 DEFAULT_PATTERN_SPECS = (
-    ("person_name", "Example User " + "Döhn"),
-    ("person_email", "exampleuser" + ".doehn" + "@" + "example.invalid"),
+    ("person_name", "Example" + " Private" + " Name"),
+    ("person_email", "example.private" + "@" + "example.invalid"),
     ("home_path", "/home/" + "exampleuser"),
     ("old_project_path", "market_" + "research"),
     ("workstation_name", "Example" + "Machine"),

@@ -74,7 +74,7 @@ class PrivateDataCleanupTests(unittest.TestCase):
         self.assertTrue(doc.is_file())
         text = doc.read_text(encoding="utf-8")
         self.assertIn("Private data cleanup", text)
-        self.assertIn("PATCHHARBOR.PRIVACY1", text)
+        self.assertIn("REPODOSSIER.PRIVACY2", text)
 
 
 if __name__ == "__main__":

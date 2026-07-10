@@ -1,6 +1,6 @@
 # RepoDossier
 
-[![CI](https://github.com/cdoehn/repodossier/actions/workflows/ci.yml/badge.svg)](https://github.com/cdoehn/repodossier/actions/workflows/ci.yml)
+[![CI](https://github.com/repodossier/repodossier/actions/workflows/ci.yml/badge.svg)](https://github.com/repodossier/repodossier/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue.svg)](pyproject.toml)
 
@@ -73,7 +73,7 @@ This repository includes supporting files for public GitHub collaboration:
 Recommended GitHub repository metadata:
 
 - Description: AI-friendly repository exports for coding assistants
-- Website: https://github.com/cdoehn/repodossier
+- Website: https://github.com/repodossier/repodossier
 - Topics: python, cli, ai, llm, static-analysis, repository, context-export, developer-tools
 
 ## Installation
@@ -131,9 +131,9 @@ Developer aliases are optional and local to a shell rc file:
     scripts/dev/install_aliases.sh
     source ~/.bashrc
 
-The alias installer provides `rdrepo`, `c`, `r`, and `patchharbor-patch`.
+The alias installer provides `rdrepo`, `c`, and `r` for normal RepoDossier development workflows.
 
-`c` runs the RepoDossier Download patch runner. It validates patch metadata internally and uses PatchHarbor `lint-script` for dry-run preflight linting.
+`c` runs the RepoDossier Download patch runner.
 
 `r` runs RepoDossier export modes.
 
