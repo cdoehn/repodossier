@@ -50,6 +50,7 @@ ALLOWED_LEGACY_NAME_PATHS = {
     "tests/test_repodossier_legacy_config.py",
     "tests/test_repodossier_naming_guard.py",
     "tests/test_repodossier_package_rename.py",
+    "tests/test_repodossier_install_docs.py",
 }
 
 
