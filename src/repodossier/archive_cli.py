@@ -7,9 +7,12 @@ import os
 import re
 import subprocess
 import zipfile
+from html import escape as escape_xml
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Iterable, Sequence
+
+from .scanner import detect_language, is_source_code_language
 
 ARCHIVE_USAGE = "repodossier [OPTIONEN] QUELLE [QUELLE ...] AUSGABEORDNER"
 DEFAULT_ARCHIVE_NAME = "repodossier-archive.zip"
@@ -69,11 +72,21 @@ class ArchiveSnapshotFile:
     repository_id: str
 
 @dataclass(frozen=True)
+class SourceReference:
+    """Structured reference from a report entry to an archived source file."""
+    repository_id: str
+    repository_path: Path
+    archive_path: PurePosixPath
+    report_relative_archive_path: PurePosixPath
+    language: str
+
+@dataclass(frozen=True)
 class ArchiveBuildResult:
     """Result of a successful archive build."""
     archive_path: Path
     snapshot_files: tuple[ArchiveSnapshotFile, ...]
     resolved: ResolvedArchiveInputs
+    source_references: tuple[SourceReference, ...]
 
 def build_archive_parser(version: str) -> argparse.ArgumentParser:
     """Create the top-level parser for the archive CLI contract."""
@@ -259,6 +272,150 @@ def enumerate_all_snapshot_files(resolved: ResolvedArchiveInputs, *, final_archi
         files.extend(enumerate_repository_snapshot_files(repository, output_dir=resolved.output_dir, final_archive_path=final_archive_path, temporary_archive_path=temporary_archive_path))
     return tuple(files)
 
+def _read_language_sample(path: Path, limit: int = 8192) -> str | bytes | None:
+    """Read a small sample for central language detection."""
+    try:
+        return path.read_bytes()[:limit]
+    except OSError:
+        return None
+
+
+def _snapshot_is_inside_source(
+    snapshot_file: ArchiveSnapshotFile,
+    source: ResolvedArchiveSource,
+) -> bool:
+    if snapshot_file.repository_id != source.repository_id:
+        return False
+    source_relative = source.repository_relative_path
+    if source_relative == Path("."):
+        return True
+    try:
+        snapshot_file.repository_relative_path.relative_to(source_relative)
+    except ValueError:
+        return False
+    return True
+
+
+def _source_for_snapshot(
+    snapshot_file: ArchiveSnapshotFile,
+    sources: Sequence[ResolvedArchiveSource],
+) -> ResolvedArchiveSource | None:
+    matching = [source for source in sources if _snapshot_is_inside_source(snapshot_file, source)]
+    if not matching:
+        return None
+    return max(matching, key=lambda source: len(source.repository_relative_path.parts))
+
+
+def collect_source_references(
+    resolved: ResolvedArchiveInputs,
+    snapshot_files: Sequence[ArchiveSnapshotFile],
+) -> tuple[SourceReference, ...]:
+    """Return structured source-code references for analyzed source folders.
+
+    Source code classification uses RepoDossier's central language-detection
+    pipeline. This function intentionally does not maintain a second list of
+    source-code file extensions.
+    """
+    references: list[SourceReference] = []
+    seen: set[tuple[str, Path]] = set()
+
+    for snapshot_file in snapshot_files:
+        source = _source_for_snapshot(snapshot_file, resolved.sources)
+        if source is None:
+            continue
+
+        sample = _read_language_sample(snapshot_file.source_path)
+        language = detect_language(snapshot_file.repository_relative_path, sample)
+        if not is_source_code_language(language):
+            continue
+
+        key = (snapshot_file.repository_id, snapshot_file.repository_relative_path)
+        if key in seen:
+            continue
+        seen.add(key)
+
+        references.append(
+            SourceReference(
+                repository_id=snapshot_file.repository_id,
+                repository_path=snapshot_file.repository_relative_path,
+                archive_path=snapshot_file.archive_path,
+                report_relative_archive_path=PurePosixPath("..") / snapshot_file.archive_path,
+                language=language or "unknown",
+            )
+        )
+
+    return tuple(references)
+
+
+def render_source_references_text(references: Sequence[SourceReference]) -> str:
+    """Render source references for plain-text reports."""
+    lines = ["RepoDossier source references", ""]
+    if not references:
+        lines.append("No source-code files were detected in the selected source folders.")
+        return "\n".join(lines) + "\n"
+
+    for reference in references:
+        lines.append(f"Repository: {reference.repository_id}")
+        lines.append(f"Language: {reference.language}")
+        lines.append(f"Source file: {reference.repository_path.as_posix()}")
+        lines.append(f"Archive path: {reference.report_relative_archive_path.as_posix()}")
+        lines.append("")
+    return "\n".join(lines)
+
+
+def render_source_references_markdown(references: Sequence[SourceReference]) -> str:
+    """Render source references for Markdown reports."""
+    lines = [
+        "# RepoDossier source references",
+        "",
+        "Full source-code contents are stored in the repository snapshots, not embedded in this report.",
+        "",
+    ]
+    if not references:
+        lines.append("No source-code files were detected in the selected source folders.")
+        return "\n".join(lines) + "\n"
+
+    lines.extend(["| Repository | Language | Source file | Archive path |", "| --- | --- | --- | --- |"])
+    for reference in references:
+        lines.append(
+            "| "
+            f"{reference.repository_id} | "
+            f"{reference.language} | "
+            f"{reference.repository_path.as_posix()} | "
+            f"{reference.report_relative_archive_path.as_posix()} |"
+        )
+    lines.append("")
+    return "\n".join(lines)
+
+
+def render_source_references_xml(references: Sequence[SourceReference]) -> str:
+    """Render source references for XML reports."""
+    lines = [
+        '<?xml version="1.0" encoding="utf-8"?>',
+        "<source-files>",
+    ]
+    for reference in references:
+        lines.append(
+            "  <source-file"
+            f' repository-id="{escape_xml(reference.repository_id)}"'
+            f' language="{escape_xml(reference.language)}"'
+            f' repository-path="{escape_xml(reference.repository_path.as_posix())}"'
+            f' archive-path="{escape_xml(reference.report_relative_archive_path.as_posix())}"'
+            " />"
+        )
+    lines.append("</source-files>")
+    return "\n".join(lines) + "\n"
+
+
+def _write_source_reference_reports(
+    archive: zipfile.ZipFile,
+    references: Sequence[SourceReference],
+) -> None:
+    archive.writestr("reports/source-references.txt", render_source_references_text(references))
+    archive.writestr("reports/source-references.md", render_source_references_markdown(references))
+    archive.writestr("reports/source-references.xml", render_source_references_xml(references))
+
+
 def _archive_final_path(resolved: ResolvedArchiveInputs) -> Path:
     return resolved.output_dir / resolved.arguments.archive_filename
 
@@ -304,9 +461,11 @@ def create_archive_dossier(resolved: ResolvedArchiveInputs) -> ArchiveBuildResul
         raise ArchiveCreationError(f"output archive already exists: {final_path}")
     temporary_path = _temporary_archive_path(final_path)
     snapshot_files = enumerate_all_snapshot_files(resolved, final_archive_path=final_path.resolve(strict=False), temporary_archive_path=temporary_path.resolve(strict=False))
+    source_references = collect_source_references(resolved, snapshot_files)
     try:
         with zipfile.ZipFile(temporary_path, mode="w", compression=zipfile.ZIP_DEFLATED, compresslevel=9) as archive:
             _write_archive_manifest(archive, resolved, snapshot_files)
+            _write_source_reference_reports(archive, source_references)
             _write_repository_snapshots(archive, snapshot_files)
         temporary_path.replace(final_path)
     except Exception as exc:
@@ -314,7 +473,7 @@ def create_archive_dossier(resolved: ResolvedArchiveInputs) -> ArchiveBuildResul
         if isinstance(exc, ArchiveCreationError):
             raise
         raise ArchiveCreationError(f"could not create archive {final_path}: {exc}") from exc
-    return ArchiveBuildResult(archive_path=final_path, snapshot_files=snapshot_files, resolved=resolved)
+    return ArchiveBuildResult(archive_path=final_path, snapshot_files=snapshot_files, resolved=resolved, source_references=source_references)
 
 def format_archive_contract_summary(arguments: ArchiveCliArguments) -> str:
     """Return a compact human-readable summary for the parsed archive contract."""
@@ -339,4 +498,4 @@ def format_resolved_archive_summary(resolved: ResolvedArchiveInputs) -> str:
 
 def format_archive_build_summary(result: ArchiveBuildResult) -> str:
     """Return a compact success message for a created archive."""
-    return "\n".join([format_resolved_archive_summary(result.resolved), f"Wrote archive: {result.archive_path}", f"Snapshot files: {len(result.snapshot_files)}"])
+    return "\n".join([format_resolved_archive_summary(result.resolved), f"Wrote archive: {result.archive_path}", f"Snapshot files: {len(result.snapshot_files)}", f"Source references: {len(result.source_references)}"])

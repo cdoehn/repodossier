@@ -460,6 +460,31 @@ def detect_language(
 
     return None
 
+SOURCE_CODE_LANGUAGES = frozenset({
+    "bash",
+    "c",
+    "cpp",
+    "csharp",
+    "css",
+    "html",
+    "java",
+    "javascript",
+    "jsx",
+    "python",
+    "tsx",
+    "typescript",
+})
+
+
+def is_source_code_language(language: str | None) -> bool:
+    """Return True when a detected language represents source code.
+
+    This helper classifies central language-detection labels instead of
+    maintaining another file-extension list.
+    """
+    return language in SOURCE_CODE_LANGUAGES
+
+
 def is_text_file(path: Path | str, sample_size: int = 1024) -> bool:
     """
     Determine whether a file can be read as UTF-8 text.
