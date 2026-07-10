@@ -14,7 +14,7 @@ def _write_script(path: Path, body: str) -> Path:
     return path
 
 
-def _valid_script(tmp_path: Path, commands: str = "python3 -m py_compile scripts/dev/validate_patch_metadata.py\nprint_footer\n") -> Path:
+def _valid_script(tmp_path: Path, commands: str = "python3 -m py_compile scripts/dev/lint_patch_script.py\nprint_footer\n") -> Path:
     return _write_script(
         tmp_path / "patch.sh",
         "\n".join(
@@ -55,7 +55,7 @@ def test_lint_patch_script_accepts_valid_patch(tmp_path: Path) -> None:
 def test_lint_patch_script_rejects_missing_metadata(tmp_path: Path) -> None:
     script = _write_script(
         tmp_path / "patch.sh",
-        "#!/usr/bin/env bash\nprint_footer() { echo footer; }\npython3 -m py_compile scripts/dev/validate_patch_metadata.py\n",
+        "#!/usr/bin/env bash\nprint_footer() { echo footer; }\npython3 -m py_compile scripts/dev/lint_patch_script.py\n",
     )
 
     result = _run_linter(script)
@@ -66,7 +66,7 @@ def test_lint_patch_script_rejects_missing_metadata(tmp_path: Path) -> None:
 
 
 def test_lint_patch_script_rejects_bundle_project(tmp_path: Path) -> None:
-    script = _valid_script(tmp_path, "./bundle_project.sh\npython3 -m py_compile scripts/dev/validate_patch_metadata.py\n")
+    script = _valid_script(tmp_path, "./bundle_project.sh\npython3 -m py_compile scripts/dev/lint_patch_script.py\n")
 
     result = _run_linter(script)
 
@@ -75,7 +75,7 @@ def test_lint_patch_script_rejects_bundle_project(tmp_path: Path) -> None:
 
 
 def test_lint_patch_script_rejects_own_global_tee_logging(tmp_path: Path) -> None:
-    script = _valid_script(tmp_path, "exec > >(tee patch.log) 2>&1\npython3 -m py_compile scripts/dev/validate_patch_metadata.py\n")
+    script = _valid_script(tmp_path, "exec > >(tee patch.log) 2>&1\npython3 -m py_compile scripts/dev/lint_patch_script.py\n")
 
     result = _run_linter(script)
 
@@ -84,7 +84,7 @@ def test_lint_patch_script_rejects_own_global_tee_logging(tmp_path: Path) -> Non
 
 
 def test_lint_patch_script_rejects_clipboard_tools(tmp_path: Path) -> None:
-    script = _valid_script(tmp_path, "echo bad | xclip -selection clipboard\npython3 -m py_compile scripts/dev/validate_patch_metadata.py\n")
+    script = _valid_script(tmp_path, "echo bad | xclip -selection clipboard\npython3 -m py_compile scripts/dev/lint_patch_script.py\n")
 
     result = _run_linter(script)
 
@@ -97,7 +97,7 @@ def test_lint_patch_script_allows_git_diff_and_forbidden_terms_in_quoted_diagnos
         tmp_path,
         "echo \"git diff --cached --quiet is documented here\"\n"
         "echo 'bundle_project.sh xclip aider git diff are quoted diagnostics'\n"
-        "python3 -m py_compile scripts/dev/validate_patch_metadata.py\n",
+        "python3 -m py_compile scripts/dev/lint_patch_script.py\n",
     )
 
     result = _run_linter(script)
@@ -106,7 +106,7 @@ def test_lint_patch_script_allows_git_diff_and_forbidden_terms_in_quoted_diagnos
 
 
 def test_lint_patch_script_rejects_git_diff_without_no_pager(tmp_path: Path) -> None:
-    script = _valid_script(tmp_path, "git diff -- src\npython3 -m py_compile scripts/dev/validate_patch_metadata.py\n")
+    script = _valid_script(tmp_path, "git diff -- src\npython3 -m py_compile scripts/dev/lint_patch_script.py\n")
 
     result = _run_linter(script)
 
@@ -120,7 +120,7 @@ def test_lint_patch_script_allows_git_diff_quiet_commit_guard(tmp_path: Path) ->
         "if git diff --cached --quiet; then\n"
         "  echo nothing-to-commit\n"
         "fi\n"
-        "python3 -m py_compile scripts/dev/validate_patch_metadata.py\n",
+        "python3 -m py_compile scripts/dev/lint_patch_script.py\n",
     )
 
     result = _run_linter(script)
@@ -129,7 +129,7 @@ def test_lint_patch_script_allows_git_diff_quiet_commit_guard(tmp_path: Path) ->
 
 
 def test_lint_patch_script_allows_git_no_pager_diff(tmp_path: Path) -> None:
-    script = _valid_script(tmp_path, "git --no-pager diff -- src\npython3 -m py_compile scripts/dev/validate_patch_metadata.py\n")
+    script = _valid_script(tmp_path, "git --no-pager diff -- src\npython3 -m py_compile scripts/dev/lint_patch_script.py\n")
 
     result = _run_linter(script)
 
@@ -145,7 +145,7 @@ def test_lint_patch_script_rejects_missing_footer(tmp_path: Path) -> None:
                 '# repodossier-meta: {"type":"patch","id":"TEST","title":"Test patch","commit":"Test patch"}',
                 '# repodossier-meta: {"type":"progress","panel":"roadmap","status":"active","file":"scripts/dev/patch-rules.md","start":1,"end":1}',
                 '# repodossier-meta: {"type":"progress","panel":"milestone","status":"partial","file":"scripts/dev/patch-rules.md","start":2,"end":2}',
-                "python3 -m py_compile scripts/dev/validate_patch_metadata.py",
+                "python3 -m py_compile scripts/dev/lint_patch_script.py",
             ]
         )
         + "\n",
@@ -161,7 +161,7 @@ def test_lint_patch_script_rejects_literal_triple_backticks(tmp_path: Path) -> N
     fence = chr(96) * 3
     script = _valid_script(
         tmp_path,
-        f"cat > README.md <<'EOF'\n{fence}\nEOF\npython3 -m py_compile scripts/dev/validate_patch_metadata.py\n",
+        f"cat > README.md <<'EOF'\n{fence}\nEOF\npython3 -m py_compile scripts/dev/lint_patch_script.py\n",
     )
 
     result = _run_linter(script)
@@ -182,7 +182,7 @@ def test_lint_patch_script_ignores_forbidden_terms_inside_test_fixture_heredoc(t
                 "    assert 'aider' in 'aider'",
                 "    assert 'git diff' in 'git diff'",
                 "PYTEST",
-                "python3 -m py_compile scripts/dev/validate_patch_metadata.py",
+                "python3 -m py_compile scripts/dev/lint_patch_script.py",
                 "",
             ]
         ),
@@ -203,7 +203,7 @@ def test_lint_patch_script_still_checks_commands_after_heredoc(tmp_path: Path) -
                 "    assert 'bundle_project.sh' in 'bundle_project.sh'",
                 "PYTEST",
                 "git diff -- src",
-                "python3 -m py_compile scripts/dev/validate_patch_metadata.py",
+                "python3 -m py_compile scripts/dev/lint_patch_script.py",
                 "",
             ]
         ),
@@ -227,7 +227,7 @@ def test_lint_patch_script_accepts_progress_context_false_without_progress_metad
                 "print_footer() {",
                 "  echo footer",
                 "}",
-                "python3 -m py_compile scripts/dev/validate_patch_metadata.py",
+                "python3 -m py_compile scripts/dev/lint_patch_script.py",
             ]
         )
         + "\n",
@@ -253,7 +253,7 @@ def test_lint_patch_script_rejects_progress_context_false_with_progress_metadata
                 "print_footer() {",
                 "  echo footer",
                 "}",
-                "python3 -m py_compile scripts/dev/validate_patch_metadata.py",
+                "python3 -m py_compile scripts/dev/lint_patch_script.py",
             ]
         )
         + "\n",

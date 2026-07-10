@@ -541,7 +541,7 @@ Farben:
 3. `partial` = gelb
 4. `todo` = rot
 
-`c` validiert diese Metadaten vor der Ausführung mit `scripts/dev/validate_patch_metadata.py`.
+`c` validiert diese Metadaten vor der Ausführung mit `scripts/dev/lint_patch_script.py`.
 
 Progress-Metadaten sind für normale `c`-Patchscripts Pflicht. `c` rendert mit `scripts/dev/show_progress_context.py` Roadmap links und Milestone rechts, ohne Rahmen und mit Kontextzeilen oberhalb und unterhalb. Wenn ein Patch keine Roadmap- und Milestone-Progress-Zeilen enthält, wird er vor der Ausführung blockiert.
 

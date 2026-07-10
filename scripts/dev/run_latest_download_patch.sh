@@ -78,7 +78,6 @@ if [ -n "${C_RUNNER_TEMP_COPY:-}" ] && [ -x "${REPODOSSIER_REPO:-$(pwd)}/scripts
 fi
 runner_dir="$(cd "$(dirname "$runner_source")" && pwd)"
 runner_repo="$(cd "$runner_dir/../.." && pwd)"
-metadata_validator="$runner_dir/validate_patch_metadata.py"
 progress_renderer="$runner_dir/show_progress_context.py"
 preflight_linter="$runner_dir/lint_patch_script.py"
 
@@ -691,14 +690,14 @@ info "Logfile: $(show_path "$run_log")"
 info "Startzeit: $(date --iso-8601=seconds)"
 
 section "Metadatenprüfung"
-if [ ! -x "$metadata_validator" ]; then
-  error "Metadata-Validator fehlt oder ist nicht ausführbar: $metadata_validator"
+if [ ! -x "$preflight_linter" ]; then
+  error "Patch-Preflight-Linter fehlt oder ist nicht ausführbar: $preflight_linter"
   info "Logfile bleibt erhalten: $(show_path "$run_log")"
   exit 10
 fi
 
 action "Validiere repodossier-meta JSON-Kommentarzeilen."
-python3 "$metadata_validator" --script "$patch_script" --repo "$runner_repo"
+python3 "$preflight_linter" --metadata-only --script "$patch_script" --repo "$runner_repo"
 metadata_status=$?
 if [ "$metadata_status" -ne 0 ]; then
   error "Metadatenprüfung fehlgeschlagen. Patch wird nicht ausgeführt."

@@ -299,3 +299,10 @@ PATCHHARBOR.14a2 is accepted when:
 - high-risk runner and repository helper logic are explicitly not removed yet
 - workflow-rule and policy files are not misclassified as safe deletion targets
 - target PatchHarbor repository remains unchanged
+
+
+## PATCHHARBOR.14b1 applied
+
+- `scripts/dev/validate_patch_metadata.py` was removed as an obsolete metadata helper wrapper.
+- `scripts/dev/run_latest_download_patch.sh` calls `scripts/dev/lint_patch_script.py --metadata-only` for `c` metadata checks.
+- `scripts/dev/lint_patch_script.py` keeps temporary metadata compatibility until PATCHHARBOR.14b2 removes the obsolete lint wrapper.

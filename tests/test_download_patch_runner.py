@@ -50,7 +50,7 @@ def _preflight_script_body(commands: str) -> str:
         "  echo footer\n"
         "}\n"
         f"{commands}\n"
-        "python3 -m py_compile scripts/dev/validate_patch_metadata.py\n"
+        "python3 -m py_compile scripts/dev/lint_patch_script.py\n"
     )
 
 
@@ -467,7 +467,7 @@ def test_c_runner_dry_run_syntax_failure_does_not_move_script(tmp_path: Path) ->
     broken = _write_script(
         download_dir,
         "dry_run_broken_patch.sh",
-        f"#!/usr/bin/env bash\n{_meta()}\nprint_footer() {{ echo footer; }}\npython3 -m py_compile scripts/dev/validate_patch_metadata.py\nif true; then\necho broken\n",
+        f"#!/usr/bin/env bash\n{_meta()}\nprint_footer() {{ echo footer; }}\npython3 -m py_compile scripts/dev/lint_patch_script.py\nif true; then\necho broken\n",
     )
 
     result = _run_runner(download_dir, "--dry-run")

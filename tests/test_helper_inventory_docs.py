@@ -22,13 +22,14 @@ CURRENT_HELPERS = [
     "scripts/dev/run_patchharbor_patch.sh",
     "scripts/dev/run_repodossier_exports.sh",
     "scripts/dev/show_progress_context.py",
-    "scripts/dev/validate_patch_metadata.py",
     "scripts/dev/validate_patch_workflow_rules.py",
 ]
 OPTIONAL_HELPERS = [
     "scripts/dev/run_latest_download_patch_patchharbor_candidate.sh",
 ]
-
+REMOVED_HELPERS = [
+    "scripts/dev/validate_patch_metadata.py",
+]
 
 def _read(path: Path) -> str:
     return path.read_text(encoding="utf-8")
@@ -55,7 +56,7 @@ def test_helper_inventory_lists_current_helper_files_and_optional_candidate() ->
 
 def test_helper_classification_covers_every_inventory_helper() -> None:
     classification = _read(HELPER_CLASSIFICATION)
-    missing = [helper for helper in CURRENT_HELPERS + OPTIONAL_HELPERS if helper not in classification]
+    missing = [helper for helper in CURRENT_HELPERS + OPTIONAL_HELPERS + REMOVED_HELPERS if helper not in classification]
     assert not missing, missing
 
 
@@ -140,8 +141,7 @@ def test_helper_classification_separates_immediate_generic_candidates_from_sourc
 def test_helper_classification_keeps_metadata_and_workflow_rules_compatibility_sensitive() -> None:
     text = _read(HELPER_CLASSIFICATION)
     required = [
-        "scripts/dev/validate_patch_metadata.py",
-        "scripts/dev/show_progress_context.py",
+            "scripts/dev/show_progress_context.py",
         "compatibility-sensitive",
         "Do not weaken metadata validation.",
         "Context display suppression through `progress_context=false` must remain compatible.",

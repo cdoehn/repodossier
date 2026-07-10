@@ -28,7 +28,7 @@ def _valid_preflight_body(commands: str, *, patch_id: str = "PATCHHARBOR.FRESHNE
         "  echo footer\n"
         "}\n"
         f"{commands}\n"
-        "python3 -m py_compile scripts/dev/validate_patch_metadata.py\n"
+        "python3 -m py_compile scripts/dev/lint_patch_script.py\n"
     )
 
 
