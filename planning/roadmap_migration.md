@@ -1,3 +1,5 @@
+Hinweis: Die operative Umsetzung folgt planning/milestones_migration.md. Diese Datei enthält die fein geschnittenen Patch-Schritte und hat Vorrang vor der groben Roadmap-Struktur.Hinweis: Die operative Umsetzung folgt planning/milestones_migration.md. Diese Datei enthält die fein geschnittenen Patch-Schritte und hat Vorrang vor der groben Roadmap-Struktur.
+
 # PatchHarbor / RepoDossier Migration Roadmap
 
 Stand dieser Roadmap: nach `PATCHHARBOR.08d`.
