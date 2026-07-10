@@ -12,6 +12,14 @@ BOLD='\033[1m'
 NC='\033[0m'
 
 ALL_MODES=(all full ai docs changed)
+PATCHHARBOR_PLAN_FILE=""
+
+cleanup_patchharbor_plan() {
+  if [ -n "${PATCHHARBOR_PLAN_FILE:-}" ] && [ -e "$PATCHHARBOR_PLAN_FILE" ]; then
+    rm -f "$PATCHHARBOR_PLAN_FILE"
+  fi
+}
+trap cleanup_patchharbor_plan EXIT
 
 log_info() {
   printf "${CYAN}r${NC} ${INFO}info${NC}  %s\n" "$1"
@@ -55,6 +63,7 @@ Modes:
 Environment:
   REPODOSSIER_BIN       RepoDossier executable, default: repodossier
   PATCH_DOWNLOAD_DIR    Download directory, default: $HOME/Downloads
+  PATCHHARBOR_REPO      PatchHarbor repository, default: sibling patch-harbor when available
 HELP
 }
 
@@ -83,6 +92,94 @@ normalize_mode() {
       return 1
       ;;
   esac
+}
+
+resolve_patchharbor_src() {
+  local configured="${PATCHHARBOR_REPO:-}"
+  local source_root=""
+  local candidate=""
+
+  if [ -n "$configured" ] && [ -f "$configured/src/patchharbor/export_planning.py" ]; then
+    printf '%s\n' "$configured/src"
+    return 0
+  fi
+
+  if source_root="$(git -C "$SCRIPT_DIR" rev-parse --show-toplevel 2>/dev/null)"; then
+    candidate="$(cd "$source_root/.." && pwd)/patch-harbor"
+    if [ -f "$candidate/src/patchharbor/export_planning.py" ]; then
+      printf '%s\n' "$candidate/src"
+      return 0
+    fi
+  fi
+
+  return 1
+}
+
+prepare_patchharbor_export_plan() {
+  local patchharbor_src=""
+  local plan_file=""
+
+  if ! patchharbor_src="$(resolve_patchharbor_src)"; then
+    log_info "PatchHarbor export plan: nicht verfügbar, verwende Source-Kompatibilitätsmodus"
+    return 0
+  fi
+
+  if ! plan_file="$(mktemp "${TMPDIR:-/tmp}/patchharbor-export-plan.XXXXXX")"; then
+    log_info "PatchHarbor export plan: temporäre Datei nicht verfügbar, verwende Source-Kompatibilitätsmodus"
+    return 0
+  fi
+
+  if PYTHONPATH="$patchharbor_src${PYTHONPATH:+:$PYTHONPATH}" python3 - "$plan_file" "$REPODOSSIER_BIN" "$DRY_RUN" "${MODES[@]}" <<'PYEOF'
+from __future__ import annotations
+
+from pathlib import Path
+import sys
+
+from patchharbor.export_display import format_export_command
+from patchharbor.export_model import ExportArtifact, ExportJob
+from patchharbor.export_planning import create_export_plan
+
+plan_file = Path(sys.argv[1])
+repodossier_bin = sys.argv[2]
+dry_run = sys.argv[3] == "1"
+requested_names = tuple(sys.argv[4:])
+
+jobs = (
+    ExportJob("full", (repodossier_bin, "full"), artifacts=(ExportArtifact("full.txt"),), description="RepoDossier full export"),
+    ExportJob("ai", (repodossier_bin, "export-ai"), artifacts=(ExportArtifact("ai.txt"),), description="RepoDossier AI export"),
+    ExportJob("docs", (repodossier_bin, "export-docs"), artifacts=(ExportArtifact("docs.txt"),), description="RepoDossier docs export"),
+    ExportJob("changed", (repodossier_bin, "changed"), artifacts=(ExportArtifact("changed.txt"),), description="RepoDossier changed export"),
+)
+plan = create_export_plan(jobs, requested_names=requested_names, dry_run=dry_run, output_directory="downloads")
+lines = [f"{job.name}\t{format_export_command(job.command)}" for job in plan.selected_jobs]
+plan_file.write_text("\n".join(lines) + "\n", encoding="utf-8")
+PYEOF
+  then
+    PATCHHARBOR_PLAN_FILE="$plan_file"
+    log_info "PatchHarbor export plan: aktiv"
+  else
+    if [ -e "$plan_file" ]; then
+      rm -f "$plan_file"
+    fi
+    PATCHHARBOR_PLAN_FILE=""
+    log_info "PatchHarbor export plan: nicht nutzbar, verwende Source-Kompatibilitätsmodus"
+  fi
+}
+
+planned_command_for_mode() {
+  local mode="$1"
+  local fallback="$2"
+  local planned=""
+
+  if [ -n "${PATCHHARBOR_PLAN_FILE:-}" ] && [ -f "$PATCHHARBOR_PLAN_FILE" ]; then
+    planned="$(awk -F '\t' -v wanted="$mode" '$1 == wanted { print $2; found=1; exit } END { if (!found) exit 1 }' "$PATCHHARBOR_PLAN_FILE" 2>/dev/null || true)"
+    if [ -n "$planned" ]; then
+      printf '%s\n' "$planned"
+      return 0
+    fi
+  fi
+
+  printf '%s\n' "$fallback"
 }
 
 DRY_RUN=0
@@ -153,6 +250,8 @@ if ! command -v "$REPODOSSIER_BIN" >/dev/null 2>&1; then
   exit 1
 fi
 
+prepare_patchharbor_export_plan
+
 mkdir -p "$DOWNLOAD_DIR"
 
 copy_if_exists() {
@@ -167,12 +266,14 @@ copy_if_exists() {
 
 run_mode() {
   local mode="$1"
+  local command_text=""
 
   case "$mode" in
     full)
       log_do "Exportiere full"
       if [ "$DRY_RUN" -eq 1 ]; then
-        log_info "Befehl: $REPODOSSIER_BIN full"
+        command_text="$(planned_command_for_mode full "$REPODOSSIER_BIN full")"
+        log_info "Befehl: $command_text"
       else
         "$REPODOSSIER_BIN" full
         local status=$?
@@ -186,7 +287,8 @@ run_mode() {
     ai)
       log_do "Exportiere ai"
       if [ "$DRY_RUN" -eq 1 ]; then
-        log_info "Befehl: $REPODOSSIER_BIN export-ai"
+        command_text="$(planned_command_for_mode ai "$REPODOSSIER_BIN export-ai")"
+        log_info "Befehl: $command_text"
       else
         "$REPODOSSIER_BIN" export-ai
         local status=$?
@@ -200,7 +302,8 @@ run_mode() {
     docs)
       log_do "Exportiere docs"
       if [ "$DRY_RUN" -eq 1 ]; then
-        log_info "Befehl: $REPODOSSIER_BIN export-docs"
+        command_text="$(planned_command_for_mode docs "$REPODOSSIER_BIN export-docs")"
+        log_info "Befehl: $command_text"
       else
         "$REPODOSSIER_BIN" export-docs
         local status=$?
@@ -214,7 +317,8 @@ run_mode() {
     changed)
       log_do "Exportiere changed"
       if [ "$DRY_RUN" -eq 1 ]; then
-        log_info "Befehl: $REPODOSSIER_BIN changed"
+        command_text="$(planned_command_for_mode changed "$REPODOSSIER_BIN changed")"
+        log_info "Befehl: $command_text"
       else
         "$REPODOSSIER_BIN" changed
         local status=$?
