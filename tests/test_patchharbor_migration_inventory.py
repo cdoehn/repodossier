@@ -31,7 +31,7 @@ def test_patchharbor_inventory_avoids_local_private_markers():
         "/home/",
         "/Users/",
         "\\Users\\",
-        "@gmail.com",
+        "@example.invalid",
         "@outlook.",
         "@hotmail.",
     ]

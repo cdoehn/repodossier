@@ -227,11 +227,11 @@ def test_source_export_wrapper_smoke_does_not_change_productive_files() -> None:
 def test_source_export_wrapper_smoke_tests_do_not_store_private_local_values() -> None:
     text = Path(__file__).read_text(encoding="utf-8")
     forbidden = [
-        "/home/" + "christian",
-        "christian" + "@",
-        "christian.doehn" + "@" + "gmail.com",
-        "Think" + "Pad",
-        "~/" + "Projekte",
+        "/home/" + "exampleuser",
+        "user" + "@",
+        "example.user" + "@" + "example.invalid",
+        "Example" + "Laptop",
+        "~/" + "Projects",
         chr(96) * 3,
     ]
     for value in forbidden:

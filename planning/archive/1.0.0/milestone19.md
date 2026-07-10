@@ -301,7 +301,7 @@ Die öffentliche Dokumentation wird vollständig auf RepoDossier umgestellt.
 4. Legacy-Abschnitt ergänzen:
    - Alter CLI-Befehl `repocontext` wird vorerst unterstützt
    - Alte Config-Namen werden vorerst unterstützt
-   - Neue Projekte sollen `repodossier` verwenden
+   - Neue Projects sollen `repodossier` verwenden
 
 5. Weitere Dokumentation aktualisieren:
    - `architecture.md`

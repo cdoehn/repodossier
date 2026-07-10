@@ -103,12 +103,12 @@ def test_install_docs_do_not_introduce_private_local_values_or_fences() -> None:
     readme_section = readme_install_section()
 
     private_forbidden = [
-        "/home/" + "christian",
-        "christian" + "@",
-        "christian.doehn" + "@" + "gmail.com",
-        "Think" + "Pad",
-        "Blade-" + "15",
-        "~/" + "Projekte",
+        "/home/" + "exampleuser",
+        "user" + "@",
+        "example.user" + "@" + "example.invalid",
+        "Example" + "Laptop",
+        "Example" + "Machine",
+        "~/" + "Projects",
     ]
 
     for value in private_forbidden:

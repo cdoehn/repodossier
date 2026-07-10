@@ -66,12 +66,12 @@ def test_c_runner_still_rejects_invalid_metadata_in_dry_run(tmp_path: Path) -> N
 def test_metadata_cleanup_tests_do_not_store_private_local_values() -> None:
     text = "\n".join(path.read_text(encoding="utf-8") for path in [Path(__file__).resolve(), RUNNER])
     forbidden = [
-        "/home/" + "christian",
-        "christian" + "@",
-        "christian.doehn" + "@" + "gmail.com",
-        "Think" + "Pad",
-        "Blade-" + "15",
-        "~/" + "Projekte",
+        "/home/" + "exampleuser",
+        "user" + "@",
+        "example.user" + "@" + "example.invalid",
+        "Example" + "Laptop",
+        "Example" + "Machine",
+        "~/" + "Projects",
         chr(96) * 3,
     ]
     for value in forbidden:

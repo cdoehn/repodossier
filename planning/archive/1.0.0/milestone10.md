@@ -4,7 +4,7 @@
 
 RepoContext soll Projektabhängigkeiten automatisch erkennen und strukturiert im Export sichtbar machen.
 
-Milestone 10 erweitert die Analyse um Dependency Detection für typische Python-Projekte.
+Milestone 10 erweitert die Analyse um Dependency Detection für typische Python-Projects.
 
 Erkannt werden sollen insbesondere:
 

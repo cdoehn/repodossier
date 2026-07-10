@@ -1041,7 +1041,7 @@ Anforderungen:
 - Symbol Index gruppiert nach Datei
 - Import Graph Summary und lokale Imports
 - Call Graph Summary und wichtigste Edges
-- Limits für große Projekte
+- Limits für große Projects
 
 Akzeptanzkriterien:
 

@@ -103,12 +103,12 @@ def test_developer_workflow_docs_do_not_store_private_local_values() -> None:
     checked = [WORKFLOW, ALIASES, PATCH_RULES, Path(__file__).resolve()]
     text = "\n".join(read(path) for path in checked)
     private_forbidden = [
-        "/home/" + "christian",
-        "christian" + "@",
-        "christian.doehn" + "@" + "gmail.com",
-        "Think" + "Pad",
-        "Blade-" + "15",
-        "~/" + "Projekte",
+        "/home/" + "exampleuser",
+        "user" + "@",
+        "example.user" + "@" + "example.invalid",
+        "Example" + "Laptop",
+        "Example" + "Machine",
+        "~/" + "Projects",
     ]
 
     for value in private_forbidden:

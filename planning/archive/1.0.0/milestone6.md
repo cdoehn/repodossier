@@ -55,7 +55,7 @@ Nicht Teil von Milestone 6:
   - from ..git import discover_repo
 - Wildcard:
   - from module import *
-- Ziel: Parser ist vollständig genug für normale Python-Projekte.
+- Ziel: Parser ist vollständig genug für normale Python-Projects.
 
 6.1.d Tests für reine Import-Erkennung schreiben
 - Tests mit kleinen Code-Snippets.

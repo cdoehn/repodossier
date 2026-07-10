@@ -108,12 +108,12 @@ def test_removed_helper_paths_are_historical_and_not_active_instructions() -> No
 def test_migration_notes_do_not_store_private_local_values_or_fences() -> None:
     text = "\n".join(read(path) for path in [NOTES, Path(__file__).resolve()])
     forbidden = [
-        "/home/" + "christian",
-        "christian" + "@",
-        "christian.doehn" + "@" + "gmail.com",
-        "Think" + "Pad",
-        "Blade-" + "15",
-        "~/" + "Projekte",
+        "/home/" + "exampleuser",
+        "user" + "@",
+        "example.user" + "@" + "example.invalid",
+        "Example" + "Laptop",
+        "Example" + "Machine",
+        "~/" + "Projects",
     ]
 
     for value in forbidden:

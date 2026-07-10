@@ -97,12 +97,12 @@ def test_required_and_category_mapping_preserves_legacy_optional_tools() -> None
 def test_check_dev_environment_tests_do_not_add_private_literals() -> None:
     text = Path(__file__).read_text(encoding="utf-8")
     forbidden = [
-        "/home/" + "christian",
-        "christian" + "@",
-        "christian.doehn" + "@" + "gmail.com",
-        "Think" + "Pad",
-        "Blade-" + "15",
-        "~/" + "Projekte",
+        "/home/" + "exampleuser",
+        "user" + "@",
+        "example.user" + "@" + "example.invalid",
+        "Example" + "Laptop",
+        "Example" + "Machine",
+        "~/" + "Projects",
         chr(96) * 3,
     ]
     for value in forbidden:

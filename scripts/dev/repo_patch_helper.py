@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Reusable local helper library for Christian's repo patch scripts.
+"""Reusable local helper library for Example User's repo patch scripts.
 
 This module is versioned with RepoDossier at:
     scripts/dev/repo_patch_helper.py
 
-A legacy copy may also exist on Christian's machines at:
+A legacy copy may also exist on Example User's machines at:
     ~/dev-scripts/repo_patch_helper.py
 
 It can be imported from patch heredocs like this:
@@ -597,7 +597,7 @@ def print_task_footer(
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="repo_patch_helper.py",
-        description="Local helper for Christian's repo patch scripts.",
+        description="Local helper for Example User's repo patch scripts.",
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
 

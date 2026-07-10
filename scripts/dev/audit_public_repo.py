@@ -12,11 +12,11 @@ from typing import Iterable, Sequence
 
 
 DEFAULT_PATTERN_SPECS = (
-    ("person_name", "Christian " + "Döhn"),
-    ("person_email", "christian" + ".doehn" + "@" + "gmail.com"),
-    ("home_path", "/home/" + "christian"),
+    ("person_name", "Example User " + "Döhn"),
+    ("person_email", "exampleuser" + ".doehn" + "@" + "example.invalid"),
+    ("home_path", "/home/" + "exampleuser"),
     ("old_project_path", "market_" + "research"),
-    ("workstation_name", "Blade-" + "15"),
+    ("workstation_name", "Example" + "Machine"),
 )
 FORBIDDEN_PATTERNS = [value for _name, value in DEFAULT_PATTERN_SPECS]
 

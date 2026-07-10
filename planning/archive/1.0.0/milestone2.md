@@ -127,7 +127,7 @@
 
   -  2.7.b Store estimated tokens in `FileInfo`
 
-    Speichert die geschätzte Tokenanzahl im `FileInfo`-Objekt. Diese Information wird später verwendet, um Exportgrößen abzuschätzen und große Projekte sinnvoll aufzuteilen.
+    Speichert die geschätzte Tokenanzahl im `FileInfo`-Objekt. Diese Information wird später verwendet, um Exportgrößen abzuschätzen und große Projects sinnvoll aufzuteilen.
 
   -  2.7.c Unit Tests
 

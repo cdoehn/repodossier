@@ -109,11 +109,11 @@ def test_c_runner_progress_context_switch_is_documented_in_runner_source() -> No
 def test_c_runner_progress_context_switch_tests_have_no_private_values() -> None:
     text = Path(__file__).read_text(encoding="utf-8")
     forbidden = [
-        "/home/" + "christian",
-        "christian" + "@",
-        "christian.doehn" + "@" + "gmail.com",
-        "Think" + "Pad",
-        "~/" + "Projekte",
+        "/home/" + "exampleuser",
+        "user" + "@",
+        "example.user" + "@" + "example.invalid",
+        "Example" + "Laptop",
+        "~/" + "Projects",
         chr(96) * 3,
     ]
     for value in forbidden:

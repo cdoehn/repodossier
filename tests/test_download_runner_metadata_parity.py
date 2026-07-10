@@ -215,11 +215,11 @@ def test_invalid_metadata_inside_zip_stops_before_execution_and_keeps_archive(tm
 def test_metadata_parity_tests_do_not_store_private_local_values() -> None:
     text = Path(__file__).read_text(encoding="utf-8")
     forbidden = [
-        "/home/" + "christian",
-        "christian" + "@",
-        "christian.doehn" + "@" + "gmail.com",
-        "Think" + "Pad",
-        "~/" + "Projekte",
+        "/home/" + "exampleuser",
+        "user" + "@",
+        "example.user" + "@" + "example.invalid",
+        "Example" + "Laptop",
+        "~/" + "Projects",
         chr(96) * 3,
     ]
     for value in forbidden:

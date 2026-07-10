@@ -8,7 +8,7 @@ Sie liegt unter `scripts/dev/`, weil sie zur Entwicklungs- und Patch-Infrastrukt
 
 ## 1. Bedeutung von `n`
 
-Wenn Christian nur schreibt:
+Wenn Example User nur schreibt:
 
 ```text
 n
@@ -25,13 +25,13 @@ Daraus folgt:
 3. Direkt den nächsten sinnvollen Commit liefern.
 4. Keine Wiederholung des vorherigen Patches.
 5. Wenn aus dem Chat klar ist, dass der letzte Schritt ein Fix war, den Fix als abgeschlossen behandeln.
-6. Wenn Christian statt `n` eine Fehlermeldung, ein Logfile oder Terminalausgabe mit Fehlern postet, hat der Fix Vorrang.
+6. Wenn Example User statt `n` eine Fehlermeldung, ein Logfile oder Terminalausgabe mit Fehlern postet, hat der Fix Vorrang.
 
 ---
 
 ## 2. Bedeutung von geposteten Fehlern
 
-Wenn Christian Terminalausgaben, Tracebacks, Syntaxfehler, Testfehler oder Logfiles mit Fehlern postet, gilt:
+Wenn Example User Terminalausgaben, Tracebacks, Syntaxfehler, Testfehler oder Logfiles mit Fehlern postet, gilt:
 
 > Der aktuelle Patch ist noch nicht abgeschlossen. Repariere genau diesen Patch.
 
@@ -55,7 +55,7 @@ Für zukünftige Commit- und Fix-Antworten gilt:
 1. Patches, Fixes und Next-Commit-Scripts werden als Download-Link zu einer `.sh`-Bashscript-Datei bereitgestellt.
 2. Keine riesigen Bash-Scripts direkt ins Chatfenster posten, wenn ein Download-Link möglich ist.
 3. Kurz und knapp erklären, was der Patch oder Fix macht.
-4. Bei Bedarf darf Christian um zusätzliche Eingaben, Logausgaben oder Testergebnisse gebeten werden.
+4. Bei Bedarf darf Example User um zusätzliche Eingaben, Logausgaben oder Testergebnisse gebeten werden.
 5. Die `.sh`-Datei muss direkt ausführbar oder mit `bash <datei>.sh` ausführbar sein.
 6. Der Script-Footer bleibt Teil des `.sh`-Scripts und wird beim Ausführen im Terminal angezeigt.
 
@@ -100,7 +100,7 @@ Regeln für einzelne Patch-Scripts:
 3. Patch-Scripts sollen normal auf `stdout` und `stderr` schreiben.
 4. Patch-Scripts müssen korrekte Exit-Codes liefern.
 5. `c` schreibt die vollständige Ausgabe in eine Logdatei unter `~/Downloads`.
-6. Wenn Christian Fehler postet, genügt die Terminalausgabe oder die von `c` erzeugte Logdatei.
+6. Wenn Example User Fehler postet, genügt die Terminalausgabe oder die von `c` erzeugte Logdatei.
 
 Das macht Sinn, weil Logging, Syntaxprüfung und Verschieben der Download-Scripts dadurch zentral, einheitlich und weniger fehleranfällig werden.
 
@@ -170,7 +170,7 @@ Bei Commit-Patches gilt:
 1. Kein Aider verwenden.
 2. Keine Aider-Prompts ausgeben.
 3. Direkte Python-/Bash-Patches liefern.
-4. Nur wenn Christian ausdrücklich Aider verlangt, darf Aider verwendet werden.
+4. Nur wenn Example User ausdrücklich Aider verlangt, darf Aider verwendet werden.
 
 ---
 
@@ -388,7 +388,7 @@ Diese Reihenfolge ist Orientierung. Fehlerfixes haben Vorrang.
 
 ## 23. Kurzfassung für `n`
 
-Wenn Christian `n` schreibt:
+Wenn Example User `n` schreibt:
 
 1. Letzten Patch als grün behandeln.
 2. Nächsten sinnvollen Commit liefern.
@@ -404,7 +404,7 @@ Wenn Christian `n` schreibt:
 
 ## 24. Kurzfassung für Fixes
 
-Wenn Christian einen Fehler postet:
+Wenn Example User einen Fehler postet:
 
 1. Aktuellen Patch reparieren.
 2. Nicht weitergehen.

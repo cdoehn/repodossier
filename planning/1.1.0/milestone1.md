@@ -958,7 +958,7 @@ Akzeptanzkriterien:
 
 Ziel:
 
-Bei Fehlern soll Christian sofort sehen, welcher Schritt gescheitert ist.
+Bei Fehlern soll Example User sofort sehen, welcher Schritt gescheitert ist.
 
 Anforderungen:
 

@@ -10,7 +10,7 @@ RepoContext soll eine robuste, nachvollziehbare und testbare Rangliste wichtiger
 - Projektstruktur
 - bestehende Export-Nutzung in ai.txt / full.txt
 
-Die Rangliste soll später besonders im AI Export helfen, damit wichtige Dateien weiter oben erscheinen und RepoContext für große Projekte bessere Kontext-Pakete erzeugt.
+Die Rangliste soll später besonders im AI Export helfen, damit wichtige Dateien weiter oben erscheinen und RepoContext für große Projects bessere Kontext-Pakete erzeugt.
 
 Quelle laut Roadmap:
 Milestone 12 – Important File Ranking
@@ -357,8 +357,8 @@ Milestone 12 – Important File Ranking
 
 8.1.b Score normalisieren
 - Problem:
-  - Große Projekte haben mehr Imports/Calls
-  - Kleine Projekte dürfen nicht verzerrt werden
+  - Große Projects haben mehr Imports/Calls
+  - Kleine Projects dürfen nicht verzerrt werden
 - Lösung:
   - Degree-Werte deckeln oder logarithmisch skalieren
 - Beispiel:

@@ -15,7 +15,7 @@ AUDIT = ROOT / "scripts" / "dev" / "audit_public_repo.py"
 
 
 def test_scan_text_finds_private_patterns_without_storing_literal_in_test() -> None:
-    text = "x " + "Christian " + "Döhn" + " y\n" + "/home/" + "christian" + "/project\n"
+    text = "x " + "Example User " + "Döhn" + " y\n" + "/home/" + "exampleuser" + "/project\n"
 
     findings = scan_text("sample.txt", text)
 
@@ -33,7 +33,7 @@ def test_scan_text_accepts_custom_patterns() -> None:
 
 
 def test_scan_text_ignores_split_private_email_test_literals() -> None:
-    text = '"christian.doehn" + "@" + "gmail.com"\n'
+    text = '"example.user" + "@" + "example.invalid"\n'
 
     assert scan_text("test_file.py", text) == []
 
@@ -86,7 +86,7 @@ def test_patchharbor_stdout_is_converted_to_legacy_findings() -> None:
     assert len(findings) == 1
     assert findings[0].path == "file.txt"
     assert findings[0].line == 2
-    assert findings[0].pattern == "Christian " + "Döhn"
+    assert findings[0].pattern == "Example User " + "Döhn"
     assert findings[0].text == "contains name"
 
 
@@ -96,4 +96,4 @@ def test_patchharbor_stdout_maps_full_email_pattern_without_bare_handle_false_po
     findings = _findings_from_patchharbor_stdout(stdout)
 
     assert len(findings) == 1
-    assert findings[0].pattern == "christian" + ".doehn" + "@" + "gmail.com"
+    assert findings[0].pattern == "exampleuser" + ".doehn" + "@" + "example.invalid"

@@ -74,10 +74,10 @@ Wenn ein Test verbotene Strings sucht, darf die getrackte Testdatei diese String
 
 Dynamisch zusammensetzen:
 
-- `"/home/" + "christian"`
-- `"christian" + "@"`
-- `"Think" + "Pad"`
-- `"~/" + "Projekte"`
+- `"/home/" + "exampleuser"`
+- `"user" + "@"`
+- `"Example" + "Laptop"`
+- `"~/" + "Projects"`
 - `"run_latest_" + "download_patch"`
 - `chr(96) * 3`
 

@@ -113,11 +113,11 @@ def test_c_runner_selects_latest_zip_when_no_path_is_given(tmp_path: Path) -> No
 def test_c_runner_zip_support_and_status_test_has_no_private_values() -> None:
     text = Path(__file__).read_text(encoding="utf-8")
     forbidden = [
-        "/home/" + "christian",
-        "christian" + "@",
-        "christian.doehn" + "@" + "gmail.com",
-        "Think" + "Pad",
-        "~/" + "Projekte",
+        "/home/" + "exampleuser",
+        "user" + "@",
+        "example.user" + "@" + "example.invalid",
+        "Example" + "Laptop",
+        "~/" + "Projects",
         chr(96) * 3,
     ]
     for value in forbidden:
