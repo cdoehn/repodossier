@@ -2,6 +2,14 @@
 
 This document describes current RepoDossier installation paths after PATCHHARBOR.14c2.
 
+## Standard pip install
+
+Use this when installing into the currently active Python environment:
+
+    python3 -m pip install .
+    repodossier --help
+    repodossier --version
+
 ## Recommended user install: pipx
 
 Use `pipx` when you want the command-line application available on your normal shell path.
@@ -108,3 +116,20 @@ PATCHHARBOR.14c3 records source-cleanup migration notes in `planning/patchharbor
 ## Migration note reference
 
 PATCHHARBOR.14c3 records source-cleanup migration notes in `planning/patchharbor/repodossier-migration-notes.md`.
+
+## Archive CLI workflow
+
+The archive workflow is available after `pip install .` or `pipx install .`:
+
+    repodossier ./projekt ./output
+    repodossier ./projekt/src/backend ./output
+    repodossier ./projekt/backend ./projekt/frontend ./output
+    repodossier ./repo-a ./repo-b ./output
+    repodossier ./projekt ./output --output-name projektpaket.zip
+    repodossier ./projekt ./output --output-name projektpaket.xml
+
+The last positional argument is always the output folder. All earlier positional arguments are source folders. Source folders may be Git repository roots or subfolders inside Git repositories.
+
+The archive is technically a ZIP file regardless of the selected filename extension. It contains reports under `reports/` and working-tree snapshots under `repositories/`. Git internals, ignored files, the output folder, and temporary archive files are excluded.
+
+Ubuntu 26.04 is the required functional verification platform. The implementation uses portable Python, Git, pathlib, subprocess, and zipfile behavior so it is expected to work on Ubuntu 24.04 as well, but Ubuntu 24.04 is not a separate required test matrix.

@@ -169,6 +169,33 @@ It cannot guarantee that every possible credential format will be found. Always
 review generated files before publishing or sharing them outside a trusted
 environment.
 
+
+## Repository dossier archive workflow
+
+The normal archive CLI form is:
+
+    repodossier [OPTIONEN] QUELLE [QUELLE ...] AUSGABEORDNER
+
+At least two positional arguments are required. Every positional argument except the last one is a source folder. The last positional argument is always the output folder.
+
+Examples:
+
+    repodossier ./projekt ./output
+    repodossier ./projekt/src/backend ./output
+    repodossier ./projekt/backend ./projekt/frontend ./output
+    repodossier ./repo-a ./repo-b ./output
+    repodossier ./projekt ./output --output-name projektpaket.zip
+    repodossier ./projekt ./output --output-name projektpaket.xml
+
+The produced file is always a ZIP archive, even when the selected filename uses another extension. The archive contains reports under `reports/` and complete working-tree repository snapshots under `repositories/`.
+
+Source-code files are not embedded as full source text in the source-reference reports. Those reports contain structured references such as:
+
+    Source file: src/main.py
+    Archive path: ../repositories/projekt/src/main.py
+
+The referenced paths point to files in the repository snapshot after the archive is extracted.
+
 ## Usage
 
 Run RepoDossier inside a Git repository or any subdirectory of a Git repository.
