@@ -276,7 +276,7 @@ def _main_without_export_secret_safety_net(argv: Optional[Iterable[str]] = None)
 
     if _should_use_legacy_parser(raw_args):
         parser = _build_parser()
-        arguments = parser.parse_args(raw_args)
+        arguments = parser.parse_args(list(argv) if argv is not None else None)
         config = _load_config_for_cli_args(arguments)
         enable_split_write_interceptor_for_args(arguments, base_config=config)
         return arguments.handler(arguments)
