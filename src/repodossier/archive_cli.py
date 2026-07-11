@@ -241,8 +241,6 @@ def _is_relative_to(path: Path, parent: Path) -> bool:
     return True
 
 def _should_exclude_snapshot_path(absolute_path: Path, *, repository_root: Path, output_dir: Path, final_archive_path: Path, temporary_archive_path: Path) -> bool:
-    if ".git" in absolute_path.relative_to(repository_root).parts:
-        return True
     if _is_relative_to(absolute_path, output_dir):
         return True
     if absolute_path == final_archive_path or absolute_path == temporary_archive_path:
@@ -253,7 +251,18 @@ def enumerate_repository_snapshot_files(repository: ResolvedArchiveRepository, *
     """Enumerate visible Git working-tree files for one repository snapshot."""
     files: list[ArchiveSnapshotFile] = []
     seen_relative_paths: set[Path] = set()
-    for relative_path in _git_ls_files(repository.repository_root):
+    relative_paths = _git_ls_files(repository.repository_root)
+    git_metadata_path = repository.repository_root / ".git"
+    if git_metadata_path.is_file():
+        relative_paths.append(Path(".git"))
+    elif git_metadata_path.is_dir():
+        relative_paths.extend(
+            path.relative_to(repository.repository_root)
+            for path in git_metadata_path.rglob("*")
+            if path.is_file()
+        )
+
+    for relative_path in relative_paths:
         if relative_path in seen_relative_paths:
             continue
         seen_relative_paths.add(relative_path)

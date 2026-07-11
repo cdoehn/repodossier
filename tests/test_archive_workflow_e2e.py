@@ -68,7 +68,7 @@ def test_end_to_end_archive_cli_creates_zip_with_reports_and_snapshot(tmp_path: 
     assert "repositories/projekt/README.md" in names
     assert "repositories/projekt/untracked.txt" in names
     assert "repositories/projekt/ignored.txt" not in names
-    assert all(".git/" not in name for name in names)
+    assert "repositories/projekt/.git/HEAD" in names
     assert all("output/" not in name for name in names)
 
     assert _text(archive_path, "repositories/projekt/src/backend/main.py") == "VALUE = 'unstaged visible working tree'\n"

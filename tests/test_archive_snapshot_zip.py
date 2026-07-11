@@ -63,7 +63,7 @@ def test_snapshot_includes_tracked_staged_unstaged_and_untracked_visible_files(t
     assert "repositories/project/untracked.txt" in names
     assert "repositories/project/.gitignore" in names
     assert "repositories/project/ignored.txt" not in names
-    assert not any("/.git/" in name or name.startswith("repositories/project/.git/") for name in names)
+    assert "repositories/project/.git/HEAD" in names
     assert _zip_text(result.archive_path, "repositories/project/tracked.txt") == "tracked visible unstaged"
 
 

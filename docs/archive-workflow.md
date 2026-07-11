@@ -38,7 +38,7 @@ Existing target files are not overwritten silently.
 
 The snapshot represents the visible working tree, not just the last commit. It includes tracked files, staged changes, unstaged changes, staged new files, and untracked files that are not ignored by Git.
 
-The snapshot excludes `.git`, Git internals, ignored untracked files, the output folder, the final archive, and temporary archive files from the active run.
+The snapshot includes the repository's `.git` metadata so branches, commits, tags, and history remain available after extraction. It still excludes ignored untracked files, the output folder, the final archive, and temporary archive files from the active run.
 
 ## Source references
 

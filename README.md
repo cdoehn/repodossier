@@ -187,7 +187,7 @@ Examples:
     repodossier ./projekt ./output --output-name projektpaket.zip
     repodossier ./projekt ./output --output-name projektpaket.xml
 
-The produced file is always a ZIP archive, even when the selected filename uses another extension. The archive contains reports under `reports/` and complete working-tree repository snapshots under `repositories/`.
+The produced file is always a ZIP archive, even when the selected filename uses another extension. The archive contains reports under `reports/` and complete Git repository snapshots including history under `repositories/`.
 
 Source-code files are not embedded as full source text in the source-reference reports. Those reports contain structured references such as:
 
