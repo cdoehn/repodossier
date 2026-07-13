@@ -187,7 +187,7 @@ Examples:
     repodossier ./projekt ./output --output-name projektpaket.zip
     repodossier ./projekt ./output --output-name projektpaket.xml
 
-The produced file is always a ZIP archive, even when the selected filename uses another extension. The archive contains reports under `reports/` and committed `HEAD` snapshots under `repositories/`. RepoDossier uses Git's native `git archive --format=zip --output=repodossier.zip HEAD` semantics internally; staged, unstaged, untracked, ignored, and `.git` metadata are not included.
+The produced file is always a ZIP archive, even when the selected filename uses another extension. The archive contains `reports/full.txt`, `reports/ai.txt`, `reports/docs.txt`, `reports/changed.txt`, the source-reference reports, and committed `HEAD` snapshots under `repositories/`. The regular exports are generated directly into the ZIP without creating those files in the source repository. They analyze the current working tree, while the repository snapshot uses Git's native `git archive --format=zip --output=repodossier.zip HEAD` semantics; staged, unstaged, untracked, ignored, and `.git` metadata are not included in that snapshot.
 
 Source-code files are not embedded as full source text in the source-reference reports. Those reports contain structured references such as:
 

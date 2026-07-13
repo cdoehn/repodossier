@@ -17,9 +17,19 @@ Only the explicitly supplied source folders are analyzed for source references. 
 Each invocation creates exactly one ZIP archive. The archive contains:
 
     reports/
+        full.txt
+        ai.txt
+        docs.txt
+        changed.txt
+        archive-manifest.txt
+        source-references.txt
+        source-references.md
+        source-references.xml
     repositories/
         repository-a/
         repository-b/
+
+The four regular exports are generated automatically while the archive is built. They are written directly into the ZIP and are not created in the source repository. `full.txt`, `ai.txt`, and `docs.txt` analyze the current working tree; `changed.txt` records its Git changes. The repository snapshot remains the committed `HEAD` tree. When multiple repositories are supplied, each of the four report files contains clearly labelled sections for every repository.
 
 Repository folder names inside the archive are deterministic and collision-free.
 

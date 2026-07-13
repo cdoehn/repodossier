@@ -61,6 +61,10 @@ def test_end_to_end_archive_cli_creates_zip_with_reports_and_snapshot(tmp_path: 
     assert zipfile.is_zipfile(archive_path)
     names = _names(archive_path)
     assert "reports/archive-manifest.txt" in names
+    assert "reports/full.txt" in names
+    assert "reports/ai.txt" in names
+    assert "reports/docs.txt" in names
+    assert "reports/changed.txt" in names
     assert "reports/source-references.txt" in names
     assert "reports/source-references.md" in names
     assert "reports/source-references.xml" in names
@@ -76,6 +80,10 @@ def test_end_to_end_archive_cli_creates_zip_with_reports_and_snapshot(tmp_path: 
     assert "Source file: src/backend/main.py" in report
     assert "Archive path: ../repositories/projekt/src/backend/main.py" in report
     assert "unstaged visible working tree" not in report
+    assert "unstaged visible working tree" in _text(archive_path, "reports/full.txt")
+    assert "src/backend/main.py" in _text(archive_path, "reports/ai.txt")
+    assert "README.md" in _text(archive_path, "reports/docs.txt")
+    assert "unstaged visible working tree" in _text(archive_path, "reports/changed.txt")
 
 
 def test_end_to_end_archive_cli_supports_multiple_repositories(tmp_path: Path) -> None:

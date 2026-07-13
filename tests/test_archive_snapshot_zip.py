@@ -61,6 +61,41 @@ def _zip_text(path: Path, name: str) -> str:
         return archive.read(name).decode("utf-8")
 
 
+def test_archive_contains_all_regular_exports_without_writing_them_to_repository(
+    tmp_path: Path,
+) -> None:
+    repo = _git_init(tmp_path / "project")
+    (repo / "app.py").write_text("VALUE = 'committed'\n", encoding="utf-8")
+    (repo / "README.md").write_text(
+        "# Example\n\nDocumentation body.\n",
+        encoding="utf-8",
+    )
+    assert _git(repo, "add", "app.py", "README.md").returncode == 0
+    _commit(repo, "initial")
+    (repo / "app.py").write_text("VALUE = 'working tree'\n", encoding="utf-8")
+
+    result = create_archive_dossier(
+        resolve_archive_inputs(_args(repo, output_dir=tmp_path / "out"))
+    )
+
+    names = _zip_names(result.archive_path)
+    assert {
+        "reports/full.txt",
+        "reports/ai.txt",
+        "reports/docs.txt",
+        "reports/changed.txt",
+    } <= names
+    assert "VALUE = 'working tree'" in _zip_text(result.archive_path, "reports/full.txt")
+    assert "app.py" in _zip_text(result.archive_path, "reports/ai.txt")
+    assert "Documentation body." in _zip_text(result.archive_path, "reports/docs.txt")
+    changed = _zip_text(result.archive_path, "reports/changed.txt")
+    assert "app.py" in changed
+    assert "VALUE = 'working tree'" in changed
+
+    for filename in archive_cli.ARCHIVE_EXPORT_FILENAMES:
+        assert not (repo / filename).exists()
+
+
 def test_snapshot_uses_committed_head_and_excludes_working_tree_and_git_metadata(tmp_path: Path) -> None:
     repo = _git_init(tmp_path / "project")
     (repo / "tracked.txt").write_text("committed content", encoding="utf-8")
@@ -192,6 +227,10 @@ def test_multiple_repositories_are_written_to_one_archive(tmp_path: Path) -> Non
     assert "reports/archive-manifest.txt" in names
     assert "repositories/repo-a/a.txt" in names
     assert "repositories/repo-b/b.txt" in names
+    full_report = _zip_text(result.archive_path, "reports/full.txt")
+    assert "RepoDossier multi-repository export" in full_report
+    assert "Repository: repo-a" in full_report
+    assert "Repository: repo-b" in full_report
 
 
 def test_output_name_is_used_exactly_even_with_non_zip_extension(tmp_path: Path) -> None:

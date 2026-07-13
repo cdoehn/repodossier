@@ -6,16 +6,27 @@ import argparse
 import os
 import re
 import subprocess
+import tempfile
 import zipfile
 from html import escape as escape_xml
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Iterable, Sequence
 
+from .changed_exporter import render_changed_export
+from .exporters import (
+    build_full_export_context,
+    create_ai_export_context,
+    create_docs_export_context,
+    write_ai_export,
+    write_docs_export,
+    write_full_export,
+)
 from .scanner import detect_language, is_source_code_language
 
 ARCHIVE_USAGE = "repodossier [OPTIONEN] QUELLE [QUELLE ...] AUSGABEORDNER"
 DEFAULT_ARCHIVE_NAME = "repodossier.zip"
+ARCHIVE_EXPORT_FILENAMES = ("full.txt", "ai.txt", "docs.txt", "changed.txt")
 
 class ArchiveCliArgumentError(ValueError):
     """Raised when the archive CLI positional contract is violated."""
@@ -112,6 +123,7 @@ def build_archive_parser(version: str) -> argparse.ArgumentParser:
             "\n"
             "ZIP-Paket:\n"
             "  Pro Aufruf wird genau ein gemeinsames ZIP-Archiv erzeugt. Es enthält\n"
+            "  die Exporte full.txt, ai.txt, docs.txt und changed.txt sowie weitere\n"
             "  RepoDossier-Reports unter reports/ und Repository-Snapshots unter\n"
             "  repositories/. Der Dateiname ist frei wählbar; der Inhalt bleibt auch\n"
             "  bei anderer Dateiendung technisch ein ZIP-Archiv.\n"
@@ -531,6 +543,89 @@ def _write_source_reference_reports(
     archive.writestr("reports/source-references.xml", render_source_references_xml(references))
 
 
+def _generate_repository_export_texts(
+    repository: ResolvedArchiveRepository,
+) -> dict[str, str]:
+    """Generate the four regular RepoDossier exports without changing the source repository."""
+
+    try:
+        full_context = build_full_export_context(repository.repository_root)
+        ai_context = create_ai_export_context(full_context)
+        docs_context = create_docs_export_context(full_context)
+
+        with tempfile.TemporaryDirectory(
+            prefix=f"repodossier-{repository.repository_id}-reports-"
+        ) as directory:
+            temporary_dir = Path(directory)
+            output_paths = {
+                "full.txt": write_full_export(full_context, temporary_dir / "full.txt"),
+                "ai.txt": write_ai_export(ai_context, temporary_dir / "ai.txt"),
+                "docs.txt": write_docs_export(docs_context, temporary_dir / "docs.txt"),
+            }
+            reports = {
+                filename: output_path.read_text(encoding="utf-8")
+                for filename, output_path in output_paths.items()
+            }
+
+        reports["changed.txt"] = render_changed_export(repository.repository_root)
+        return reports
+    except Exception as exc:
+        raise ArchiveCreationError(
+            f"could not generate RepoDossier exports for {repository.repository_root}: {exc}"
+        ) from exc
+
+
+def _combine_repository_exports(
+    repository_exports: Sequence[tuple[ResolvedArchiveRepository, dict[str, str]]],
+    filename: str,
+) -> str:
+    """Return one archive report for a single repository or a labelled multi-repository bundle."""
+
+    if len(repository_exports) == 1:
+        return repository_exports[0][1][filename]
+
+    sections = [
+        "RepoDossier multi-repository export",
+        f"Report: {filename}",
+        f"Repositories: {len(repository_exports)}",
+        "",
+    ]
+    for repository, reports in repository_exports:
+        sections.extend(
+            [
+                "=" * 80,
+                f"Repository: {repository.repository_id}",
+                f"Root: {repository.repository_root}",
+                "=" * 80,
+                "",
+                reports[filename].rstrip(),
+                "",
+            ]
+        )
+    return "\n".join(sections).rstrip() + "\n"
+
+
+def _generate_archive_exports(
+    resolved: ResolvedArchiveInputs,
+) -> dict[str, str]:
+    repository_exports = tuple(
+        (repository, _generate_repository_export_texts(repository))
+        for repository in resolved.repositories
+    )
+    return {
+        filename: _combine_repository_exports(repository_exports, filename)
+        for filename in ARCHIVE_EXPORT_FILENAMES
+    }
+
+
+def _write_regular_export_reports(
+    archive: zipfile.ZipFile,
+    reports: dict[str, str],
+) -> None:
+    for filename in ARCHIVE_EXPORT_FILENAMES:
+        archive.writestr(f"reports/{filename}", reports[filename])
+
+
 def _archive_final_path(resolved: ResolvedArchiveInputs) -> Path:
     return resolved.output_dir / resolved.arguments.archive_filename
 
@@ -544,7 +639,12 @@ def _temporary_archive_path(final_archive_path: Path) -> Path:
     return candidate
 
 def _manifest_text(resolved: ResolvedArchiveInputs, snapshot_files: Sequence[ArchiveSnapshotFile]) -> str:
-    lines = ["RepoDossier archive manifest", f"Archive filename: {resolved.arguments.archive_filename}", f"Sources: {len(resolved.sources)}"]
+    lines = [
+        "RepoDossier archive manifest",
+        f"Archive filename: {resolved.arguments.archive_filename}",
+        "Reports: " + ", ".join(ARCHIVE_EXPORT_FILENAMES),
+        f"Sources: {len(resolved.sources)}",
+    ]
     for source in resolved.sources:
         lines.append(f"Source: {source.normalized_path}")
         lines.append(f"  Repository: {source.repository_id}")
@@ -583,6 +683,7 @@ def create_archive_dossier(resolved: ResolvedArchiveInputs) -> ArchiveBuildResul
     temporary_path = _temporary_archive_path(final_path)
     repository_archives: tuple[_RepositoryGitArchive, ...] = ()
     try:
+        regular_reports = _generate_archive_exports(resolved)
         repository_archives = _create_all_repository_git_archives(
             resolved,
             final_archive_path=final_path,
@@ -593,8 +694,14 @@ def create_archive_dossier(resolved: ResolvedArchiveInputs) -> ArchiveBuildResul
             for snapshot_file in repository_archive.snapshot_files
         )
         source_references = collect_source_references(resolved, snapshot_files)
-        with zipfile.ZipFile(temporary_path, mode="w", compression=zipfile.ZIP_DEFLATED, compresslevel=9) as archive:
+        with zipfile.ZipFile(
+            temporary_path,
+            mode="w",
+            compression=zipfile.ZIP_DEFLATED,
+            compresslevel=9,
+        ) as archive:
             _write_archive_manifest(archive, resolved, snapshot_files)
+            _write_regular_export_reports(archive, regular_reports)
             _write_source_reference_reports(archive, source_references)
             _write_repository_snapshots(archive, repository_archives)
         temporary_path.replace(final_path)
