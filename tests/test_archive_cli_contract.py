@@ -24,6 +24,14 @@ SRC_ROOT = ROOT / "src"
 def _git_init(path: Path) -> Path:
     path.mkdir(parents=True, exist_ok=True)
     subprocess.run(["git", "-C", str(path), "init"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
+    subprocess.run(["git", "-C", str(path), "config", "user.name", "Example User"], check=True)
+    subprocess.run(["git", "-C", str(path), "config", "user.email", "example@example.invalid"], check=True)
+    subprocess.run(
+        ["git", "-C", str(path), "commit", "--allow-empty", "-m", "initial"],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=True,
+    )
     return path
 
 
@@ -104,7 +112,7 @@ def test_main_accepts_two_positionals(capsys: pytest.CaptureFixture[str], tmp_pa
     assert "RepoDossier archive CLI contract accepted." in captured.out
     assert "Sources: 1" in captured.out
     assert f"Output folder: {output_dir}" in captured.out
-    assert "Archive filename: repodossier-archive.zip" in captured.out
+    assert "Archive filename: repodossier.zip" in captured.out
     assert "Repositories: 1" in captured.out
 
 

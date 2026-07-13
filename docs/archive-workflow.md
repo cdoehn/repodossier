@@ -10,7 +10,7 @@ At least one source folder and one output folder are required. The last position
 
 Source folders may be Git repository roots or subfolders inside Git repositories. RepoDossier resolves the corresponding repository root for every source folder.
 
-Only the explicitly supplied source folders are analyzed for source references. The repository snapshot stores the complete detected repository working tree.
+Only the explicitly supplied source folders are analyzed for source references. The repository snapshot stores the complete committed `HEAD` tree of each detected repository.
 
 ## Archive structure
 
@@ -36,9 +36,13 @@ Existing target files are not overwritten silently.
 
 ## Snapshot contents
 
-The snapshot represents the visible working tree, not just the last commit. It includes tracked files, staged changes, unstaged changes, staged new files, and untracked files that are not ignored by Git.
+The snapshot represents the committed `HEAD` tree. RepoDossier delegates snapshot creation to Git using the core command semantics:
 
-The snapshot includes the repository's `.git` metadata so branches, commits, tags, and history remain available after extraction. It still excludes ignored untracked files, the output folder, the final archive, and temporary archive files from the active run.
+    git archive --format=zip --output=repodossier.zip HEAD
+
+For the shared dossier, RepoDossier adds a deterministic `repositories/<repository-id>/` prefix and uses a temporary ZIP before merging the snapshot with the reports.
+
+The snapshot includes files committed at `HEAD`. It excludes staged changes, unstaged changes, untracked files, ignored files, `.git` metadata, branches, tags, and repository history. A repository therefore needs at least one commit before it can be archived.
 
 ## Source references
 

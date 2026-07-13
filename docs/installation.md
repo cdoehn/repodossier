@@ -130,6 +130,6 @@ The archive workflow is available after `pip install .` or `pipx install .`:
 
 The last positional argument is always the output folder. All earlier positional arguments are source folders. Source folders may be Git repository roots or subfolders inside Git repositories.
 
-The archive is technically a ZIP file regardless of the selected filename extension. It contains reports under `reports/` and working-tree snapshots under `repositories/`. Git internals, ignored files, the output folder, and temporary archive files are excluded.
+The archive is technically a ZIP file regardless of the selected filename extension. It contains reports under `reports/` and committed `HEAD` snapshots under `repositories/`. Snapshot creation uses Git's native `git archive --format=zip --output=repodossier.zip HEAD` semantics. Git internals, staged changes, unstaged changes, untracked files, ignored files, and temporary archive files are excluded.
 
 Ubuntu 26.04 is the required functional verification platform. The implementation uses portable Python, Git, pathlib, subprocess, and zipfile behavior so it is expected to work on Ubuntu 24.04 as well, but Ubuntu 24.04 is not a separate required test matrix.

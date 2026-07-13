@@ -15,7 +15,7 @@ from typing import Iterable, Sequence
 from .scanner import detect_language, is_source_code_language
 
 ARCHIVE_USAGE = "repodossier [OPTIONEN] QUELLE [QUELLE ...] AUSGABEORDNER"
-DEFAULT_ARCHIVE_NAME = "repodossier-archive.zip"
+DEFAULT_ARCHIVE_NAME = "repodossier.zip"
 
 class ArchiveCliArgumentError(ValueError):
     """Raised when the archive CLI positional contract is violated."""
@@ -65,11 +65,20 @@ class ResolvedArchiveInputs:
 
 @dataclass(frozen=True)
 class ArchiveSnapshotFile:
-    """One file copied from the visible working tree into the archive."""
+    """One file exported from a repository's committed HEAD snapshot."""
     source_path: Path
     repository_relative_path: Path
     archive_path: PurePosixPath
     repository_id: str
+    content_sample: bytes | None = None
+
+
+@dataclass(frozen=True)
+class _RepositoryGitArchive:
+    """Temporary git-archive output for one resolved repository."""
+    repository: ResolvedArchiveRepository
+    temporary_path: Path
+    snapshot_files: tuple[ArchiveSnapshotFile, ...]
 
 @dataclass(frozen=True)
 class SourceReference:
@@ -226,59 +235,154 @@ def resolve_archive_inputs(arguments: ArchiveCliArguments, *, cwd: Path | None =
     )
     return ResolvedArchiveInputs(arguments=arguments, output_dir=_normalize_output_dir(arguments.output_dir, cwd=cwd), sources=sources, repositories=repositories)
 
-def _git_ls_files(repository_root: Path) -> list[Path]:
-    result = subprocess.run(["git", "-C", str(repository_root), "ls-files", "-z", "--cached", "--others", "--exclude-standard"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
+def _temporary_git_archive_path(final_archive_path: Path, repository_id: str) -> Path:
+    base = f".{final_archive_path.name}.{repository_id}.git-archive-{os.getpid()}.zip"
+    candidate = final_archive_path.with_name(base)
+    index = 0
+    while candidate.exists():
+        index += 1
+        candidate = final_archive_path.with_name(f"{base}-{index}")
+    return candidate
+
+
+def _run_git_archive(repository: ResolvedArchiveRepository, destination: Path) -> None:
+    """Export the committed HEAD tree with Git's native archive implementation."""
+    prefix = f"{repository.archive_path.as_posix()}/"
+    command = [
+        "git",
+        "archive",
+        "--format=zip",
+        f"--output={destination}",
+        f"--prefix={prefix}",
+        "HEAD",
+    ]
+    result = subprocess.run(
+        command,
+        cwd=repository.repository_root,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
+    )
     if result.returncode != 0:
+        destination.unlink(missing_ok=True)
         message = result.stderr.decode("utf-8", errors="replace").strip()
-        raise ArchiveCreationError(f"could not enumerate Git working-tree files for {repository_root}: {message}")
-    return [Path(item.decode("utf-8")) for item in result.stdout.split(b"\0") if item]
-
-def _is_relative_to(path: Path, parent: Path) -> bool:
-    try:
-        path.relative_to(parent)
-    except ValueError:
-        return False
-    return True
-
-def _should_exclude_snapshot_path(absolute_path: Path, *, repository_root: Path, output_dir: Path, final_archive_path: Path, temporary_archive_path: Path) -> bool:
-    if _is_relative_to(absolute_path, output_dir):
-        return True
-    if absolute_path == final_archive_path or absolute_path == temporary_archive_path:
-        return True
-    return False
-
-def enumerate_repository_snapshot_files(repository: ResolvedArchiveRepository, *, output_dir: Path, final_archive_path: Path, temporary_archive_path: Path) -> tuple[ArchiveSnapshotFile, ...]:
-    """Enumerate visible Git working-tree files for one repository snapshot."""
-    files: list[ArchiveSnapshotFile] = []
-    seen_relative_paths: set[Path] = set()
-    relative_paths = _git_ls_files(repository.repository_root)
-    git_metadata_path = repository.repository_root / ".git"
-    if git_metadata_path.is_file():
-        relative_paths.append(Path(".git"))
-    elif git_metadata_path.is_dir():
-        relative_paths.extend(
-            path.relative_to(repository.repository_root)
-            for path in git_metadata_path.rglob("*")
-            if path.is_file()
+        detail = message or f"git archive exited with status {result.returncode}"
+        raise ArchiveCreationError(
+            f"could not create committed HEAD snapshot for {repository.repository_root}: {detail}"
         )
 
-    for relative_path in relative_paths:
-        if relative_path in seen_relative_paths:
-            continue
-        seen_relative_paths.add(relative_path)
-        absolute_path = (repository.repository_root / relative_path).resolve(strict=False)
-        if not absolute_path.exists() or not absolute_path.is_file():
-            continue
-        if _should_exclude_snapshot_path(absolute_path, repository_root=repository.repository_root, output_dir=output_dir, final_archive_path=final_archive_path, temporary_archive_path=temporary_archive_path):
-            continue
-        files.append(ArchiveSnapshotFile(source_path=absolute_path, repository_relative_path=relative_path, archive_path=repository.archive_path / PurePosixPath(relative_path.as_posix()), repository_id=repository.repository_id))
+
+def _path_from_git_archive_entry(name: str, repository: ResolvedArchiveRepository) -> Path:
+    prefix = f"{repository.archive_path.as_posix()}/"
+    if not name.startswith(prefix):
+        raise ArchiveCreationError(
+            f"git archive returned an entry outside the expected prefix for "
+            f"{repository.repository_root}: {name}"
+        )
+    relative_name = name[len(prefix):]
+    relative_posix = PurePosixPath(relative_name)
+    if not relative_name or relative_posix.is_absolute() or ".." in relative_posix.parts:
+        raise ArchiveCreationError(
+            f"git archive returned an unsafe repository path for "
+            f"{repository.repository_root}: {name}"
+        )
+    return Path(*relative_posix.parts)
+
+
+def _inspect_git_archive(
+    repository: ResolvedArchiveRepository,
+    temporary_path: Path,
+) -> tuple[ArchiveSnapshotFile, ...]:
+    files: list[ArchiveSnapshotFile] = []
+    try:
+        with zipfile.ZipFile(temporary_path) as archive:
+            for info in archive.infolist():
+                if info.is_dir():
+                    continue
+                relative_path = _path_from_git_archive_entry(info.filename, repository)
+                with archive.open(info) as source:
+                    content_sample = source.read(8192)
+                files.append(
+                    ArchiveSnapshotFile(
+                        source_path=repository.repository_root / relative_path,
+                        repository_relative_path=relative_path,
+                        archive_path=PurePosixPath(info.filename),
+                        repository_id=repository.repository_id,
+                        content_sample=content_sample,
+                    )
+                )
+    except (OSError, zipfile.BadZipFile) as exc:
+        raise ArchiveCreationError(
+            f"could not inspect Git archive for {repository.repository_root}: {exc}"
+        ) from exc
     return tuple(files)
 
+
+def _create_repository_git_archive(
+    repository: ResolvedArchiveRepository,
+    *,
+    final_archive_path: Path,
+) -> _RepositoryGitArchive:
+    temporary_path = _temporary_git_archive_path(final_archive_path, repository.repository_id)
+    _run_git_archive(repository, temporary_path)
+    try:
+        snapshot_files = _inspect_git_archive(repository, temporary_path)
+    except Exception:
+        temporary_path.unlink(missing_ok=True)
+        raise
+    return _RepositoryGitArchive(
+        repository=repository,
+        temporary_path=temporary_path,
+        snapshot_files=snapshot_files,
+    )
+
+
+def _create_all_repository_git_archives(
+    resolved: ResolvedArchiveInputs,
+    *,
+    final_archive_path: Path,
+) -> tuple[_RepositoryGitArchive, ...]:
+    archives: list[_RepositoryGitArchive] = []
+    try:
+        for repository in resolved.repositories:
+            archives.append(
+                _create_repository_git_archive(
+                    repository,
+                    final_archive_path=final_archive_path,
+                )
+            )
+    except Exception:
+        for repository_archive in archives:
+            repository_archive.temporary_path.unlink(missing_ok=True)
+        raise
+    return tuple(archives)
+
+
+def enumerate_repository_snapshot_files(repository: ResolvedArchiveRepository, *, output_dir: Path, final_archive_path: Path, temporary_archive_path: Path) -> tuple[ArchiveSnapshotFile, ...]:
+    """Enumerate files from one repository's committed HEAD via git archive."""
+    del output_dir, temporary_archive_path
+    repository_archive = _create_repository_git_archive(
+        repository,
+        final_archive_path=final_archive_path,
+    )
+    try:
+        return repository_archive.snapshot_files
+    finally:
+        repository_archive.temporary_path.unlink(missing_ok=True)
+
+
 def enumerate_all_snapshot_files(resolved: ResolvedArchiveInputs, *, final_archive_path: Path, temporary_archive_path: Path) -> tuple[ArchiveSnapshotFile, ...]:
-    """Enumerate all snapshot files for all unique repositories."""
+    """Enumerate committed HEAD snapshot files for all unique repositories."""
     files: list[ArchiveSnapshotFile] = []
     for repository in resolved.repositories:
-        files.extend(enumerate_repository_snapshot_files(repository, output_dir=resolved.output_dir, final_archive_path=final_archive_path, temporary_archive_path=temporary_archive_path))
+        files.extend(
+            enumerate_repository_snapshot_files(
+                repository,
+                output_dir=resolved.output_dir,
+                final_archive_path=final_archive_path,
+                temporary_archive_path=temporary_archive_path,
+            )
+        )
     return tuple(files)
 
 def _read_language_sample(path: Path, limit: int = 8192) -> str | bytes | None:
@@ -333,7 +437,9 @@ def collect_source_references(
         if source is None:
             continue
 
-        sample = _read_language_sample(snapshot_file.source_path)
+        sample = snapshot_file.content_sample
+        if sample is None:
+            sample = _read_language_sample(snapshot_file.source_path)
         language = detect_language(snapshot_file.repository_relative_path, sample)
         if not is_source_code_language(language):
             continue
@@ -458,30 +564,48 @@ def _manifest_text(resolved: ResolvedArchiveInputs, snapshot_files: Sequence[Arc
 def _write_archive_manifest(archive: zipfile.ZipFile, resolved: ResolvedArchiveInputs, snapshot_files: Sequence[ArchiveSnapshotFile]) -> None:
     archive.writestr("reports/archive-manifest.txt", _manifest_text(resolved, snapshot_files))
 
-def _write_repository_snapshots(archive: zipfile.ZipFile, snapshot_files: Sequence[ArchiveSnapshotFile]) -> None:
-    for snapshot_file in snapshot_files:
-        archive.write(snapshot_file.source_path, snapshot_file.archive_path.as_posix())
+def _write_repository_snapshots(
+    archive: zipfile.ZipFile,
+    repository_archives: Sequence[_RepositoryGitArchive],
+) -> None:
+    for repository_archive in repository_archives:
+        with zipfile.ZipFile(repository_archive.temporary_path) as source_archive:
+            for info in source_archive.infolist():
+                archive.writestr(info, source_archive.read(info))
+
 
 def create_archive_dossier(resolved: ResolvedArchiveInputs) -> ArchiveBuildResult:
-    """Create one compressed ZIP archive with reports and repository snapshots."""
+    """Create one ZIP dossier with reports and committed HEAD snapshots."""
     resolved.output_dir.mkdir(parents=True, exist_ok=True)
     final_path = _archive_final_path(resolved)
     if final_path.exists():
         raise ArchiveCreationError(f"output archive already exists: {final_path}")
     temporary_path = _temporary_archive_path(final_path)
-    snapshot_files = enumerate_all_snapshot_files(resolved, final_archive_path=final_path.resolve(strict=False), temporary_archive_path=temporary_path.resolve(strict=False))
-    source_references = collect_source_references(resolved, snapshot_files)
+    repository_archives: tuple[_RepositoryGitArchive, ...] = ()
     try:
+        repository_archives = _create_all_repository_git_archives(
+            resolved,
+            final_archive_path=final_path,
+        )
+        snapshot_files = tuple(
+            snapshot_file
+            for repository_archive in repository_archives
+            for snapshot_file in repository_archive.snapshot_files
+        )
+        source_references = collect_source_references(resolved, snapshot_files)
         with zipfile.ZipFile(temporary_path, mode="w", compression=zipfile.ZIP_DEFLATED, compresslevel=9) as archive:
             _write_archive_manifest(archive, resolved, snapshot_files)
             _write_source_reference_reports(archive, source_references)
-            _write_repository_snapshots(archive, snapshot_files)
+            _write_repository_snapshots(archive, repository_archives)
         temporary_path.replace(final_path)
     except Exception as exc:
         temporary_path.unlink(missing_ok=True)
         if isinstance(exc, ArchiveCreationError):
             raise
         raise ArchiveCreationError(f"could not create archive {final_path}: {exc}") from exc
+    finally:
+        for repository_archive in repository_archives:
+            repository_archive.temporary_path.unlink(missing_ok=True)
     return ArchiveBuildResult(archive_path=final_path, snapshot_files=snapshot_files, resolved=resolved, source_references=source_references)
 
 def format_archive_contract_summary(arguments: ArchiveCliArguments) -> str:

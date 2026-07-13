@@ -30,7 +30,14 @@ def _git_init(path: Path) -> Path:
     path.mkdir(parents=True, exist_ok=True)
     result = _git(path, "init")
     assert result.returncode == 0, result.stderr
+    assert _git(path, "config", "user.name", "Example User").returncode == 0
+    assert _git(path, "config", "user.email", "example@example.invalid").returncode == 0
     return path
+
+
+def _commit(repo: Path) -> None:
+    result = _git(repo, "commit", "-m", "snapshot")
+    assert result.returncode == 0, result.stderr
 
 
 def _arguments(*sources: Path, output_dir: Path) -> ArchiveCliArguments:
@@ -67,6 +74,7 @@ def test_source_reference_reports_point_to_archived_source_without_embedding_cod
     (source / "app.py").write_text(code_body, encoding="utf-8")
     (source / "README.md").write_text("# Backend docs\n", encoding="utf-8")
     assert _git(repo, "add", "src/backend/app.py", "src/backend/README.md").returncode == 0
+    _commit(repo)
 
     resolved = resolve_archive_inputs(_arguments(source, output_dir=tmp_path / "out"))
     result = create_archive_dossier(resolved)
@@ -96,6 +104,7 @@ def test_structured_source_references_are_returned_on_archive_result(tmp_path: P
     source.mkdir()
     (source / "app.py").write_text("def run():\n    return 1\n", encoding="utf-8")
     assert _git(repo, "add", "src/app.py").returncode == 0
+    _commit(repo)
 
     resolved = resolve_archive_inputs(_arguments(source, output_dir=tmp_path / "out"))
     result = create_archive_dossier(resolved)
@@ -119,6 +128,7 @@ def test_source_references_are_limited_to_explicit_analysis_sources(tmp_path: Pa
     (selected / "app.py").write_text("print('selected')\n", encoding="utf-8")
     (ignored_for_analysis / "app.py").write_text("print('other')\n", encoding="utf-8")
     assert _git(repo, "add", "selected/app.py", "other/app.py").returncode == 0
+    _commit(repo)
 
     resolved = resolve_archive_inputs(_arguments(selected, output_dir=tmp_path / "out"))
     result = create_archive_dossier(resolved)
@@ -133,6 +143,7 @@ def test_source_reference_xml_is_valid_and_contains_structured_paths(tmp_path: P
     repo = _git_init(tmp_path / "project")
     (repo / "main.py").write_text("print('xml')\n", encoding="utf-8")
     assert _git(repo, "add", "main.py").returncode == 0
+    _commit(repo)
 
     resolved = resolve_archive_inputs(_arguments(repo, output_dir=tmp_path / "out"))
     result = create_archive_dossier(resolved)
@@ -151,6 +162,7 @@ def test_collect_source_references_can_be_called_independently(tmp_path: Path) -
     (repo / "tool.sh").write_text("#!/usr/bin/env bash\necho ok\n", encoding="utf-8")
     (repo / "notes.txt").write_text("plain text\n", encoding="utf-8")
     assert _git(repo, "add", "tool.sh", "notes.txt").returncode == 0
+    _commit(repo)
 
     resolved = resolve_archive_inputs(_arguments(repo, output_dir=tmp_path / "out"))
     result = create_archive_dossier(resolved)

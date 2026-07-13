@@ -217,7 +217,7 @@ def _print_archive_cli_error(parser: argparse.ArgumentParser, message: str) -> N
 
 
 def _handle_archive_contract_command(arguments: object) -> int:
-    """Resolve sources and create the compressed working-tree archive."""
+    """Resolve sources and create the compressed committed-HEAD archive."""
 
     try:
         resolved = resolve_archive_inputs(arguments)  # type: ignore[arg-type]

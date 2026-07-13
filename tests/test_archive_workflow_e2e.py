@@ -66,12 +66,12 @@ def test_end_to_end_archive_cli_creates_zip_with_reports_and_snapshot(tmp_path: 
     assert "reports/source-references.xml" in names
     assert "repositories/projekt/src/backend/main.py" in names
     assert "repositories/projekt/README.md" in names
-    assert "repositories/projekt/untracked.txt" in names
+    assert "repositories/projekt/untracked.txt" not in names
     assert "repositories/projekt/ignored.txt" not in names
-    assert "repositories/projekt/.git/HEAD" in names
+    assert not any(name.startswith("repositories/projekt/.git/") for name in names)
     assert all("output/" not in name for name in names)
 
-    assert _text(archive_path, "repositories/projekt/src/backend/main.py") == "VALUE = 'unstaged visible working tree'\n"
+    assert _text(archive_path, "repositories/projekt/src/backend/main.py") == "VALUE = 'visible working tree'\n"
     report = _text(archive_path, "reports/source-references.txt")
     assert "Source file: src/backend/main.py" in report
     assert "Archive path: ../repositories/projekt/src/backend/main.py" in report
@@ -85,11 +85,13 @@ def test_end_to_end_archive_cli_supports_multiple_repositories(tmp_path: Path) -
     (repo_b / "b.py").write_text("B = 2\n", encoding="utf-8")
     assert _git(repo_a, "add", "a.py").returncode == 0
     assert _git(repo_b, "add", "b.py").returncode == 0
+    assert _git(repo_a, "commit", "-m", "snapshot").returncode == 0
+    assert _git(repo_b, "commit", "-m", "snapshot").returncode == 0
 
     exit_code = main([str(repo_a), str(repo_b), str(tmp_path / "out")])
 
     assert exit_code == 0
-    archive_path = tmp_path / "out" / "repodossier-archive.zip"
+    archive_path = tmp_path / "out" / "repodossier.zip"
     names = _names(archive_path)
     assert "repositories/repo-a/a.py" in names
     assert "repositories/repo-b/b.py" in names
@@ -119,6 +121,7 @@ def test_module_cli_help_and_archive_call_work_from_subprocess(tmp_path: Path) -
     repo = _git_init(tmp_path / "repo")
     (repo / "app.py").write_text("print('ok')\n", encoding="utf-8")
     assert _git(repo, "add", "app.py").returncode == 0
+    assert _git(repo, "commit", "-m", "snapshot").returncode == 0
     output = tmp_path / "out"
     env = os.environ.copy()
     env["PYTHONPATH"] = os.pathsep.join([str(SRC_ROOT), env.get("PYTHONPATH", "")]).rstrip(os.pathsep)
