@@ -12,6 +12,10 @@ Run the full suite:
 
     ./runtests
 
+The explicit full-suite alias is also supported:
+
+    ./runtests full
+
 Run a focused test:
 
     ./runtests tests/test_private_data_cleanup.py
@@ -52,13 +56,7 @@ Logs are written under:
 
 The directory is ignored by git.
 
-If tests fail, the helper attempts to copy the full log to the clipboard with one of these tools when available:
-
-- `wl-copy`
-- `xclip`
-- `xsel`
-- `pbcopy`
-- `clip.exe`
+If tests fail, the helper prints the retained log path. The log remains under `.runtests/` for direct inspection.
 
 ## Validation markers
 

@@ -86,17 +86,14 @@
       "id": "SAFE-002",
       "category": "safety",
       "severity": "must",
-      "title": "Do not install global logging or clipboard hooks",
-      "description": "Patch scripts do not use global tee redirection or clipboard tools.",
+      "title": "Do not install global logging hooks",
+      "description": "Patch scripts do not use global tee redirection.",
       "rationale": "The c runner owns logging and terminal failure handling.",
       "applies_to": [
         "patch-script"
       ],
       "checks": [
-        "no global exec tee redirection",
-        "no xclip command",
-        "no xsel command",
-        "no wl-copy command"
+        "no global exec tee redirection"
       ]
     },
     {

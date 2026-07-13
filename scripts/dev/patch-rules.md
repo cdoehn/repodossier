@@ -89,18 +89,17 @@ c ~/Downloads/mein_patch.sh
 
 ---
 
-## 5. Logging und Clipboard
+## 5. Logging
 
 Ab jetzt übernimmt `c` die zentrale Log-Verwaltung.
 
 Regeln für einzelne Patch-Scripts:
 
 1. Patch-Scripts sollen keine eigene globale `exec > >(tee ...) 2>&1`-Logumleitung mehr einrichten.
-2. Patch-Scripts sollen keine eigene Clipboard-Logik mit `xclip` mehr enthalten.
-3. Patch-Scripts sollen normal auf `stdout` und `stderr` schreiben.
-4. Patch-Scripts müssen korrekte Exit-Codes liefern.
-5. `c` schreibt die vollständige Ausgabe in eine Logdatei unter `~/Downloads`.
-6. Wenn Example User Fehler postet, genügt die Terminalausgabe oder die von `c` erzeugte Logdatei.
+2. Patch-Scripts sollen normal auf `stdout` und `stderr` schreiben.
+3. Patch-Scripts müssen korrekte Exit-Codes liefern.
+4. `c` schreibt die vollständige Ausgabe in eine Logdatei unter `~/Downloads`.
+5. Wenn Example User Fehler postet, genügt die Terminalausgabe oder die von `c` erzeugte Logdatei.
 
 Das macht Sinn, weil Logging, Syntaxprüfung und Verschieben der Download-Scripts dadurch zentral, einheitlich und weniger fehleranfällig werden.
 
@@ -450,7 +449,7 @@ Regeln:
 11. Ohne Bestätigung bleibt das Script in `~/Downloads` liegen und wird weder nach `done` noch nach `failed` verschoben.
 12. `c` wird getestet: Auswahl des neuesten Scripts, erfolgreiche Ausführung, Fehler-Ausführung, Syntaxfehler, Logdatei, done/failed-Verschiebung und Altersbestätigung.
 
-Einzelne Patchscripts sollen weiterhin keine eigene globale Logumleitung und keine eigene Clipboard-Logik enthalten. `c` übernimmt diese Verantwortung zentral.
+Einzelne Patchscripts sollen weiterhin keine eigene globale Logumleitung enthalten. `c` übernimmt diese Verantwortung zentral.
 
 ---
 
@@ -673,12 +672,11 @@ Der Linter prüft vor der eigentlichen Ausführung:
 2. Roadmap- und Milestone-Progress-Metadaten,
 3. kein `bundle_project.sh`,
 4. keine eigene globale `tee`-Logumleitung,
-5. keine Clipboard-Tools wie `xclip`, `xsel` oder `wl-copy`,
-6. kein Aider-Aufruf in direkten Patchscripts,
-7. `git diff`, `git log` und `git show` nur mit `--no-pager` oder `GIT_PAGER=cat`,
-8. vorhandene Footer-Funktion,
-9. vorhandene Tests oder Syntax-/Smoke-Checks,
-10. keine literal Triple-Backticks in Patch-Heredocs.
+5. kein Aider-Aufruf in direkten Patchscripts,
+6. `git diff`, `git log` und `git show` nur mit `--no-pager` oder `GIT_PAGER=cat`,
+7. vorhandene Footer-Funktion,
+8. vorhandene Tests oder Syntax-/Smoke-Checks,
+9. keine literal Triple-Backticks in Patch-Heredocs.
 
 Der Linter ist die technische Vorstufe für `c --dry-run` und soll verhindern, dass formal fehlerhafte Patches überhaupt in den normalen Patchlauf kommen.
 
@@ -703,7 +701,7 @@ Der Patch-Preflight-Linter prüft Workflow-Verbote in echten Shell-Zeilen außer
 Grund:
 
 1. Patchscripts erzeugen häufig Tests.
-2. Diese Tests müssen verbotene Begriffe wie `bundle_project.sh`, `xclip`, `aider` oder `git diff` als Test-Fixtures enthalten dürfen.
+2. Diese Tests müssen verbotene Begriffe wie `bundle_project.sh`, `aider` oder `git diff` als Test-Fixtures enthalten dürfen.
 3. Solche Fixture-Strings sind keine ausgeführten Patch-Kommandos.
 4. Deshalb ignoriert der Linter Workflow-Verbote innerhalb von Heredoc-Bodies.
 5. Nach Ende eines Heredocs werden Shell-Kommandos wieder normal geprüft.
@@ -735,7 +733,7 @@ Der Linter prüft echte Shell-Kommandos. Quoted Diagnose- oder Erklärungstexte 
 Beispiele, die als Text erlaubt sind:
 
     echo "git diff --cached --quiet is documented here"
-    echo 'bundle_project.sh xclip aider git diff are quoted diagnostics'
+    echo 'bundle_project.sh aider git diff are quoted diagnostics'
 
 Echte unquoted Befehle bleiben verboten, zum Beispiel:
 

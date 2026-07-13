@@ -17,7 +17,7 @@ fail() {
 usage() {
   cat <<'USAGE'
 Usage:
-  ./runtests [options] [pytest args...]
+  ./runtests [full] [options] [pytest args...]
 
 Purpose:
   Create or reuse a local virtual environment, activate it inside this script,
@@ -25,6 +25,7 @@ Purpose:
 
 Examples:
   ./runtests
+  ./runtests full
   ./runtests -q
   ./runtests tests/test_private_data_cleanup.py
   ./runtests --no-install
@@ -78,6 +79,9 @@ while [ "$#" -gt 0 ]; do
     --help|-h)
       usage
       exit 0
+      ;;
+    full)
+      # Explicit alias for the complete suite. Do not forward it to pytest.
       ;;
     --no-install)
       INSTALL=0
@@ -245,28 +249,6 @@ PY
   "$VENV_PYTHON" -m pip install "${install_args[@]}"
 }
 
-copy_log_to_clipboard() {
-  local log_file="$1"
-  local copied=0
-
-  if command -v wl-copy >/dev/null 2>&1; then
-    wl-copy < "$log_file" && copied=1 || true
-  elif command -v xclip >/dev/null 2>&1; then
-    xclip -selection clipboard < "$log_file" && copied=1 || true
-  elif command -v xsel >/dev/null 2>&1; then
-    xsel --clipboard --input < "$log_file" && copied=1 || true
-  elif command -v pbcopy >/dev/null 2>&1; then
-    pbcopy < "$log_file" && copied=1 || true
-  elif command -v clip.exe >/dev/null 2>&1; then
-    clip.exe < "$log_file" && copied=1 || true
-  fi
-
-  if [ "$copied" -eq 1 ]; then
-    warn "Failure log copied to clipboard"
-  else
-    warn "No clipboard tool found; failure log stays at: $log_file"
-  fi
-}
 
 run_pytest() {
   mkdir -p "$LOG_DIR"
@@ -285,7 +267,7 @@ run_pytest() {
 
   if [ "$test_status" -ne 0 ]; then
     warn "Tests failed with exit code $test_status"
-    copy_log_to_clipboard "$log_file"
+    warn "Failure log: $log_file"
     exit "$test_status"
   fi
 

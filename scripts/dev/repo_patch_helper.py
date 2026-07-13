@@ -25,7 +25,6 @@ from __future__ import annotations
 
 import argparse
 import os
-import shutil
 import subprocess
 import sys
 from dataclasses import dataclass
@@ -402,29 +401,6 @@ def run_stream(
             log_handle.close()
 
 
-def copy_file_to_clipboard(log_path: str | Path) -> bool:
-    """Copy a file to the X clipboard when xclip is available."""
-
-    path = as_path(log_path)
-    if not path.exists():
-        print(colored(f"Fehlerlog nicht gefunden: {path}", RED))
-        return False
-
-    xclip = shutil.which("xclip")
-    if not xclip:
-        print("Hinweis: xclip ist nicht installiert. Fehlerlog wurde nicht kopiert.")
-        return False
-
-    with path.open("rb") as handle:
-        subprocess.run(
-            [xclip, "-selection", "clipboard"],
-            stdin=handle,
-            check=False,
-        )
-
-    print("Fehlerlog wurde in die Zwischenablage kopiert.")
-    return True
-
 
 def repo_path(path: str | Path | None = None) -> Path:
     return as_path(path or ".").resolve()
@@ -614,9 +590,6 @@ def build_parser() -> argparse.ArgumentParser:
     pytest_parser.add_argument("--extra", action="append", default=[])
     pytest_parser.add_argument("tests", nargs="+")
 
-    copy_parser = subparsers.add_parser("copy-log", help="Copy a log file to clipboard with xclip.")
-    copy_parser.add_argument("log_path")
-
     diff_parser = subparsers.add_parser("diff", help="Show git diff without pager.")
     diff_parser.add_argument("--repo", default=".")
     diff_parser.add_argument("--staged", action="store_true")
@@ -669,9 +642,6 @@ def main(argv: Sequence[str] | None = None) -> int:
             log_path=args.log,
             extra_args=extra_args,
         )
-
-    if args.command == "copy-log":
-        return 0 if copy_file_to_clipboard(args.log_path) else 1
 
     if args.command == "diff":
         return git_diff(args.paths, cwd=args.repo, staged=args.staged)
