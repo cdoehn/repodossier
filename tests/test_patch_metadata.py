@@ -34,7 +34,7 @@ def test_c_runner_still_rejects_invalid_metadata_in_dry_run(tmp_path: Path) -> N
         "\n".join(
             [
                 "#!/usr/bin/env bash",
-                '# repodossier-meta: {"type":"patch","id":"PATCHHARBOR.BAD","title":"Bad"}',
+                '# repodossier-meta: {"type":"patch","id":"REPODOSSIER.BAD","title":"Bad"}',
                 '# repodossier-meta: {"type":"display","progress_context":false}',
                 "print_footer() { echo footer; }",
                 "trap print_footer EXIT",

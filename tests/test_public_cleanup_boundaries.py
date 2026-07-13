@@ -43,35 +43,11 @@ def test_public_metadata_does_not_store_previous_private_identity_fragments() ->
     for value in forbidden:
         assert value not in combined
 
-def test_pet_prefix_patchharbor_misspellings_are_absent_from_tracked_text() -> None:
-    spellings = [
-        "Pet " + "Harbor",
-        "Pet" + "Harbor",
-        "pet" + "harbor",
-        "pet" + "-" + "harbor",
-        "pet" + "_" + "harbor",
-    ]
-    offenders: list[tuple[str, str]] = []
-    for path in ROOT.rglob("*"):
-        if not path.is_file():
-            continue
-        if any(part in {".git", ".venv", "__pycache__", ".pytest_cache", ".runtests"} for part in path.parts):
-            continue
-        try:
-            text = path.read_text(encoding="utf-8")
-        except UnicodeDecodeError:
-            continue
-        relative = path.relative_to(ROOT).as_posix()
-        for spelling in spellings:
-            if spelling in text:
-                offenders.append((relative, spelling))
-    assert offenders == []
 
 def test_private_fixture_boundary_is_documented() -> None:
     text = _read("docs/public-cleanup-boundaries.md")
     assert "Dedicated tests may contain reconstructed private-like fixtures" in text
-    assert "PatchHarbor references in migration plans" in text
-    assert "Misspelled pet-prefix variants" in text
+    assert "must not depend on unrelated sibling repositories" in text
 
 def test_private_fixture_allowlist_is_limited_to_tests() -> None:
     for relative in TEST_PRIVATE_FIXTURE_ALLOWLIST:

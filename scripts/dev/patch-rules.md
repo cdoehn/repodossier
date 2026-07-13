@@ -541,7 +541,7 @@ Farben:
 3. `partial` = gelb
 4. `todo` = rot
 
-`c` validiert diese Metadaten vor der Ausführung intern im Runner und nutzt PatchHarbor `lint-script` für die Preflight-Lint-Prüfung.
+`c` validiert diese Metadaten vor der Ausführung vollständig intern im Runner.
 
 Progress-Metadaten sind für normale `c`-Patchscripts Pflicht. `c` rendert mit `scripts/dev/show_progress_context.py` Roadmap links und Milestone rechts, ohne Rahmen und mit Kontextzeilen oberhalb und unterhalb. Wenn ein Patch keine Roadmap- und Milestone-Progress-Zeilen enthält, wird er vor der Ausführung blockiert.
 
@@ -665,7 +665,7 @@ Fehlerläufe zeigen keine Erfolgsleiste.
 
 Neue Download-Patchscripts sollen zusätzlich mit dem repo-lokalen Preflight-Linter prüfbar sein:
 
-    python3 patchharbor lint-script --script ~/Downloads/patch.sh --repo .
+    bash -n ~/Downloads/patch.sh
 
 Der Linter prüft vor der eigentlichen Ausführung:
 
@@ -1024,11 +1024,10 @@ It must print concrete command preview lines such as `Befehl: repodossier full`.
 
 ---
 
-## 14c1. Current RepoDossier developer workflow after PatchHarbor cleanup
+## 14c1. Current RepoDossier developer workflow
 
 The current source-side developer workflow is documented in:
 
-    planning/patchharbor/repodossier-developer-workflow.md
     docs/dev-aliases.md
 
 Active source-side workflow commands remain:
@@ -1045,10 +1044,10 @@ The active `r` implementation remains:
 
     scripts/dev/r.sh
 
-The `c` runner validates patch metadata internally and uses PatchHarbor `lint-script` for dry-run preflight linting.
+The `c` runner validates patch metadata and Bash syntax internally.
 
 Removed legacy metadata, lint, and candidate-runner helpers are not active workflow commands. Their exact historical paths belong in migration docs, not in this active workflow rules file.
 
 Historical migration notes may mention removed helper paths, but new instructions must not tell users to run them.
 
-Source-only documentation patches must leave the PatchHarbor target repository unchanged.
+Source-only documentation patches must not modify unrelated repositories.

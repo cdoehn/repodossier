@@ -110,7 +110,7 @@ Usage:
 
 Dry-run mode:
   c --dry-run validates the selected patch through metadata, progress,
-  preflight, freshness, repetition and bash syntax checks, but does not
+  freshness, repetition and bash syntax checks, but does not
   execute it and does not move it to done/failed.
 
 Normal mode:
@@ -679,29 +679,6 @@ info "Startzeit: $(date --iso-8601=seconds)"
 
 
 
-run_patchharbor_cli() {
-  local target_repo="${PATCHHARBOR_REPO:-}"
-  if [ -z "$target_repo" ]; then
-    local parent_dir
-    parent_dir="$(cd "$runner_repo/.." && pwd)"
-    if [ -d "$parent_dir/patch-harbor/src/patchharbor" ]; then
-      target_repo="$parent_dir/patch-harbor"
-    fi
-  fi
-
-  if [ -n "$target_repo" ] && [ -d "$target_repo/src/patchharbor" ]; then
-    PYTHONPATH="$target_repo/src${PYTHONPATH:+:$PYTHONPATH}" python3 -m patchharbor "$@"
-    return $?
-  fi
-
-  if command -v patchharbor >/dev/null 2>&1; then
-    patchharbor "$@"
-    return $?
-  fi
-
-  echo "PatchHarbor CLI not found. Set PATCHHARBOR_REPO or install patchharbor." >&2
-  return 127
-}
 
 section "Metadatenprüfung"
 action "Validiere repodossier-meta JSON-Kommentarzeilen."
@@ -905,18 +882,6 @@ if [ "$progress_context_explicit" -eq 0 ]; then
   esac
 fi
 
-if [ "$dry_run" -eq 1 ]; then
-  section "Preflight"
-  action "Prüfe Patchscript mit patchharbor lint-script."
-  run_patchharbor_cli lint-script "$patch_script"
-  preflight_status=$?
-  if [ "$preflight_status" -ne 0 ]; then
-    error "Preflight-Linter hat das Patchscript beanstandet."
-    info "Patchscript wurde nicht ausgeführt und bleibt unverändert: $(show_path "$patch_script")"
-    exit 20
-  fi
-  success "Preflight OK."
-fi
 
 progress_context_output=""
 if [ -x "$progress_renderer" ]; then

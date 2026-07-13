@@ -8,7 +8,6 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 R_WRAPPER = ROOT / "scripts" / "dev" / "r.sh"
 EXPORT_RUNNER = ROOT / "scripts" / "dev" / "run_repodossier_exports.sh"
-WRAPPER_DRAFT = ROOT / "planning" / "patchharbor" / "source-export-wrapper-draft.md"
 
 
 def _init_git_repo(path: Path) -> None:
@@ -213,15 +212,12 @@ def test_source_export_wrapper_smoke_export_command_failure_preserves_exit_code(
 def test_source_export_wrapper_smoke_does_not_change_productive_files() -> None:
     assert R_WRAPPER.exists()
     assert EXPORT_RUNNER.exists()
-    assert WRAPPER_DRAFT.exists()
     wrapper = R_WRAPPER.read_text(encoding="utf-8")
     runner = EXPORT_RUNNER.read_text(encoding="utf-8")
-    draft = WRAPPER_DRAFT.read_text(encoding="utf-8")
 
     assert "run_repodossier_exports.sh" in wrapper
     assert "REPODOSSIER_BIN" in runner
     assert "PATCH_DOWNLOAD_DIR" in runner
-    assert "PATCHHARBOR.11c2 should add source export wrapper smoke tests" in draft
 
 
 def test_source_export_wrapper_smoke_tests_do_not_store_private_local_values() -> None:

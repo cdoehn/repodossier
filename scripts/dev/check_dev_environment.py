@@ -2,15 +2,12 @@
 from __future__ import annotations
 
 import argparse
-import importlib
 import os
 import shutil
 import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from types import ModuleType
-from typing import Iterable
 
 
 @dataclass(frozen=True)
@@ -113,75 +110,8 @@ def collect_checks(repo_root: Path) -> list[CheckResult]:
     checks.append(_check_file("workflow rules", repo_root / "scripts/dev/patch-workflow-rules.json"))
     checks.append(_check_file("workflow rules validator", repo_root / "scripts/dev/validate_patch_workflow_rules.py", executable=True))
 
-    return _normalize_with_patchharbor_environment_model(checks, repo_root)
+    return checks
 
-
-def _normalize_with_patchharbor_environment_model(results: list[CheckResult], repo_root: Path) -> list[CheckResult]:
-    model = _load_patchharbor_environment_model(repo_root)
-    if model is None:
-        return results
-
-    try:
-        target_checks = [
-            model.EnvironmentCheck(
-                name=result.name,
-                ok=result.ok,
-                detail=result.detail,
-                hint=result.hint,
-                required=_is_required_check(result.name),
-                category=_check_category(result.name),
-                metadata={"source_wrapper": "check_dev_environment"},
-            )
-            for result in results
-        ]
-        target_result = model.EnvironmentCheckResult(tuple(target_checks), metadata={"source_wrapper": "check_dev_environment"})
-    except Exception:
-        return results
-
-    return [
-        CheckResult(
-            name=check.name,
-            ok=check.ok,
-            detail=check.detail,
-            hint=check.hint,
-        )
-        for check in target_result.checks
-    ]
-
-
-def _load_patchharbor_environment_model(repo_root: Path | None = None) -> ModuleType | None:
-    for source_path in _patchharbor_src_candidates(repo_root):
-        if (source_path / "patchharbor" / "environment_check.py").is_file():
-            source_text = str(source_path)
-            if source_text not in sys.path:
-                sys.path.insert(0, source_text)
-            break
-
-    try:
-        model = importlib.import_module("patchharbor.environment_check")
-    except Exception:
-        return None
-
-    required_names = ("EnvironmentCheck", "EnvironmentCheckResult")
-    if not all(hasattr(model, name) for name in required_names):
-        return None
-    return model
-
-
-def _patchharbor_src_candidates(repo_root: Path | None = None) -> Iterable[Path]:
-    env_src = os.environ.get("PATCHHARBOR_SRC")
-    if env_src:
-        yield Path(env_src).expanduser().resolve()
-
-    env_repo = os.environ.get("PATCHHARBOR_REPO")
-    if env_repo:
-        yield Path(env_repo).expanduser().resolve() / "src"
-
-    if repo_root is not None:
-        yield repo_root.resolve().parent / "patch-harbor" / "src"
-
-    script_root = Path(__file__).resolve().parents[2]
-    yield script_root.parent / "patch-harbor" / "src"
 
 
 def _is_required_check(name: str) -> bool:

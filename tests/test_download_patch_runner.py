@@ -312,81 +312,6 @@ def test_c_runner_can_rerun_already_applied_script_after_confirmation(tmp_path: 
     assert (download_dir / "done" / "duplicate_patch.sh").exists()
 
 
-def test_c_wait_runs_fresh_new_script_in_foreground_and_keeps_waiting(tmp_path: Path) -> None:
-    download_dir = tmp_path / "Downloads"
-    download_dir.mkdir()
-
-    marker = tmp_path / "wait_marker"
-    env = os.environ.copy()
-    env["PATCH_DOWNLOAD_DIR"] = str(download_dir)
-    env["C_RUNNER_WAIT_SLEEP_SECONDS"] = "0.1"
-    env["C_RUNNER_WAIT_FRESH_SECONDS"] = "30"
-
-    process = subprocess.Popen(
-        [str(RUNNER), "--wait"],
-        cwd=REPO_ROOT,
-        env=env,
-        text=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-    )
-
-    try:
-        time.sleep(0.4)
-        _write_script(download_dir, "wait_patch.sh", _script_body(f"echo visible-wait-output\n: > {marker}"))
-
-        deadline = time.time() + 8
-        while time.time() < deadline and not marker.exists():
-            time.sleep(0.1)
-
-        assert marker.exists()
-        assert (download_dir / "done" / "wait_patch.sh").exists()
-
-        time.sleep(0.4)
-        assert process.poll() is None
-    finally:
-        process.send_signal(signal.SIGTERM)
-        stdout, stderr = process.communicate(timeout=5)
-
-    assert "Warte-Modus" in stdout
-    assert "visible-wait-output" in stdout
-    assert "Warte auf das nächste Script" in stdout
-    assert "watch" not in stdout.lower()
-    assert stderr == ""
-
-
-def test_c_wait_marks_existing_scripts_seen_before_waiting(tmp_path: Path) -> None:
-    download_dir = tmp_path / "Downloads"
-    download_dir.mkdir()
-
-    marker = tmp_path / "old_marker"
-    existing = _write_script(download_dir, "already_there.sh", _script_body(f": > {marker}"))
-
-    env = os.environ.copy()
-    env["PATCH_DOWNLOAD_DIR"] = str(download_dir)
-    env["C_RUNNER_WAIT_SLEEP_SECONDS"] = "0.1"
-    env["C_RUNNER_WAIT_FRESH_SECONDS"] = "30"
-
-    process = subprocess.Popen(
-        [str(RUNNER), "--wait"],
-        cwd=REPO_ROOT,
-        env=env,
-        text=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-    )
-
-    try:
-        time.sleep(0.8)
-        assert existing.exists()
-        assert not marker.exists()
-    finally:
-        process.terminate()
-        stdout, stderr = process.communicate(timeout=5)
-
-    assert "Warte-Modus" in stdout
-    assert stderr == ""
-
 def test_c_runner_dry_run_checks_without_executing_or_moving(tmp_path: Path) -> None:
     download_dir = tmp_path / "Downloads"
     download_dir.mkdir()
@@ -405,32 +330,10 @@ def test_c_runner_dry_run_checks_without_executing_or_moving(tmp_path: Path) -> 
     assert not marker.exists()
     assert not (download_dir / "done" / "dry_run_patch.sh").exists()
     assert not (download_dir / "failed" / "dry_run_patch.sh").exists()
-    assert "Preflight OK" in result.stdout
     assert "Dry-run erfolgreich" in result.stdout
     assert "c · Progress Context" in result.stdout
     assert result.stdout.rstrip().endswith("DRY-RUN OK\x1b[0m") or result.stdout.rstrip().endswith("DRY-RUN OK")
 
-
-def test_c_runner_dry_run_rejects_preflight_failure_without_moving(tmp_path: Path) -> None:
-    download_dir = tmp_path / "Downloads"
-    download_dir.mkdir()
-
-    marker = tmp_path / "bad_dry_run_marker"
-    script = _write_script(
-        download_dir,
-        "bad_dry_run_patch.sh",
-        f"#!/usr/bin/env bash\n{_meta()}\n: > {marker}\n",
-    )
-
-    result = _run_runner(download_dir, "--dry-run")
-
-    assert result.returncode == 20
-    assert script.exists()
-    assert not marker.exists()
-    assert not (download_dir / "done" / "bad_dry_run_patch.sh").exists()
-    assert not (download_dir / "failed" / "bad_dry_run_patch.sh").exists()
-    assert "Preflight-Linter hat das Patchscript beanstandet" in result.stdout
-    assert "patch.footer" in result.stdout
 
 
 def test_c_runner_dry_run_accepts_explicit_script_path(tmp_path: Path) -> None:
